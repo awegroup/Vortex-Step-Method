@@ -13,7 +13,7 @@ INPUTS:
 The coordinates are defined so that the first point is the LE position of the first section, the second point the TE of the first section and so on. 
 - Convergence criteria
 - Velocity magnitude and direction
-- Number of filaments per horseshoe
+- Number of filaments per horseshoe (default should be 5)
 - Model : 'VSM' or 'LLT'
 - Airfoil polars
 
