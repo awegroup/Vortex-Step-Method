@@ -234,7 +234,7 @@ plot_polars(
     ],
     literature_path_list=[],
     angle_range=np.linspace(0, 20, 10),
-    angle_type="side_slip",
+    angle_type="angle_of_attack",
     angle_of_attack=np.deg2rad(6.75),
     side_slip=0,
     yaw_rate=0,
