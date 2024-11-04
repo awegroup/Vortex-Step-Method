@@ -798,8 +798,8 @@ def plot_polars(
             marker = "."
             markersize = 5
         axs[1, 1].plot(
-            polar_data[1],
             polar_data[2],
+            polar_data[1],
             label=label,
             linestyle=linestyle,
             marker=marker,
