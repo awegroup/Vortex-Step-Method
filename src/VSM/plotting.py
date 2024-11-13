@@ -696,7 +696,7 @@ def plot_polars(
         )
         polar_data_list.append(polar_data)
         # Appending Reynolds numbers to the labels of the solvers
-        label_list[i] += f" Re = {1e-5*reynolds_number:.0f}e5"
+        label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
 
     # Grabbing additional data from literature
     if literature_path_list is not None:
@@ -762,10 +762,9 @@ def plot_polars(
     axs[0, 1].set_ylabel(r"$C_D$")
     axs[0, 1].legend()
 
-    # CS plot
-    for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-        # Build-in a check, since the literature polars might not have the CS coefficient
-        if len(polar_data) > 3:
+    # CL-CD plot
+    if angle_type == "angle_of_attack":
+        for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
             if i < n_solvers:
                 linestyle = "-"
                 marker = "*"
@@ -775,19 +774,48 @@ def plot_polars(
                 marker = "."
                 markersize = 5
             axs[1, 0].plot(
-                polar_data[0],
-                polar_data[3],
+                polar_data[2],
+                polar_data[1],
                 label=label,
                 linestyle=linestyle,
                 marker=marker,
                 markersize=markersize,
             )
-    axs[1, 0].set_title(r"$C_S$ vs {}".format(angle_type))
-    axs[1, 0].set_xlabel(r"{}[deg]".format(angle_type))
-    axs[1, 0].set_ylabel(r"$C_S$")
-    axs[1, 0].legend()
+            if max(polar_data[1]) > 10 or max(polar_data[2]) > 10:
+                axs[1, 0].set_ylim([-0.5, 2])
+                axs[1, 0].set_xlim([-0.2, 0.5])
+        axs[1, 0].set_title(r"$C_L$ vs $C_D$ (over {} range)".format(angle_type))
+        axs[1, 0].set_xlabel(r"$C_D$")
+        axs[1, 0].set_ylabel(r"$C_L$")
+        axs[1, 0].legend()
 
-    # CL-CD plot
+    elif angle_type == "side_slip":
+        # CS plot
+        for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
+            # Build-in a check, since the literature polars might not have the CS coefficient
+            if len(polar_data) > 3:
+                if i < n_solvers:
+                    linestyle = "-"
+                    marker = "*"
+                    markersize = 7
+                else:
+                    linestyle = "-"
+                    marker = "."
+                    markersize = 5
+                axs[1, 0].plot(
+                    polar_data[0],
+                    polar_data[3],
+                    label=label,
+                    linestyle=linestyle,
+                    marker=marker,
+                    markersize=markersize,
+                )
+        axs[1, 0].set_title(r"$C_S$ vs {}".format(angle_type))
+        axs[1, 0].set_xlabel(r"{}[deg]".format(angle_type))
+        axs[1, 0].set_ylabel(r"$C_S$")
+        axs[1, 0].legend()
+
+    # plot CL/CD over alpha
     for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
         if i < n_solvers:
             linestyle = "-"
@@ -798,19 +826,16 @@ def plot_polars(
             marker = "."
             markersize = 5
         axs[1, 1].plot(
-            polar_data[2],
-            polar_data[1],
+            polar_data[0],
+            polar_data[1] / polar_data[2],
             label=label,
             linestyle=linestyle,
             marker=marker,
             markersize=markersize,
         )
-        if max(polar_data[1]) > 10 or max(polar_data[2]) > 10:
-            axs[1, 1].set_ylim([-0.5, 2])
-            axs[1, 1].set_xlim([-0.2, 0.5])
-    axs[1, 1].set_title(r"$C_L$ vs $C_D$ (over {} range)".format(angle_type))
-    axs[1, 1].set_xlabel(r"$C_D$")
-    axs[1, 1].set_ylabel(r"$C_L$")
+    axs[1, 1].set_title(r"$C_L/C_D$ vs {}".format(angle_type))
+    axs[1, 1].set_xlabel(r"{}[deg]".format(angle_type))
+    axs[1, 1].set_ylabel(r"$C_L/C_D$")
     axs[1, 1].legend()
 
     # Ensure the figure is fully rendered

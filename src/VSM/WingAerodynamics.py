@@ -435,6 +435,7 @@ class WingAerodynamics:
         va_unit_array,
         panels,
         is_only_f_and_gamma_output,
+        is_new_vector_definition,
     ):
 
         cl_array, cd_array, cm_array = (
@@ -516,11 +517,12 @@ class WingAerodynamics:
                 + np.sin(alpha_corrected_i) * x_airf_normal_to_chord
             )
             dir_induced_va_airfoil = induced_va_airfoil / jit_norm(induced_va_airfoil)
+
             ### Calculate the direction of the lift and drag vectors
             # lift is perpendical/normal to induced apparent wind speed
-            # drag is parallel/tangential to induced apparent wind speed
             dir_lift_induced_va = jit_cross(dir_induced_va_airfoil, z_airf_span)
             dir_lift_induced_va = dir_lift_induced_va / jit_norm(dir_lift_induced_va)
+            # drag is parallel/tangential to induced apparent wind speed
             dir_drag_induced_va = jit_cross(spanwise_direction, dir_lift_induced_va)
             dir_drag_induced_va = dir_drag_induced_va / jit_norm(dir_drag_induced_va)
 
@@ -536,7 +538,7 @@ class WingAerodynamics:
             # panel force VECTOR TANGENTIAL to CALCULATED induced velocity
             drag_induced_va = drag_induced_va_mag * dir_drag_induced_va
             ftotal_induced_va = lift_induced_va + drag_induced_va
-            logging.debug(f"ftotal_induced_va: {ftotal_induced_va}")
+            logging.debug(f" OLD ftotal_induced_va: {ftotal_induced_va}")
 
             ### Converting forces to prescribed wing va
             dir_lift_prescribed_va = jit_cross(va, spanwise_direction)
@@ -549,9 +551,115 @@ class WingAerodynamics:
             drag_prescribed_va = jit_dot(lift_induced_va, va_unit) + jit_dot(
                 drag_induced_va, va_unit
             )
-            side_prescribed_va = jit_dot(lift_induced_va, spanwise_direction) + jit_dot(
-                drag_induced_va, spanwise_direction
-            )
+            if is_new_vector_definition:
+                dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
+                side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
+                    drag_induced_va, dir_side
+                )
+            else:
+                side_prescribed_va = jit_dot(
+                    lift_induced_va, spanwise_direction
+                ) + jit_dot(drag_induced_va, spanwise_direction)
+
+            # logging.info(f" old implementation")
+            # logging.info(f" local ")
+            # logging.info(f"dir_lift_induced_va: {dir_lift_induced_va}")
+            # logging.info(f"dir_drag_induced_va: {dir_drag_induced_va}")
+            # logging.info(f" global ")
+            # logging.info(f"dir_lift_prescribed_va: {dir_lift_prescribed_va}")
+            # logging.info(f"dir_drag_prescribed_va: {va_unit}")
+            # logging.info(f"dir_side_prescribed_va: {spanwise_direction}")
+            # logging.info(
+            #     f"new side dir: {jit_cross(dir_lift_prescribed_va, va_unit)}"
+            # )
+            # logging.info(f"lift_prescribed_va: {lift_prescribed_va}")
+            # logging.info(f"drag_prescribed_va: {drag_prescribed_va}")
+            # logging.info(f"side_prescribed_va: {side_prescribed_va}")
+
+            # ############### BELOW NEW ################
+            # ### Defining local airfoil lift and drag directions
+            # # 1. Defining local drag direction , as parallel to the local va
+            # dir_airfoil_drag = dir_induced_va_airfoil
+
+            # # 2. Defining local lift direction, as perpendicular to the local va
+            # # We start with z_global, and remove the component that is parallel to the induced va
+            # # This component is find by flattening the z_global vector onto the induced va vector
+            # # In this way we end up with a vector that is perpendicular to the induced va vector
+            # # np.dot(z_global, va_unit): This calculates how much of z_global is parallel to va_unit
+            # # np.dot(z_global, va_unit) * va_unit: This creates a vector that represents the component of z_global that's parallel to va_unit
+            # # z_global - (np.dot(z_global, va_unit) * va_unit): By subtracting this parallel component from z_global, we're left with the component of z_global that's perpendicular to va_unit.
+            # z_global = x_airf_normal_to_chord
+            # dir_airfoil_lift_vector = (
+            #     z_global - jit_dot(z_global, dir_airfoil_drag) * dir_airfoil_drag
+            # )
+            # dir_airfoil_lift = dir_airfoil_lift_vector / jit_norm(
+            #     dir_airfoil_lift_vector
+            # )
+
+            # ### Calculating the MAGNITUDE of the lift and drag
+            # # The VSM and LTT methods do NOT differ here, both use the uncorrected angle of attack
+            # # i.e. evaluate the magnitude at the (3/4c) control point
+            # # 2D AIRFOIL aerodynamic forces, so multiplied by chord
+            # lift_induced_va_mag = lift[i]
+            # drag_induced_va_mag = drag[i]
+
+            # # panel force VECTOR NORMAL to CALCULATED induced velocity
+            # lift_induced_va = lift_induced_va_mag * dir_airfoil_lift
+            # # panel force VECTOR TANGENTIAL to CALCULATED induced velocity
+            # drag_induced_va = drag_induced_va_mag * dir_airfoil_drag
+
+            # # total force
+            # ftotal_induced_va = lift_induced_va + drag_induced_va
+
+            # ### Calculating wing directions
+            # # 1. Defining wing drag direction
+            # dir_wing_drag_prescribed_va = va_unit
+            # # 2. Defining wing lift direction
+            # z_global = np.array([0, 0, 1])
+            # dir_wing_lift_prescribed_va_vector = (
+            #     z_global
+            #     - jit_dot(z_global, dir_wing_drag_prescribed_va)
+            #     * dir_wing_drag_prescribed_va
+            # )
+            # dir_wing_lift_prescribed_va = (
+            #     dir_wing_lift_prescribed_va_vector
+            #     / jit_norm(dir_wing_lift_prescribed_va_vector)
+            # )
+            # # 3. Defining wing side direction
+            # dir_wing_side_prescribed_va = np.cross(
+            #     dir_wing_drag_prescribed_va, dir_wing_lift_prescribed_va
+            # )
+
+            # # ensure it is pointing in the positive y-direction
+            # if dir_wing_side_prescribed_va[1] < 0:
+            #     dir_wing_side_prescribed_va = -dir_wing_side_prescribed_va
+
+            # ### Converting forces to prescribed wing va
+            # drag_prescribed_va = jit_dot(
+            #     lift_induced_va, dir_wing_drag_prescribed_va
+            # ) + jit_dot(drag_induced_va, dir_wing_drag_prescribed_va)
+            # lift_prescribed_va = jit_dot(
+            #     lift_induced_va, dir_wing_lift_prescribed_va
+            # ) + jit_dot(drag_induced_va, dir_wing_lift_prescribed_va)
+            # side_prescribed_va = jit_dot(
+            #     lift_induced_va, dir_wing_side_prescribed_va
+            # ) + jit_dot(drag_induced_va, dir_wing_side_prescribed_va)
+
+            # # print(f"\n new implementation")
+            # # logging.info(f" local ")
+            # # logging.info(f"dir_lift_induced_va: {dir_airfoil_lift}")
+            # # logging.info(f"dir_drag_induced_va: {dir_airfoil_drag}")
+
+            # # logging.info(f" global ")
+            # # logging.info(f"dir_lift_prescribed_va: {dir_wing_lift_prescribed_va}")
+            # # logging.info(f"dir_drag_prescribed_va: {dir_wing_drag_prescribed_va}")
+            # # logging.info(f"dir_side_prescribed_va: {dir_wing_side_prescribed_va}")
+
+            # # logging.info(f"lift_prescribed_va: {lift_prescribed_va}")
+            # # logging.info(f"drag_prescribed_va: {drag_prescribed_va}")
+            # # logging.info(f"side_prescribed_va: {side_prescribed_va}")
+
+            # ############### ABOVE NEW ################
 
             ### Converting forces to the global reference frame
             fx_global_2D = jit_dot(ftotal_induced_va, np.array([1, 0, 0]))
@@ -559,21 +667,21 @@ class WingAerodynamics:
             fz_global_2D = jit_dot(ftotal_induced_va, np.array([0, 0, 1]))
 
             ### Logging
-            logging.debug("----calculate_results_new----- icp: %d", i)
-            logging.debug(f"dir urel: {dir_induced_va_airfoil}")
-            logging.debug(f"dir_L: {dir_lift_induced_va}")
-            logging.debug(f"dir_D: {dir_drag_induced_va}")
-            logging.debug(
-                "lift_induced_va_2d (=L_rel): %s",
-                lift_induced_va,
-            )
-            logging.debug(
-                "lift_induced_va_2d (=D_rel): %s",
-                drag_induced_va,
-            )
-            logging.debug(f"Fmag_0: {lift_prescribed_va}")
-            logging.debug(f"Fmag_1: {drag_prescribed_va}")
-            logging.debug(f"Fmag_2: {side_prescribed_va}")
+            # logging.debug("----calculate_results_new----- icp: %d", i)
+            # logging.debug(f"dir urel: {dir_induced_va_airfoil}")
+            # logging.debug(f"dir_L: {dir_lift_induced_va}")
+            # logging.debug(f"dir_D: {dir_drag_induced_va}")
+            # logging.debug(
+            #     "lift_induced_va_2d (=L_rel): %s",
+            #     lift_induced_va,
+            # )
+            # logging.debug(
+            #     "lift_induced_va_2d (=D_rel): %s",
+            #     drag_induced_va,
+            # )
+            # logging.debug(f"Fmag_0: {lift_prescribed_va}")
+            # logging.debug(f"Fmag_1: {drag_prescribed_va}")
+            # logging.debug(f"Fmag_2: {side_prescribed_va}")
 
             # 3D, by multiplying with the panel width
             lift_wing_3D = lift_prescribed_va * panel_width
