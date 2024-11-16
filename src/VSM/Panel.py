@@ -487,7 +487,7 @@ class Panel:
                     color = "green"
             else:
                 # For semi-infinite filaments
-                x2 = x1 + 2 * self.chord * (self.va / jit_norm(self.va))
+                x2 = x1 + 1 * self.chord * (self.va / jit_norm(self.va))
                 color = "orange"
                 if filament.filament_direction == -1:
                     x1, x2 = x2, x1

@@ -117,7 +117,7 @@ def add_panel_surface(fig: go.Figure, panel: Any, is_first: bool) -> None:
     )
 
 
-def add_aerodynamic_details(fig: go.Figure, panel: Any, is_first: bool = False) -> None:
+def add_filaments(fig: go.Figure, panel: Any, is_first: bool = False) -> None:
     """Add aerodynamic visualization details to the figure."""
     filaments = panel.calculate_filaments_for_plotting()
     colors = ["blue", "blue", "blue", "blue", "blue"]
@@ -252,6 +252,9 @@ def create_3D_plot(
     """
     panels = wing_aero.panels
 
+    if is_with_aerodynamic_details:
+        add_control_and_aero_centers(fig, panels)
+
     # Add geometric elements
     for i, panel in enumerate(panels):
         is_first = False
@@ -261,15 +264,12 @@ def create_3D_plot(
         elif i == len(panels) - 1:
             is_last = True
 
+        if is_with_aerodynamic_details:
+            add_filaments(fig, panel, is_first)
+
         add_panel_edges(fig, panel, is_first, is_last)
         add_panel_surface(fig, panel, is_first)
         add_aerodynamic_vectors(fig, panel, is_first, np.array(forces_of_panels[i]))
-
-        if is_with_aerodynamic_details:
-            add_aerodynamic_details(fig, panel, is_first)
-
-    if is_with_aerodynamic_details:
-        add_control_and_aero_centers(fig, panels)
 
     return fig
 
@@ -394,7 +394,14 @@ def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figur
             bgcolor="white",
         ),
         showlegend=True,
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01, title="Legend"),
+        legend=dict(
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=0,
+            title="Legend (click items to hide)",
+            font=dict(size=12),
+        ),
         paper_bgcolor="white",
         plot_bgcolor="white",
     )
@@ -460,14 +467,39 @@ def add_text_annotations(fig, x, y, title: str = "Your Text Here"):
 
 
 def add_case_information(
-    fig, vel: float, angle_of_attack: float, side_slip: float, yaw_rate: float
-):
-    add_text_annotations(fig, x=1, y=1.00, title=f"V = {vel} m/s")
+    fig,
+    vel: float,
+    angle_of_attack: float,
+    side_slip: float,
+    yaw_rate: float,
+    results: Dict[str, Any],
+) -> go.Figure:
+    add_text_annotations(fig, x=1, y=1.00, title=f"velocity = {vel:.2f} [m/s]")
     add_text_annotations(
-        fig, x=1, y=0.98, title=f"angle of attack = {angle_of_attack}deg"
+        fig, x=1, y=0.98, title=f"angle of attack = {angle_of_attack:.2f} [deg]"
     )
-    add_text_annotations(fig, x=1, y=0.96, title=f"Side Slip = {side_slip}deg")
-    add_text_annotations(fig, x=1, y=0.94, title=f"Yaw Rate = {yaw_rate} rad/s")
+    add_text_annotations(fig, x=1, y=0.96, title=f"side slip = {side_slip:.2f} [deg]")
+    add_text_annotations(fig, x=1, y=0.94, title=f"yaw rate = {yaw_rate:.2f} [rad/s]")
+    add_text_annotations(fig, x=1, y=0.92, title="-------------------")
+    add_text_annotations(
+        fig,
+        x=1,
+        y=0.90,
+        title=f"CL = {results['cl']:.2f}",
+    )
+    add_text_annotations(
+        fig,
+        x=1,
+        y=0.88,
+        title=f"CD = {results['cd']:.2f}",
+    )
+    add_text_annotations(
+        fig,
+        x=1,
+        y=0.86,
+        title=f"CS = {results['cs']:.2f}",
+    )
+
     return fig
 
 
@@ -490,13 +522,17 @@ def update_plot(
     fig = create_3D_plot(
         fig, wing_aero, results["F_distribution"], is_with_aerodynamic_details
     )
-    fig = add_case_information(fig, vel, angle_of_attack, side_slip, yaw_rate)
+    fig = add_case_information(fig, vel, angle_of_attack, side_slip, yaw_rate, results)
     fig = update_fig_layout(fig, wing_aero.panels, title)
 
 
 # Define the interactive plot function with slider for AoA
 def interactive_plot(
     wing_aero: object,
+    vel: float = 10,
+    angle_of_attack: float = 10,
+    side_slip: float = 0,
+    yaw_rate: float = 0,
     title: str = "Interactive plot",
     is_with_aerodynamic_details: bool = False,
     save_path: str = None,
@@ -507,11 +543,6 @@ def interactive_plot(
     """
     Creates and optionally saves multiple views of the wing geometry with interactive AoA slider.
     """
-    # Values
-    vel = 3.15
-    aoa = 6.75
-    side_slip = 0
-    yaw_rate = 0
 
     # Create the figure
     fig = go.Figure()
@@ -521,7 +552,7 @@ def interactive_plot(
         fig,
         wing_aero,
         vel,
-        aoa,
+        angle_of_attack,
         side_slip,
         yaw_rate,
         is_with_aerodynamic_details,

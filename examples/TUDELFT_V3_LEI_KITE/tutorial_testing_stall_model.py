@@ -90,40 +90,46 @@ VSM_new_vector_diff_stall = Solver(
 )
 
 
-# setting va
-Umag = 3.15
-aoa = 6.75
-side_slip = np.deg2rad(0)
-yaw_rate = 0
-aoa_rad = np.deg2rad(aoa)
-vel_app = (
-    np.array(
-        [
-            np.cos(aoa_rad) * np.cos(side_slip),
-            np.sin(side_slip),
-            np.sin(aoa_rad),
-        ]
-    )
-    * Umag
-)
-wing_aero_CAD_19ribs.va = (vel_app, yaw_rate)
-
 # interactive plot
-interactive_plot(wing_aero_CAD_19ribs, title="Wing Geometry")
+interactive_plot(
+    wing_aero_CAD_19ribs,
+    vel=3.15,
+    angle_of_attack=6.75,
+    side_slip=10,
+    yaw_rate=0,
+    is_with_aerodynamic_details=True,
+)
 
-##############
 
-# ## Plotting
-# plot_geometry(
-#     wing_aero_CAD_19ribs,
-#     title=" ",
-#     data_type=".svg",
-#     save_path=" ",
-#     is_save=False,
-#     is_show=True,
-#     view_elevation=15,
-#     view_azimuth=-120,
+# # setting va
+# Umag = 3.15
+# aoa = 6.75
+# side_slip = np.deg2rad(0)
+# yaw_rate = 0
+# aoa_rad = np.deg2rad(aoa)
+# vel_app = (
+#     np.array(
+#         [
+#             np.cos(aoa_rad) * np.cos(side_slip),
+#             np.sin(side_slip),
+#             np.sin(aoa_rad),
+#         ]
+#     )
+#     * Umag
 # )
+# wing_aero_CAD_19ribs.va = (vel_app, yaw_rate)
+
+# # ## Plotting
+# # plot_geometry(
+# #     wing_aero_CAD_19ribs,
+# #     title=" ",
+# #     data_type=".svg",
+# #     save_path=" ",
+# #     is_save=False,
+# #     is_show=True,
+# #     view_elevation=15,
+# #     view_azimuth=-120,
+# # )
 
 # ### plotting distributions
 # results = VSM.solve(wing_aero_CAD_19ribs)
