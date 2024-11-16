@@ -90,6 +90,7 @@ dependencies = [
   "numba",
   "ipykernel",
   "screeninfo",
+  "plotly",
 ]
 
 
