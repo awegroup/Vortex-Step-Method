@@ -84,7 +84,7 @@ class WingAerodynamics:
         self._gamma_distribution = None
         self._alpha_uncorrected = None
         self._alpha_corrected = None
-        self._stall_angle_list = self.calculate_stall_angle_list()
+        # self._stall_angle_list = self.calculate_stall_angle_list()
 
     ###########################
     ## GETTER FUNCTIONS
@@ -110,9 +110,9 @@ class WingAerodynamics:
     def wings(self):
         return self._wings
 
-    @property
-    def stall_angle_list(self):
-        return self._stall_angle_list
+    # @property
+    # def stall_angle_list(self):
+    #     return self._stall_angle_list
 
     ###########################
     ## SETTER FUNCTIONS
@@ -374,48 +374,48 @@ class WingAerodynamics:
 
         return gamma_i
 
-    def calculate_stall_angle_list(
-        self,
-        begin_aoa: float = 9,
-        end_aoa: float = 22,
-        step_aoa: float = 1,
-        stall_angle_if_none_detected: float = 50,
-        cl_initial: float = -10,
-    ):
-        """Calculates the stall angle list for each panel
+    # def calculate_stall_angle_list(
+    #     self,
+    #     begin_aoa: float = 9,
+    #     end_aoa: float = 22,
+    #     step_aoa: float = 1,
+    #     stall_angle_if_none_detected: float = 50,
+    #     cl_initial: float = -10,
+    # ):
+    #     """Calculates the stall angle list for each panel
 
-        Args:
-            begin_aoa (float): The beginning angle of attack
-            end_aoa (float): The end angle of attack
-            step_aoa (float): The step angle of attack
-            stall_angle_if_none_detected (float): The stall angle if none is detected
-            cl_initial (float): The initial lift coefficient
+    #     Args:
+    #         begin_aoa (float): The beginning angle of attack
+    #         end_aoa (float): The end angle of attack
+    #         step_aoa (float): The step angle of attack
+    #         stall_angle_if_none_detected (float): The stall angle if none is detected
+    #         cl_initial (float): The initial lift coefficient
 
-        Returns:
-            np.array: The stall angle list"""
+    #     Returns:
+    #         np.array: The stall angle list"""
 
-        aoa_range_over_which_stall_is_expected = np.deg2rad(
-            np.arange(
-                begin_aoa,
-                end_aoa,
-                step_aoa,
-            )
-        )
-        stall_angle_list = []
-        for panel in self.panels:
-            # initialising a value, for when no stall is found
-            panel_aoa_stall = stall_angle_if_none_detected
+    #     aoa_range_over_which_stall_is_expected = np.deg2rad(
+    #         np.arange(
+    #             begin_aoa,
+    #             end_aoa,
+    #             step_aoa,
+    #         )
+    #     )
+    #     stall_angle_list = []
+    #     for panel in self.panels:
+    #         # initialising a value, for when no stall is found
+    #         panel_aoa_stall = stall_angle_if_none_detected
 
-            # starting with a very small cl value
-            cl_old = cl_initial
-            for aoa in aoa_range_over_which_stall_is_expected:
-                cl = panel.calculate_cl(aoa)
-                if cl < cl_old:
-                    panel_aoa_stall = aoa
-                    break
-                cl_old = cl
-            stall_angle_list.append(panel_aoa_stall)
-        return np.array(stall_angle_list)
+    #         # starting with a very small cl value
+    #         cl_old = cl_initial
+    #         for aoa in aoa_range_over_which_stall_is_expected:
+    #             cl = panel.calculate_cl(aoa)
+    #             if cl < cl_old:
+    #                 panel_aoa_stall = aoa
+    #                 break
+    #             cl_old = cl
+    #         stall_angle_list.append(panel_aoa_stall)
+    #     return np.array(stall_angle_list)
 
     def calculate_results(
         self,

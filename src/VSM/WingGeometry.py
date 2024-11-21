@@ -290,7 +290,7 @@ class Wing:
         return new_sections
 
     def interpolate_to_common_alpha(
-        alpha_common, alpha_orig, CL_orig, CD_orig, CM_orig
+        self, alpha_common, alpha_orig, CL_orig, CD_orig, CM_orig
     ):
         CL_common = np.interp(alpha_common, alpha_orig, CL_orig)
         CD_common = np.interp(alpha_common, alpha_orig, CD_orig)

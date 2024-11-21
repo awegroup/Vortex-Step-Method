@@ -115,11 +115,27 @@ default_kite = rows = [
         ["lei_airfoil_breukels", [np.float64(0.09000078168237204), 0.09]],
     ],
 ]
+"""
+"polar_data",[alpha,CL,CD,CM]]: Polar data aerodynamics
+                    Where alpha, CL, CD, and CM are arrays of the same length
+                        - alpha: Angle of attack in radians
+                        - CL: Lift coefficient
+                        - CD: Drag coefficient
+                        - CM: Moment coefficient
+"""
+
 n_panels = len(default_kite)
 wing = Wing(n_panels, "linear")
 
+alpha = np.deg2rad(np.linspace(-5, 20, 26))
+cl = 2 * np.pi * (alpha)
+cd = 0.01 + 0.1 * np.abs(alpha)
+cm = 0.03 * np.ones_like(alpha)
+
+polar_data = ["polar_data", np.array([alpha, cl, cd, cm])]
+
 for rib in default_kite:
-    wing.add_section(rib[0], rib[1], rib[2])
+    wing.add_section(rib[0], rib[1], polar_data)
 wing_aero = WingAerodynamics([wing])
 
 
