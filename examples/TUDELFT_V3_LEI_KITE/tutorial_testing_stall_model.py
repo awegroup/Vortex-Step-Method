@@ -94,30 +94,30 @@ VSM_new_vector_diff_stall = Solver(
 interactive_plot(
     wing_aero_CAD_19ribs,
     vel=3.15,
-    angle_of_attack=6.75,
-    side_slip=10,
+    angle_of_attack=6.00,
+    side_slip=0,
     yaw_rate=0,
     is_with_aerodynamic_details=True,
 )
 
 
-# # setting va
-# Umag = 3.15
-# aoa = 6.75
-# side_slip = np.deg2rad(0)
-# yaw_rate = 0
-# aoa_rad = np.deg2rad(aoa)
-# vel_app = (
-#     np.array(
-#         [
-#             np.cos(aoa_rad) * np.cos(side_slip),
-#             np.sin(side_slip),
-#             np.sin(aoa_rad),
-#         ]
-#     )
-#     * Umag
-# )
-# wing_aero_CAD_19ribs.va = (vel_app, yaw_rate)
+# setting va
+Umag = 3.15
+aoa = 6.0
+side_slip = np.deg2rad(0)
+yaw_rate = 0
+aoa_rad = np.deg2rad(aoa)
+vel_app = (
+    np.array(
+        [
+            np.cos(aoa_rad) * np.cos(side_slip),
+            np.sin(side_slip),
+            np.sin(aoa_rad),
+        ]
+    )
+    * Umag
+)
+wing_aero_CAD_19ribs.va = (vel_app, yaw_rate)
 
 # # ## Plotting
 # # plot_geometry(
@@ -131,42 +131,42 @@ interactive_plot(
 # #     view_azimuth=-120,
 # # )
 
-# ### plotting distributions
-# results = VSM.solve(wing_aero_CAD_19ribs)
-# results_with_stall_correction = VSM_with_stall_correction.solve(wing_aero_CAD_19ribs)
-# CAD_y_coordinates = [
-#     panels.aerodynamic_center[1] for panels in wing_aero_CAD_19ribs.panels
-# ]
-# results_no_gamma_feedback = VSM_no_gamma_feedback.solve(wing_aero_CAD_19ribs)
-# results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
-#     wing_aero_CAD_19ribs
-# )
+### plotting distributions
+results = VSM.solve(wing_aero_CAD_19ribs)
+results_with_stall_correction = VSM_with_stall_correction.solve(wing_aero_CAD_19ribs)
+CAD_y_coordinates = [
+    panels.aerodynamic_center[1] for panels in wing_aero_CAD_19ribs.panels
+]
+results_no_gamma_feedback = VSM_no_gamma_feedback.solve(wing_aero_CAD_19ribs)
+results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
+    wing_aero_CAD_19ribs
+)
 
-# plot_distribution(
-#     y_coordinates_list=[
-#         CAD_y_coordinates,
-#         CAD_y_coordinates,
-#         CAD_y_coordinates,
-#         CAD_y_coordinates,
-#     ],
-#     results_list=[
-#         results,
-#         results_with_stall_correction,
-#         results_no_gamma_feedback,
-#         results_no_gamma_feedback_stall,
-#     ],
-#     label_list=[
-#         "VSM",
-#         "VSM with stall correction",
-#         "VSM_no_gamma_feedback",
-#         "VSM_no_gamma_feedback_stall",
-#     ],
-#     title=f"CAD_spanwise_distributions_alpha_{aoa:.1f}_beta_{side_slip:.1f}_yaw_{yaw_rate:.1f}_Umag_{Umag:.1f}",
-#     data_type=".pdf",
-#     save_path=Path(save_folder) / "spanwise_distributions",
-#     is_save=False,
-#     is_show=True,
-# )
+plot_distribution(
+    y_coordinates_list=[
+        CAD_y_coordinates,
+        CAD_y_coordinates,
+        CAD_y_coordinates,
+        CAD_y_coordinates,
+    ],
+    results_list=[
+        results,
+        results_with_stall_correction,
+        results_no_gamma_feedback,
+        results_no_gamma_feedback_stall,
+    ],
+    label_list=[
+        "VSM",
+        "VSM with stall correction",
+        "VSM_no_gamma_feedback",
+        "VSM_no_gamma_feedback_stall",
+    ],
+    title=f"CAD_spanwise_distributions_alpha_{aoa:.1f}_beta_{side_slip:.1f}_yaw_{yaw_rate:.1f}_Umag_{Umag:.1f}",
+    data_type=".pdf",
+    save_path=Path(save_folder) / "spanwise_distributions",
+    is_save=False,
+    is_show=True,
+)
 
 # ### plotting polar
 # save_path = Path(root_dir) / "results" / "TUD_V3_LEI_KITE"

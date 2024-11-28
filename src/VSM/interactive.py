@@ -476,27 +476,27 @@ def add_case_information(
 ) -> go.Figure:
     add_text_annotations(fig, x=1, y=1.00, title=f"velocity = {vel:.2f} [m/s]")
     add_text_annotations(
-        fig, x=1, y=0.98, title=f"angle of attack = {angle_of_attack:.2f} [deg]"
+        fig, x=1, y=0.97, title=f"angle of attack = {angle_of_attack:.2f} [deg]"
     )
-    add_text_annotations(fig, x=1, y=0.96, title=f"side slip = {side_slip:.2f} [deg]")
-    add_text_annotations(fig, x=1, y=0.94, title=f"yaw rate = {yaw_rate:.2f} [rad/s]")
-    add_text_annotations(fig, x=1, y=0.92, title="-------------------")
+    add_text_annotations(fig, x=1, y=0.94, title=f"side slip = {side_slip:.2f} [deg]")
+    add_text_annotations(fig, x=1, y=0.91, title=f"yaw rate = {yaw_rate:.2f} [rad/s]")
+    add_text_annotations(fig, x=1, y=0.88, title="-------------------")
     add_text_annotations(
         fig,
         x=1,
-        y=0.90,
+        y=0.85,
         title=f"CL = {results['cl']:.2f}",
     )
     add_text_annotations(
         fig,
         x=1,
-        y=0.88,
+        y=0.82,
         title=f"CD = {results['cd']:.2f}",
     )
     add_text_annotations(
         fig,
         x=1,
-        y=0.86,
+        y=0.79,
         title=f"CS = {results['cs']:.2f}",
     )
 

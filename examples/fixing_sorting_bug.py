@@ -125,7 +125,7 @@ default_kite = rows = [
 """
 
 n_panels = len(default_kite)
-wing = Wing(n_panels, "linear")
+wing = Wing(n_panels + 3, "linear")
 
 alpha = np.deg2rad(np.linspace(-5, 20, 26))
 cl = 2 * np.pi * (alpha)
@@ -133,6 +133,8 @@ cd = 0.01 + 0.1 * np.abs(alpha)
 cm = 0.03 * np.ones_like(alpha)
 
 polar_data = ["polar_data", np.array([alpha, cl, cd, cm])]
+
+print(f"polar_data: {polar_data[1].shape} {polar_data[1]}")
 
 for rib in default_kite:
     wing.add_section(rib[0], rib[1], polar_data)
