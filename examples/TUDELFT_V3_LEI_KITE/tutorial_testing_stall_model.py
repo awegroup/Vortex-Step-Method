@@ -159,15 +159,15 @@ wing_aero_CAD_19ribs = setting_va(wing_aero_CAD_19ribs, Umag, aoa, side_slip, ya
 # # )
 
 
-# #### INTERACTIVE PLOT
-# interactive_plot(
-#     wing_aero_CAD_19ribs,
-#     vel=3.15,
-#     angle_of_attack=6.00,
-#     side_slip=10,
-#     yaw_rate=0,
-#     is_with_aerodynamic_details=True,
-# )
+#### INTERACTIVE PLOT
+interactive_plot(
+    wing_aero_CAD_19ribs,
+    vel=23.15,
+    angle_of_attack=6.00,
+    side_slip=10,
+    yaw_rate=0,
+    is_with_aerodynamic_details=True,
+)
 
 
 ### PLOTTING 2D POLARS

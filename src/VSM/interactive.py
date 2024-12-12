@@ -172,6 +172,7 @@ def add_aerodynamic_vectors(
     is_first: bool,
     force_vector: np.ndarray,
     scale: float = 0.5,
+    max_force: float = 1.0,
 ):
     """
     Add aerodynamic force vectors to a given panel on the plot.
@@ -184,7 +185,7 @@ def add_aerodynamic_vectors(
     """
     # Compute vector endpoint
     aerodynamic_center = panel.aerodynamic_center
-    vector = force_vector * scale
+    vector = (force_vector / max_force) * scale
     vector_endpoint = aerodynamic_center + vector
 
     # Add the vector as a line
@@ -252,6 +253,9 @@ def create_3D_plot(
     """
     panels = wing_aero.panels
 
+    chord_average = np.average([panel.chord for panel in panels])
+    max_force = np.max([np.linalg.norm(force) for force in forces_of_panels])
+
     if is_with_aerodynamic_details:
         add_control_and_aero_centers(fig, panels)
 
@@ -269,7 +273,14 @@ def create_3D_plot(
 
         add_panel_edges(fig, panel, is_first, is_last)
         add_panel_surface(fig, panel, is_first)
-        add_aerodynamic_vectors(fig, panel, is_first, np.array(forces_of_panels[i]))
+        add_aerodynamic_vectors(
+            fig,
+            panel,
+            is_first,
+            np.array(forces_of_panels[i]),
+            scale=chord_average,
+            max_force=max_force,
+        )
 
     return fig
 
@@ -544,8 +555,15 @@ def interactive_plot(
     Creates and optionally saves multiple views of the wing geometry with interactive AoA slider.
     """
 
-    # Create the figure
+    # Create the figure with a default orientation
     fig = go.Figure()
+    fig.update_layout(
+        scene_camera=dict(
+            eye=dict(
+                x=-4, y=0, z=0
+            )  # Adjust the x, y, and z values for the desired view angles
+        )
+    )
 
     # Add initial plot based on initial AoA
     update_plot(
