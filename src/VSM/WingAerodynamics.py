@@ -450,7 +450,9 @@ class WingAerodynamics:
             panel_width_array[icp] = panel_i.width
         lift = (cl_array * 0.5 * density * Umag_array**2 * chord_array)[:, np.newaxis]
         drag = (cd_array * 0.5 * density * Umag_array**2 * chord_array)[:, np.newaxis]
-        moment = (cm_array * 0.5 * density * Umag_array**2 * chord_array)[:, np.newaxis]
+        moment = (cm_array * 0.5 * density * Umag_array**2 * chord_array**2)[
+            :, np.newaxis
+        ]
 
         if aerodynamic_model_type == "VSM":
             alpha_corrected = self.update_effective_angle_of_attack_if_VSM(
@@ -488,6 +490,15 @@ class WingAerodynamics:
         fx_global_3D_sum = 0
         fy_global_3D_sum = 0
         fz_global_3D_sum = 0
+
+        ### Moments
+        m_global_3D_list = []
+        mx_global_3D_list = []
+        my_global_3D_list = []
+        mz_global_3D_list = []
+        mx_global_3D_sum = 0
+        my_global_3D_sum = 0
+        mz_global_3D_sum = 0
 
         spanwise_direction = self.wings[0].spanwise_direction
         va_mag = jit_norm(self._va)
@@ -561,127 +572,10 @@ class WingAerodynamics:
                     lift_induced_va, spanwise_direction
                 ) + jit_dot(drag_induced_va, spanwise_direction)
 
-            # logging.info(f" old implementation")
-            # logging.info(f" local ")
-            # logging.info(f"dir_lift_induced_va: {dir_lift_induced_va}")
-            # logging.info(f"dir_drag_induced_va: {dir_drag_induced_va}")
-            # logging.info(f" global ")
-            # logging.info(f"dir_lift_prescribed_va: {dir_lift_prescribed_va}")
-            # logging.info(f"dir_drag_prescribed_va: {va_unit}")
-            # logging.info(f"dir_side_prescribed_va: {spanwise_direction}")
-            # logging.info(
-            #     f"new side dir: {jit_cross(dir_lift_prescribed_va, va_unit)}"
-            # )
-            # logging.info(f"lift_prescribed_va: {lift_prescribed_va}")
-            # logging.info(f"drag_prescribed_va: {drag_prescribed_va}")
-            # logging.info(f"side_prescribed_va: {side_prescribed_va}")
-
-            # ############### BELOW NEW ################
-            # ### Defining local airfoil lift and drag directions
-            # # 1. Defining local drag direction , as parallel to the local va
-            # dir_airfoil_drag = dir_induced_va_airfoil
-
-            # # 2. Defining local lift direction, as perpendicular to the local va
-            # # We start with z_global, and remove the component that is parallel to the induced va
-            # # This component is find by flattening the z_global vector onto the induced va vector
-            # # In this way we end up with a vector that is perpendicular to the induced va vector
-            # # np.dot(z_global, va_unit): This calculates how much of z_global is parallel to va_unit
-            # # np.dot(z_global, va_unit) * va_unit: This creates a vector that represents the component of z_global that's parallel to va_unit
-            # # z_global - (np.dot(z_global, va_unit) * va_unit): By subtracting this parallel component from z_global, we're left with the component of z_global that's perpendicular to va_unit.
-            # z_global = x_airf_normal_to_chord
-            # dir_airfoil_lift_vector = (
-            #     z_global - jit_dot(z_global, dir_airfoil_drag) * dir_airfoil_drag
-            # )
-            # dir_airfoil_lift = dir_airfoil_lift_vector / jit_norm(
-            #     dir_airfoil_lift_vector
-            # )
-
-            # ### Calculating the MAGNITUDE of the lift and drag
-            # # The VSM and LTT methods do NOT differ here, both use the uncorrected angle of attack
-            # # i.e. evaluate the magnitude at the (3/4c) control point
-            # # 2D AIRFOIL aerodynamic forces, so multiplied by chord
-            # lift_induced_va_mag = lift[i]
-            # drag_induced_va_mag = drag[i]
-
-            # # panel force VECTOR NORMAL to CALCULATED induced velocity
-            # lift_induced_va = lift_induced_va_mag * dir_airfoil_lift
-            # # panel force VECTOR TANGENTIAL to CALCULATED induced velocity
-            # drag_induced_va = drag_induced_va_mag * dir_airfoil_drag
-
-            # # total force
-            # ftotal_induced_va = lift_induced_va + drag_induced_va
-
-            # ### Calculating wing directions
-            # # 1. Defining wing drag direction
-            # dir_wing_drag_prescribed_va = va_unit
-            # # 2. Defining wing lift direction
-            # z_global = np.array([0, 0, 1])
-            # dir_wing_lift_prescribed_va_vector = (
-            #     z_global
-            #     - jit_dot(z_global, dir_wing_drag_prescribed_va)
-            #     * dir_wing_drag_prescribed_va
-            # )
-            # dir_wing_lift_prescribed_va = (
-            #     dir_wing_lift_prescribed_va_vector
-            #     / jit_norm(dir_wing_lift_prescribed_va_vector)
-            # )
-            # # 3. Defining wing side direction
-            # dir_wing_side_prescribed_va = np.cross(
-            #     dir_wing_drag_prescribed_va, dir_wing_lift_prescribed_va
-            # )
-
-            # # ensure it is pointing in the positive y-direction
-            # if dir_wing_side_prescribed_va[1] < 0:
-            #     dir_wing_side_prescribed_va = -dir_wing_side_prescribed_va
-
-            # ### Converting forces to prescribed wing va
-            # drag_prescribed_va = jit_dot(
-            #     lift_induced_va, dir_wing_drag_prescribed_va
-            # ) + jit_dot(drag_induced_va, dir_wing_drag_prescribed_va)
-            # lift_prescribed_va = jit_dot(
-            #     lift_induced_va, dir_wing_lift_prescribed_va
-            # ) + jit_dot(drag_induced_va, dir_wing_lift_prescribed_va)
-            # side_prescribed_va = jit_dot(
-            #     lift_induced_va, dir_wing_side_prescribed_va
-            # ) + jit_dot(drag_induced_va, dir_wing_side_prescribed_va)
-
-            # # print(f"\n new implementation")
-            # # logging.info(f" local ")
-            # # logging.info(f"dir_lift_induced_va: {dir_airfoil_lift}")
-            # # logging.info(f"dir_drag_induced_va: {dir_airfoil_drag}")
-
-            # # logging.info(f" global ")
-            # # logging.info(f"dir_lift_prescribed_va: {dir_wing_lift_prescribed_va}")
-            # # logging.info(f"dir_drag_prescribed_va: {dir_wing_drag_prescribed_va}")
-            # # logging.info(f"dir_side_prescribed_va: {dir_wing_side_prescribed_va}")
-
-            # # logging.info(f"lift_prescribed_va: {lift_prescribed_va}")
-            # # logging.info(f"drag_prescribed_va: {drag_prescribed_va}")
-            # # logging.info(f"side_prescribed_va: {side_prescribed_va}")
-
-            # ############### ABOVE NEW ################
-
             ### Converting forces to the global reference frame
             fx_global_2D = jit_dot(ftotal_induced_va, np.array([1, 0, 0]))
             fy_global_2D = jit_dot(ftotal_induced_va, np.array([0, 1, 0]))
             fz_global_2D = jit_dot(ftotal_induced_va, np.array([0, 0, 1]))
-
-            ### Logging
-            # logging.debug("----calculate_results_new----- icp: %d", i)
-            # logging.debug(f"dir urel: {dir_induced_va_airfoil}")
-            # logging.debug(f"dir_L: {dir_lift_induced_va}")
-            # logging.debug(f"dir_D: {dir_drag_induced_va}")
-            # logging.debug(
-            #     "lift_induced_va_2d (=L_rel): %s",
-            #     lift_induced_va,
-            # )
-            # logging.debug(
-            #     "lift_induced_va_2d (=D_rel): %s",
-            #     drag_induced_va,
-            # )
-            # logging.debug(f"Fmag_0: {lift_prescribed_va}")
-            # logging.debug(f"Fmag_1: {drag_prescribed_va}")
-            # logging.debug(f"Fmag_2: {side_prescribed_va}")
 
             # 3D, by multiplying with the panel width
             lift_wing_3D = lift_prescribed_va * panel_width
@@ -708,6 +602,55 @@ class WingAerodynamics:
             fz_global_3D_list.append(fz_global_3D)
             f_global_3D_list.append(
                 np.array([fx_global_3D, fy_global_3D, fz_global_3D])
+            )
+
+            ####################
+            ##### MOMENTS ######
+            ####################
+
+            # Get the moment magnitude
+            moment_induced_va_mag = moment[i]
+            # moment_lever_arm
+            # The moment is defined, and represents the value at 1/4c
+            # The force is however computed at 3/4c control point
+            # The moment lever arm is then defined as the distance between these two points
+            moment_lever_arm_dir = y_airf_chord
+
+            # Moment direction computation
+            # Use cross product to define moment vector direction,
+            #   using the total force direction and the lever arm direction
+            ftotal_induced_va_unit = ftotal_induced_va / jit_norm(ftotal_induced_va)
+            dir_moment_induced_va = jit_cross(
+                ftotal_induced_va_unit, moment_lever_arm_dir
+            )
+            dir_moment_induced_va = dir_moment_induced_va / jit_norm(
+                dir_moment_induced_va
+            )
+
+            # Moment vector computation
+            moment_induced_va = moment_induced_va_mag * dir_moment_induced_va
+
+            ### Converting moments to the global reference frame
+            mx_global_2D = jit_dot(moment_induced_va, np.array([1, 0, 0]))
+            my_global_2D = jit_dot(moment_induced_va, np.array([0, 1, 0]))
+            mz_global_2D = jit_dot(moment_induced_va, np.array([0, 0, 1]))
+
+            # 3D, by multiplying with the panel width
+            mx_global_3D = mx_global_2D * panel_width
+            my_global_3D = my_global_2D * panel_width
+            mz_global_3D = mz_global_2D * panel_width
+
+            # Summing up totals
+            mx_global_3D_sum += mx_global_3D
+            my_global_3D_sum += my_global_3D
+            mz_global_3D_sum += mz_global_3D
+
+            # Storing results
+            mx_global_3D_list.append(mx_global_3D)
+            my_global_3D_list.append(my_global_3D)
+            mz_global_3D_list.append(mz_global_3D)
+            m_global_3D_list.append(
+                np.array([mx_global_3D, my_global_3D, mz_global_3D])
             )
 
         if is_only_f_and_gamma_output:
@@ -744,27 +687,82 @@ class WingAerodynamics:
         results_dict.update([("Fx", fx_global_3D_sum)])
         results_dict.update([("Fy", fy_global_3D_sum)])
         results_dict.update([("Fz", fz_global_3D_sum)])
+        results_dict.update([("Mx", mx_global_3D_sum)])
+        results_dict.update([("My", my_global_3D_sum)])
+        results_dict.update([("Mz", mz_global_3D_sum)])
         results_dict.update([("lift", lift_wing_3D_sum)])
         results_dict.update([("drag", drag_wing_3D_sum)])
         results_dict.update([("side", side_wing_3D_sum)])
         results_dict.update([("cl", lift_wing_3D_sum / (q_inf * projected_area))])
         results_dict.update([("cd", drag_wing_3D_sum / (q_inf * projected_area))])
         results_dict.update([("cs", side_wing_3D_sum / (q_inf * projected_area))])
+        results_dict.update(
+            [("cmx", mx_global_3D_sum / (q_inf * projected_area * max_chord))]
+        )
+        results_dict.update(
+            [("cmy", my_global_3D_sum / (q_inf * projected_area * max_chord))]
+        )
+        results_dict.update(
+            [("cmz", mz_global_3D_sum / (q_inf * projected_area * max_chord))]
+        )
         # Local panel aerodynamics
         results_dict.update([("cl_distribution", cl_prescribed_va_list)])
         results_dict.update([("cd_distribution", cd_prescribed_va_list)])
         results_dict.update([("cs_distribution", cs_prescribed_va_list)])
         results_dict.update([("F_distribution", f_global_3D_list)])
+        results_dict.update([("M_distribution", m_global_3D_list)])
 
         # Additional info
         results_dict.update(
-            [("cfx", np.array(fx_global_3D_list) / (q_inf * projected_area))]
+            [
+                (
+                    "cfx_distribution",
+                    np.array(fx_global_3D_list) / (q_inf * projected_area),
+                )
+            ]
         )
         results_dict.update(
-            [("cfy", np.array(fy_global_3D_list) / (q_inf * projected_area))]
+            [
+                (
+                    "cfy_distribution",
+                    np.array(fy_global_3D_list) / (q_inf * projected_area),
+                )
+            ]
         )
         results_dict.update(
-            [("cfz", np.array(fz_global_3D_list) / (q_inf * projected_area))]
+            [
+                (
+                    "cfz_distribution",
+                    np.array(fz_global_3D_list) / (q_inf * projected_area),
+                )
+            ]
+        )
+        results_dict.update(
+            [
+                (
+                    "cmx_distribution",
+                    np.array(mx_global_3D_list)
+                    / (q_inf * projected_area * chord_array),
+                )
+            ]
+        )
+        results_dict.update(
+            [
+                (
+                    "cmy_distribution",
+                    np.array(my_global_3D_list)
+                    / (q_inf * projected_area * chord_array),
+                )
+            ]
+        )
+        results_dict.update(
+            [
+                (
+                    "cmz_distribution",
+                    np.array(mz_global_3D_list)
+                    / (q_inf * projected_area * chord_array),
+                )
+            ]
         )
         results_dict.update([("alpha_at_ac", alpha_corrected)])
         results_dict.update([("alpha_uncorrected", alpha_uncorrected)])

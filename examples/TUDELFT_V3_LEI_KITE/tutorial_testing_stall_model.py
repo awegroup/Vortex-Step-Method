@@ -7,7 +7,12 @@ from pathlib import Path
 from VSM.WingGeometry import Wing
 from VSM.WingAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
-from VSM.plotting import plot_polars, plot_distribution, plot_geometry
+from VSM.plotting import (
+    plot_polars,
+    plot_distribution,
+    plot_geometry,
+    plot_panel_coefficients,
+)
 from VSM.interactive import interactive_plot
 
 # Find the root directory of the repository
@@ -19,7 +24,7 @@ while not os.path.isfile(os.path.join(root_dir, ".gitignore")):
 save_folder = Path(root_dir) / "results" / "TUDELFT_V3_LEI_KITE"
 
 # Defining discretisation
-n_panels = 54
+n_panels = 18
 spanwise_panel_distribution = "split_provided"
 
 ### rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
@@ -48,15 +53,32 @@ for i in range(len(LE_x_array)):
     )
 CAD_wing = Wing(n_panels, spanwise_panel_distribution)
 
+
+print(
+    f"len(rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs): {len(rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs)}"
+)
+
 for i, CAD_rib_i in enumerate(
     rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
 ):
     CAD_wing.add_section(CAD_rib_i[0], CAD_rib_i[1], CAD_rib_i[2])
+
+    # import pandas as pd
+
+    # df_polar_data = pd.read_csv(f"polar_engineering_{i}.csv")
+    # alpha = df_polar_data["alpha"].values
+    # cl = df_polar_data["cl"].values
+    # cd = df_polar_data["cd"].values
+    # cm = df_polar_data["cm"].values
+    # polar_data = ["polar_data", np.array([alpha, cl, cd, cm])]
+    # CAD_wing.add_section(CAD_rib_i[0], CAD_rib_i[1], polar_data)
+
+
 wing_aero_CAD_19ribs = WingAerodynamics([CAD_wing])
 
 
 # Solvers
-VSM = Solver(
+VSM_base = Solver(
     aerodynamic_model_type="VSM",
     is_with_artificial_damping=False,
     is_new_vector_definition=False,
@@ -90,34 +112,50 @@ VSM_new_vector_diff_stall = Solver(
 )
 
 
-# interactive plot
-interactive_plot(
-    wing_aero_CAD_19ribs,
-    vel=3.15,
-    angle_of_attack=6.00,
-    side_slip=0,
-    yaw_rate=0,
-    is_with_aerodynamic_details=True,
-)
+# # interactive plot
+# interactive_plot(
+#     wing_aero_CAD_19ribs,
+#     vel=3.15,
+#     angle_of_attack=6.00,
+#     side_slip=10,
+#     yaw_rate=0,
+#     is_with_aerodynamic_details=True,
+# )
+
+aoa = 18
+side_slip = 0
+yaw_rate = 0
+Umag = 3.15
 
 
 # setting va
-Umag = 3.15
-aoa = 6.0
-side_slip = np.deg2rad(0)
-yaw_rate = 0
-aoa_rad = np.deg2rad(aoa)
-vel_app = (
-    np.array(
-        [
-            np.cos(aoa_rad) * np.cos(side_slip),
-            np.sin(side_slip),
-            np.sin(aoa_rad),
-        ]
+def setting_va(
+    wing_aero: object,
+    Umag: float = 3.15,
+    aoa: float = 10,
+    side_slip: float = 0,
+    yaw_rate: float = 0,
+):
+    aoa_rad = np.deg2rad(aoa)
+    side_slip = np.deg2rad(side_slip)
+    vel_app = (
+        np.array(
+            [
+                np.cos(aoa_rad) * np.cos(side_slip),
+                np.sin(side_slip),
+                np.sin(aoa_rad),
+            ]
+        )
+        * Umag
     )
-    * Umag
-)
-wing_aero_CAD_19ribs.va = (vel_app, yaw_rate)
+    wing_aero.va = (vel_app, yaw_rate)
+    return wing_aero
+
+
+wing_aero_CAD_19ribs = setting_va(wing_aero_CAD_19ribs, Umag, aoa, side_slip, yaw_rate)
+
+# for n_i in range(n_panels):
+#     plot_panel_coefficients(wing_aero_CAD_19ribs, n_i, alpha_range=[-30, 30])
 
 # # ## Plotting
 # # plot_geometry(
@@ -131,101 +169,101 @@ wing_aero_CAD_19ribs.va = (vel_app, yaw_rate)
 # #     view_azimuth=-120,
 # # )
 
-### plotting distributions
-results = VSM.solve(wing_aero_CAD_19ribs)
-results_with_stall_correction = VSM_with_stall_correction.solve(wing_aero_CAD_19ribs)
-CAD_y_coordinates = [
-    panels.aerodynamic_center[1] for panels in wing_aero_CAD_19ribs.panels
-]
-results_no_gamma_feedback = VSM_no_gamma_feedback.solve(wing_aero_CAD_19ribs)
-results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
-    wing_aero_CAD_19ribs
-)
-
-plot_distribution(
-    y_coordinates_list=[
-        CAD_y_coordinates,
-        CAD_y_coordinates,
-        CAD_y_coordinates,
-        CAD_y_coordinates,
-    ],
-    results_list=[
-        results,
-        results_with_stall_correction,
-        results_no_gamma_feedback,
-        results_no_gamma_feedback_stall,
-    ],
-    label_list=[
-        "VSM",
-        "VSM with stall correction",
-        "VSM_no_gamma_feedback",
-        "VSM_no_gamma_feedback_stall",
-    ],
-    title=f"CAD_spanwise_distributions_alpha_{aoa:.1f}_beta_{side_slip:.1f}_yaw_{yaw_rate:.1f}_Umag_{Umag:.1f}",
-    data_type=".pdf",
-    save_path=Path(save_folder) / "spanwise_distributions",
-    is_save=False,
-    is_show=True,
-)
-
-# ### plotting polar
-# save_path = Path(root_dir) / "results" / "TUD_V3_LEI_KITE"
-# path_cfd_lebesque = (
-#     Path(root_dir)
-#     / "data"
-#     / "TUDELFT_V3_LEI_KITE"
-#     / "literature_results"
-#     / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
+# ### plotting distributions
+# results = VSM_base.solve(wing_aero_CAD_19ribs)
+# results_with_stall_correction = VSM_with_stall_correction.solve(wing_aero_CAD_19ribs)
+# CAD_y_coordinates = [
+#     panels.aerodynamic_center[1] for panels in wing_aero_CAD_19ribs.panels
+# ]
+# results_no_gamma_feedback = VSM_no_gamma_feedback.solve(wing_aero_CAD_19ribs)
+# results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
+#     wing_aero_CAD_19ribs
 # )
 
-# plot_polars(
-#     solver_list=[
-#         VSM,
-#         VSM_with_stall_correction,
-#         VSM_no_gamma_feedback,
-#         VSM_no_gamma_feedback_stall,
-#         # VSM_new_vector_diff,
-#         # VSM_new_vector_diff_stall,
+# plot_distribution(
+#     y_coordinates_list=[
+#         CAD_y_coordinates,
+#         CAD_y_coordinates,
+#         # CAD_y_coordinates,
+#         # CAD_y_coordinates,
 #     ],
-#     wing_aero_list=[
-#         wing_aero_CAD_19ribs,
-#         wing_aero_CAD_19ribs,
-#         wing_aero_CAD_19ribs,
-#         wing_aero_CAD_19ribs,
-#         # wing_aero_CAD_19ribs,
-#         # wing_aero_CAD_19ribs,
+#     results_list=[
+#         results,
+#         results_with_stall_correction,
+#         # results_no_gamma_feedback,
+#         # results_no_gamma_feedback_stall,
 #     ],
 #     label_list=[
-#         # "VSM CAD 19ribs",
-#         "VSM CAD 19ribs , with stall correction",
-#         "VSM CAD 19ribs , no gamma feedback",
-#         "VSM CAD 19ribs , no gamma feedback, with stall correction",
-#         # "VSM new vector diff",
-#         # "VSM new vector diff, with stall correction",
-#         "CFD_Lebesque Rey 30e5",
+#         "VSM",
+#         "VSM with stall correction",
+#         # "VSM_no_gamma_feedback",
+#         # "VSM_no_gamma_feedback_stall",
 #     ],
-#     literature_path_list=[path_cfd_lebesque],
-#     angle_range=np.linspace(0, 20, 10),
-#     angle_type="angle_of_attack",
-#     angle_of_attack=0,
-#     side_slip=0,
-#     yaw_rate=0,
-#     Umag=Umag,
-#     title=f"tutorial_testing_stall_model_n_panels_{int(n_panels):.0f}_distribution_{spanwise_panel_distribution}_alphasweep",
+#     title=f"CAD_spanwise_distributions_alpha_{aoa:.1f}_beta_{side_slip:.1f}_yaw_{yaw_rate:.1f}_Umag_{Umag:.1f}",
 #     data_type=".pdf",
-#     save_path=Path(save_folder) / "polars",
-#     is_save=True,
+#     save_path=Path(save_folder) / "spanwise_distributions",
+#     is_save=False,
 #     is_show=True,
 # )
-# # plot beta sweep
+
+### plotting alpha-polar
+save_path = Path(root_dir) / "results" / "TUD_V3_LEI_KITE"
+path_cfd_lebesque = (
+    Path(root_dir)
+    / "data"
+    / "TUDELFT_V3_LEI_KITE"
+    / "literature_results"
+    / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
+)
+
+plot_polars(
+    solver_list=[
+        VSM_base,
+        VSM_with_stall_correction,
+        # VSM_no_gamma_feedback,
+        # VSM_no_gamma_feedback_stall,
+        # VSM_new_vector_diff,
+        # VSM_new_vector_diff_stall,
+    ],
+    wing_aero_list=[
+        wing_aero_CAD_19ribs,
+        wing_aero_CAD_19ribs,
+        # wing_aero_CAD_19ribs,
+        # wing_aero_CAD_19ribs,
+        # wing_aero_CAD_19ribs,
+        # wing_aero_CAD_19ribs,
+    ],
+    label_list=[
+        "VSM CAD 19ribs",
+        "VSM CAD 19ribs , with stall correction",
+        # "VSM CAD 19ribs , no gamma feedback",
+        # "VSM CAD 19ribs , no gamma feedback, with stall correction",
+        # "VSM new vector diff",
+        # "VSM new vector diff, with stall correction",
+        "CFD_Lebesque Rey 30e5",
+    ],
+    literature_path_list=[path_cfd_lebesque],
+    angle_range=np.linspace(0, 20, 10),
+    angle_type="angle_of_attack",
+    angle_of_attack=0,
+    side_slip=0,
+    yaw_rate=0,
+    Umag=Umag,
+    title=f"tutorial_testing_stall_model_n_panels_{int(n_panels):.0f}_distribution_{spanwise_panel_distribution}_alphasweep",
+    data_type=".pdf",
+    save_path=Path(save_folder) / "polars",
+    is_save=True,
+    is_show=True,
+)
+# #### plot beta sweep
 # plot_polars(
 #     solver_list=[
-#         # VSM,
+#         # VSM_base,
 #         VSM_with_stall_correction,
 #         # VSM_no_gamma_feedback,
 #         # VSM_no_gamma_feedback_stall,
 #         # VSM_new_vector_diff,
-#         VSM_new_vector_diff_stall,
+#         # VSM_new_vector_diff_stall,
 #     ],
 #     wing_aero_list=[
 #         # wing_aero_CAD_19ribs,
@@ -233,7 +271,7 @@ plot_distribution(
 #         # wing_aero_CAD_19ribs,
 #         # wing_aero_CAD_19ribs,
 #         # wing_aero_CAD_19ribs,
-#         wing_aero_CAD_19ribs,
+#         # wing_aero_CAD_19ribs,
 #     ],
 #     label_list=[
 #         # "VSM CAD 19ribs",
@@ -241,16 +279,16 @@ plot_distribution(
 #         # "VSM CAD 19ribs , no gamma feedback",
 #         # "VSM CAD 19ribs , no gamma feedback, with stall correction",
 #         # "VSM new vector diff",
-#         "VSM new vector diff, with stall correction",
+#         # "VSM new vector diff, with stall correction",
 #         # "CFD_Lebesque Rey 30e5",
 #     ],
 #     literature_path_list=[],
 #     angle_range=np.linspace(0, 20, 10),
-#     angle_type="angle_of_attack",
-#     angle_of_attack=np.deg2rad(6.75),
+#     angle_type="side_slip",
+#     angle_of_attack=np.deg2rad(6.8),
 #     side_slip=0,
 #     yaw_rate=0,
-#     Umag=Umag,
+#     Umag=3.15,
 #     title=f"tutorial_testing_stall_model_n_panels_{int(n_panels):.0f}_distribution_{spanwise_panel_distribution}_betasweep",
 #     data_type=".pdf",
 #     save_path=Path(save_folder) / "polars",

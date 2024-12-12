@@ -342,6 +342,12 @@ class Panel:
             # if outside of 20 degrees which in rad = np.pi/9
             if alpha > (np.pi / 9) or alpha < -(np.pi / 9):
                 cl = 2 * np.cos(alpha) * np.sin(alpha) ** 2
+            #### alternative approach, of ensuring that for negative alpha, cl is very small 0
+            # if alpha < 0 and alpha > -(np.pi / 9):
+            #     cl = -0.01
+            # elif alpha > (np.pi / 9) or alpha < -(np.pi / 9):
+            #     cl = 2 * np.cos(alpha) * np.sin(alpha) ** 2
+            ####
             return cl
         elif self._panel_aero_model == "inviscid":
             return 2 * np.pi * alpha

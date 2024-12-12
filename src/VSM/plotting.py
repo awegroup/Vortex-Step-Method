@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.backends.backend_pdf import PdfPages
 from screeninfo import get_monitors
-from VSM.color_palette import set_plot_style, get_color
+from VSM.plot_styling import set_plot_style, plot_on_ax
 
 
 def save_plot(fig, save_path, title, data_type=".pdf"):
@@ -390,6 +390,7 @@ def plot_distribution(
     Returns:
         None
     """
+    set_plot_style()
 
     if len(results_list) != len(label_list):
         raise ValueError(
@@ -402,8 +403,8 @@ def plot_distribution(
     set_plot_style()
 
     # Initializing plot
-    fig, axs = plt.subplots(3, 3, figsize=(16, 10))
-    fig.suptitle(title, fontsize=16)
+    fig, axs = plt.subplots(4, 3, figsize=(20, 15))
+    fig.suptitle(title)  # , fontsize=16)
 
     # CL plot
     for y_coordinates_i, result_i, label_i in zip(
@@ -414,9 +415,10 @@ def plot_distribution(
             result_i["cl_distribution"],
             label=label_i + rf" $C_L$: {result_i['cl']:.2f}",
         )
-    axs[0, 0].set_title(rf"$C_L$ Distribution")
-    axs[0, 0].set_xlabel(r"Spanwise Position $y/b$")
-    axs[0, 0].set_ylabel(r"Lift Coefficient $C_L$")
+    # axs[0, 0].set_title(rf"$C_L$ Distribution")
+    # axs[0, 0].set_xlabel(r"Spanwise Position $y/b$")
+    axs[0, 0].tick_params(labelbottom=False)
+    axs[0, 0].set_ylabel(r"$C_L$ distribution")
     axs[0, 0].legend()
 
     # CD plot
@@ -428,9 +430,10 @@ def plot_distribution(
             result_i["cd_distribution"],
             label=label_i + rf" $C_D$: {result_i['cd']:.2f}",
         )
-    axs[0, 1].set_title(r"$C_D$ Distribution")
-    axs[0, 1].set_xlabel(r"Spanwise Position $y/b$")
-    axs[0, 1].set_ylabel(r"Drag Coefficient $C_D$")
+    # axs[0, 1].set_title(r"$C_D$ Distribution")
+    # axs[0, 1].set_xlabel(r"Spanwise Position $y/b$")
+    axs[0, 1].set_ylabel(r"$C_D$ Distribution")
+    axs[0, 1].tick_params(labelbottom=False)
     axs[0, 1].legend()
 
     # Gamma plot
@@ -438,9 +441,10 @@ def plot_distribution(
         y_coordinates_list, results_list, label_list
     ):
         axs[0, 2].plot(y_coordinates_i, result_i["gamma_distribution"], label=label_i)
-    axs[0, 2].set_title(r"$\Gamma$ Distribution")
-    axs[0, 2].set_xlabel(r"Spanwise Position $y/b$")
-    axs[0, 2].set_ylabel(r"Circulation $\Gamma$")
+    # axs[0, 2].set_title(r"$\Gamma$ Distribution")
+    # axs[0, 2].set_xlabel(r"Spanwise Position $y/b$")
+    axs[0, 2].set_ylabel(r"Circulation $\Gamma$  distribution")
+    axs[0, 2].tick_params(labelbottom=False)
     axs[0, 2].legend()
 
     # Geometric Alpha plot
@@ -450,9 +454,10 @@ def plot_distribution(
         axs[1, 0].plot(
             y_coordinates_i, np.rad2deg(result_i["alpha_geometric"]), label=label_i
         )
-    axs[1, 0].set_title(r"$\alpha$ Geometric")
-    axs[1, 0].set_xlabel(r"Spanwise Position $y/b$")
-    axs[1, 0].set_ylabel(r"Angle of Attack $\alpha$ (deg)")
+    # axs[1, 0].set_title(r"$\alpha$ Geometric")
+    # axs[1, 0].set_xlabel(r"Spanwise Position $y/b$")
+    axs[1, 0].set_ylabel(r"Geometric $\alpha$ (deg)")
+    axs[1, 0].tick_params(labelbottom=False)
     axs[1, 0].legend()
 
     # Calculated/Corrected Alpha plot
@@ -462,9 +467,10 @@ def plot_distribution(
         axs[1, 1].plot(
             y_coordinates_i, np.rad2deg(result_i["alpha_at_ac"]), label=label_i
         )
-    axs[1, 1].set_title(r"$\alpha$ result (corrected to aerodynamic center)")
-    axs[1, 1].set_xlabel(r"Spanwise Position $y/b$")
-    axs[1, 1].set_ylabel(r"Angle of Attack $\alpha$ (deg)")
+    # axs[1, 1].set_title(r"$\alpha$ result (corrected to aerodynamic center)")
+    # axs[1, 1].set_xlabel(r"Spanwise Position $y/b$")
+    axs[1, 1].set_ylabel(r"Corrected $\alpha$ (to geometric center) [deg]")
+    axs[1, 1].tick_params(labelbottom=False)
     axs[1, 1].legend()
 
     # Uncorrected Alpha plot
@@ -476,9 +482,10 @@ def plot_distribution(
             np.rad2deg(result_i["alpha_uncorrected"]),
             label=label_i,
         )
-    axs[1, 2].set_title(r"$\alpha$ Uncorrected (if VSM, at the control point)")
-    axs[1, 2].set_xlabel(r"Spanwise Position $y/b$")
-    axs[1, 2].set_ylabel(r"Angle of Attack $\alpha$ (deg)")
+    # axs[1, 2].set_title(r"$\alpha$ Uncorrected (if VSM, at the control point)")
+    # axs[1, 2].set_xlabel(r"Spanwise Position $y/b$")
+    axs[1, 2].set_ylabel(r"Uncorrected $\alpha$ (if VSM, at 3/4c control point) [deg]")
+    axs[1, 2].tick_params(labelbottom=False)
     axs[1, 2].legend()
 
     for y_coordinates_i, result_i, label_i in zip(
@@ -489,9 +496,10 @@ def plot_distribution(
             [force[0] for force in result_i["F_distribution"]],
             label=label_i + rf" $\sum{{F_x}}$: {result_i['Fx']:.2f}N",
         )
-    axs[2, 0].set_title(f"Force in x direction")
-    axs[2, 0].set_xlabel(r"Spanwise Position $y/b$")
-    axs[2, 0].set_ylabel(r"$F_x$")
+    # axs[2, 0].set_title(f"Force in x direction")
+    # axs[2, 0].set_xlabel(r"Spanwise Position $y/b$")
+    axs[2, 0].set_ylabel(r"$F_x$ distribution")
+    axs[2, 0].tick_params(labelbottom=False)
     axs[2, 0].legend()
 
     # Force in y
@@ -503,9 +511,10 @@ def plot_distribution(
             [force[1] for force in result_i["F_distribution"]],
             label=label_i + rf" $\sum{{F_y}}$: {result_i['Fy']:.2f}N",
         )
-    axs[2, 1].set_title(f"Force in y direction")
-    axs[2, 1].set_xlabel(r"Spanwise Position $y/b$")
-    axs[2, 1].set_ylabel(r"$F_y$")
+    # axs[2, 1].set_title(f"Force in y direction")
+    # axs[2, 1].set_xlabel(r"Spanwise Position $y/b$")
+    axs[2, 1].set_ylabel(r"$F_y$ distribution")
+    axs[2, 1].tick_params(labelbottom=False)
     axs[2, 1].legend()
 
     # Force in z
@@ -517,10 +526,53 @@ def plot_distribution(
             [force[2] for force in result_i["F_distribution"]],
             label=label_i + rf" $\sum{{F_z}}$: {result_i['Fz']:.2f}N",
         )
-    axs[2, 2].set_title(f"Force in z direction")
-    axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
-    axs[2, 2].set_ylabel(r"$F_z$")
+    # axs[2, 2].set_title(f"Force in z direction")
+    # axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
+    axs[2, 2].set_ylabel(r"$F_z$ distribution")
+    axs[2, 2].tick_params(labelbottom=False)
     axs[2, 2].legend()
+
+    # Moment in x
+    for y_coordinates_i, result_i, label_i in zip(
+        y_coordinates_list, results_list, label_list
+    ):
+        axs[3, 0].plot(
+            y_coordinates_i,
+            [moment[0] for moment in result_i["M_distribution"]],
+            label=label_i + rf" $\sum{{M_x}}$: {result_i['Mx']:.2f}Nm",
+        )
+    # axs[3, 0].set_title(f"Moment in x direction")
+    axs[3, 0].set_xlabel(r"Spanwise Position $y/b$")
+    axs[3, 0].set_ylabel(r"$M_x$ distribution")
+    axs[3, 0].legend()
+
+    # Moment in y
+    for y_coordinates_i, result_i, label_i in zip(
+        y_coordinates_list, results_list, label_list
+    ):
+        axs[3, 1].plot(
+            y_coordinates_i,
+            [moment[1] for moment in result_i["M_distribution"]],
+            label=label_i + rf" $\sum{{M_y}}$: {result_i['My']:.2f}Nm",
+        )
+    # axs[3, 1].set_title(f"Moment in y direction")
+    axs[3, 1].set_xlabel(r"Spanwise Position $y/b$")
+    axs[3, 1].set_ylabel(r"$M_y$ distribution")
+    axs[3, 1].legend()
+
+    # Moment in z
+    for y_coordinates_i, result_i, label_i in zip(
+        y_coordinates_list, results_list, label_list
+    ):
+        axs[3, 2].plot(
+            y_coordinates_i,
+            [moment[2] for moment in result_i["M_distribution"]],
+            label=label_i + rf" $\sum{{M_z}}$: {result_i['Mz']:.2f}Nm",
+        )
+    # axs[3, 2].set_title(f"Moment in z direction")
+    axs[3, 2].set_xlabel(r"Spanwise Position $y/b$")
+    axs[3, 2].set_ylabel(r"$M_z$ distribution")
+    axs[3, 2].legend()
 
     plt.tight_layout()
 
@@ -533,6 +585,7 @@ def plot_distribution(
 
     # showing plot
     if is_show:
+        # plt.show()
         show_plot(fig)
 
 
@@ -567,6 +620,9 @@ def generate_polar_data(
     cl = np.zeros(len(angle_range))
     cd = np.zeros(len(angle_range))
     cs = np.zeros(len(angle_range))
+    cmx = np.zeros(len(angle_range))
+    cmy = np.zeros(len(angle_range))
+    cmz = np.zeros(len(angle_range))
     gamma_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
     cl_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
     cd_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
@@ -601,6 +657,9 @@ def generate_polar_data(
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
+        cmx[i] = results["cmx"]
+        cmy[i] = results["cmy"]
+        cmz[i] = results["cmz"]
         gamma_distribution[i] = results["gamma_distribution"]
         cl_distribution[i] = results["cl_distribution"]
         cd_distribution[i] = results["cd_distribution"]
@@ -613,6 +672,9 @@ def generate_polar_data(
         cl,
         cd,
         cs,
+        cmx,
+        cmy,
+        cmz,
         gamma_distribution,
         cl_distribution,
         cd_distribution,
@@ -666,6 +728,7 @@ def plot_polars(
     Returns:
         None
     """
+    set_plot_style()
 
     if (len(wing_aero_list) + len(literature_path_list)) != len(label_list) or len(
         solver_list
@@ -707,7 +770,7 @@ def plot_polars(
             polar_data_list.append([angle, CL, CD])
 
     # Initializing plot
-    fig, axs = plt.subplots(2, 2, figsize=(14, 14))
+    fig, axs = plt.subplots(2, 3, figsize=(15, 10))
 
     n_solvers = len(solver_list)
     # CL plot
@@ -731,10 +794,7 @@ def plot_polars(
         # if CL is greater than 10, limit the yrange
         if max(polar_data[1]) > 10:
             axs[0, 0].set_ylim([-0.5, 2])
-    axs[0, 0].set_title(r"$C_L$ vs {}".format(angle_type))
-    axs[0, 0].set_xlabel(r"{}[deg]".format(angle_type))
-    axs[0, 0].set_ylabel(r"$C_L$")
-    axs[0, 0].legend()
+    axs[0, 0].set_ylabel(r"$C_{\mathrm{L}}$")
 
     # CD plot
     for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
@@ -757,10 +817,8 @@ def plot_polars(
         # if CD is greater than 10, limit the range
         if max(polar_data[2]) > 10:
             axs[0, 1].set_ylim([-0.2, 0.5])
-    axs[0, 1].set_title(r"$C_D$ vs {}".format(angle_type))
-    axs[0, 1].set_xlabel(r"{}[deg]".format(angle_type))
-    axs[0, 1].set_ylabel(r"$C_D$")
-    axs[0, 1].legend()
+    axs[0, 1].set_ylabel(r"$C_{\mathrm{D}}$")
+    axs[0, 1].legend(loc="best")
 
     # CL-CD plot
     if angle_type == "angle_of_attack":
@@ -773,21 +831,16 @@ def plot_polars(
                 linestyle = "-"
                 marker = "."
                 markersize = 5
-            axs[1, 0].plot(
-                polar_data[2],
-                polar_data[1],
+            axs[0, 2].plot(
+                polar_data[0],
+                polar_data[1] / polar_data[2],
                 label=label,
                 linestyle=linestyle,
                 marker=marker,
                 markersize=markersize,
             )
-            if max(polar_data[1]) > 10 or max(polar_data[2]) > 10:
-                axs[1, 0].set_ylim([-0.5, 2])
-                axs[1, 0].set_xlim([-0.2, 0.5])
-        axs[1, 0].set_title(r"$C_L$ vs $C_D$ (over {} range)".format(angle_type))
-        axs[1, 0].set_xlabel(r"$C_D$")
-        axs[1, 0].set_ylabel(r"$C_L$")
-        axs[1, 0].legend()
+
+        axs[0, 2].set_ylabel(r"$C_{\mathrm{L}}$ / $C_{\mathrm{D}}$")
 
     elif angle_type == "side_slip":
         # CS plot
@@ -802,7 +855,7 @@ def plot_polars(
                     linestyle = "-"
                     marker = "."
                     markersize = 5
-                axs[1, 0].plot(
+                axs[0, 2].plot(
                     polar_data[0],
                     polar_data[3],
                     label=label,
@@ -810,33 +863,52 @@ def plot_polars(
                     marker=marker,
                     markersize=markersize,
                 )
-        axs[1, 0].set_title(r"$C_S$ vs {}".format(angle_type))
-        axs[1, 0].set_xlabel(r"{}[deg]".format(angle_type))
-        axs[1, 0].set_ylabel(r"$C_S$")
-        axs[1, 0].legend()
+        axs[0, 2].set_ylabel(r"$C_{\mathrm{S}}$")
 
-    # plot CL/CD over alpha
+    # cmx, cmy,cmz plots
     for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-        if i < n_solvers:
-            linestyle = "-"
-            marker = "*"
-            markersize = 7
+        if i >= len(wing_aero_list):
+            continue
         else:
             linestyle = "-"
             marker = "."
             markersize = 5
-        axs[1, 1].plot(
-            polar_data[0],
-            polar_data[1] / polar_data[2],
-            label=label,
-            linestyle=linestyle,
-            marker=marker,
-            markersize=markersize,
-        )
-    axs[1, 1].set_title(r"$C_L/C_D$ vs {}".format(angle_type))
-    axs[1, 1].set_xlabel(r"{}[deg]".format(angle_type))
-    axs[1, 1].set_ylabel(r"$C_L/C_D$")
-    axs[1, 1].legend()
+            axs[1, 0].plot(
+                polar_data[0],
+                polar_data[4],
+                label=label + r" $C_{\mathrm{m,x}}$",
+                linestyle=linestyle,
+                marker=marker,
+                markersize=markersize,
+            )
+            axs[1, 0].set_ylabel(r"$C_{\mathrm{m,x}}$")
+            axs[1, 1].plot(
+                polar_data[0],
+                polar_data[5],
+                label=label + r" $C_{\mathrm{m,y}}$",
+                linestyle=linestyle,
+                marker=marker,
+                markersize=markersize,
+            )
+            axs[1, 1].set_ylabel(r"$C_{\mathrm{m,y}}$")
+            axs[1, 2].plot(
+                polar_data[0],
+                polar_data[6],
+                label=label + r" $C_{\mathrm{m,z}}$",
+                linestyle=linestyle,
+                marker=marker,
+                markersize=markersize,
+            )
+            axs[1, 2].set_ylabel(r"$C_{\mathrm{m,z}}$")
+
+    # Handling x-labels
+    if angle_type == "angle_of_attack":
+        x_label = r"$\alpha$ [deg] (angle of attack)"
+    elif angle_type == "side_slip":
+        x_label = r"$\beta$ [deg] (side slip angle)"
+
+    for ax in axs.flat:
+        ax.set_xlabel(x_label)
 
     # Ensure the figure is fully rendered
     fig.canvas.draw()
@@ -847,4 +919,174 @@ def plot_polars(
 
     # showing plot
     if is_show:
-        show_plot(fig, dpi=110)
+        show_plot(fig)
+
+
+def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-20, 30]):
+    """
+    Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
+
+    Args:
+        wing_aero (object): Wing aerodynamic object containing panels
+        panel_index (int): Index of the panel to plot
+        alpha_range (tuple, optional): Range of angles of attack in radians.
+                                       Defaults to (-0.5, 0.5) radians.
+    """
+    # Select the specified panel
+    panel = wing_aero.panels[panel_index]
+
+    # Create an array of angles of attack
+    alpha_array = np.deg2rad(np.linspace(alpha_range[0], alpha_range[1], 50))
+
+    # Calculate coefficients
+    cl_array = np.array([panel.calculate_cl(alpha) for alpha in alpha_array])
+
+    # For Cd and Cm, the method returns a tuple
+    cd_array = np.array([panel.calculate_cd_cm(alpha)[0] for alpha in alpha_array])
+    cm_array = np.array([panel.calculate_cd_cm(alpha)[1] for alpha in alpha_array])
+
+    cl_array_new = []
+    cd_array_new = []
+    cm_array_new = []
+    for alpha in alpha_array:
+        if np.rad2deg(alpha) < -1 and np.rad2deg(alpha) > -18:
+            cl = -0.1 + 0.005 * np.rad2deg(alpha) + 0.005 * np.deg2rad(1)
+            cd = panel.calculate_cd_cm(alpha)[0]
+        elif np.rad2deg(alpha) < -18:
+            cl = (
+                -0.1
+                - 0.005 * (np.rad2deg(alpha) + 1)
+                + 0.005 * (-np.deg2rad(alpha) - 18)
+            )
+            cd = (
+                -0.009 * (np.rad2deg(alpha) + 18)
+                + panel.calculate_cd_cm(np.deg2rad(-18))[0]
+            )
+        elif np.rad2deg(alpha) > 19:
+            cd = (
+                0.02 * (np.rad2deg(alpha) - 19)
+                + panel.calculate_cd_cm(np.deg2rad(19))[0]
+            )
+            cl = 0.9 + np.rad2deg(alpha) * 0.01 - 0.01 * 19
+        else:
+            cl = panel.calculate_cl(alpha)
+            cd = panel.calculate_cd_cm(alpha)[0]
+        cl_array_new.append(cl)
+        cd_array_new.append(cd)
+        cm_array_new.append(panel.calculate_cd_cm(alpha)[1])
+
+    from scipy.interpolate import interp1d
+    from scipy.ndimage import gaussian_filter1d
+
+    def smooth_discontinuous_values(
+        alpha, y, method="cubic", smoothing_window=1, use_gaussian=True
+    ):
+        """
+        Smooths y-values corresponding to discontinuous alpha values.
+
+        Args:
+            alpha (np.ndarray): Array of alpha values (x-axis).
+            y (np.ndarray): Array of y values (y-axis).
+            method (str): Interpolation method ('linear', 'cubic', etc.). Default is 'linear'.
+            smoothing_window (int): Size of the smoothing window. Default is 5.
+            use_gaussian (bool): Whether to use Gaussian filter for smoothing. Default is True.
+
+        Returns:
+            np.ndarray, np.ndarray: Smoothed alpha and y values.
+        """
+        # Interpolate y values on the regular alpha grid
+        interpolator = interp1d(alpha, y, kind=method, fill_value="extrapolate")
+        y_interpolated = interpolator(alpha)
+
+        # Apply smoothing
+        if use_gaussian:
+            y_smoothed = gaussian_filter1d(y_interpolated, smoothing_window)
+        else:
+            # Simple moving average
+            y_smoothed = np.convolve(
+                y_interpolated,
+                np.ones(smoothing_window) / smoothing_window,
+                mode="same",
+            )
+
+        return y_smoothed
+
+    cl_smoothed = smooth_discontinuous_values(alpha_array, cl_array_new)
+    cd_smoothed = smooth_discontinuous_values(alpha_array, cd_array_new)
+    cm_smoothed = smooth_discontinuous_values(alpha_array, cm_array_new)
+
+    # Create a new smooth array that uses the old values for alpha < -3 and alpha > 19
+    cl_smoothed = np.where(
+        np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
+        cl_smoothed,
+        cl_array,
+    )
+    cd_smoothed = np.where(
+        np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
+        cd_smoothed,
+        cd_array,
+    )
+    cm_smoothed = np.where(
+        np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
+        cm_smoothed,
+        cm_array,
+    )
+
+    # Create a 1x3 subplot
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
+
+    # Cl vs Alpha plot
+    ax1.plot(np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ NEW", color="blue")
+    ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$", color="black")
+    ax1.set_xlabel("Angle of Attack (degrees)")
+    ax1.set_ylabel(r"$C_{\mathrm{l}}$")
+    ax1.grid(True)
+    ax1.legend()
+
+    # Cd vs Alpha plot
+    ax2.plot(np.rad2deg(alpha_array), cd_smoothed, label="$C_d$", color="blue")
+    ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ OLD", color="black")
+    ax2.set_xlabel("Angle of Attack (degrees)")
+    ax2.set_ylabel(r"$C_{\mathrm{d}}$")
+    ax2.grid(True)
+
+    # Cm vs Alpha plot
+    ax3.plot(np.rad2deg(alpha_array), cm_smoothed, label="$C_m$", color="blue")
+    ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$", color="black")
+    ax3.set_xlabel("Angle of Attack (degrees)")
+    ax3.set_ylabel(r"$C_{\mathrm{m}}$")
+    ax3.grid(True)
+
+    # Adjust layout and display
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig(f"2D_polars_breukels_and_engineering_{panel_index}.pdf")
+
+    import pandas as pd
+
+    # Create a pandas DataFrame with the results
+    # df = pd.DataFrame(
+    #     {
+    #         "aoa": np.rad2deg(alpha_array),
+    #         "C_l_breukels": cl_array,
+    #         "C_d_breukels": cd_array,
+    #         "C_m_breukels": cm_array,
+    #         "C_l_engineering": cl_smoothed,
+    #         "C_d_engineering": cd_smoothed,
+    #         "C_m_engineering": cm_smoothed,
+    #     }
+    # )
+    # df.to_csv(f"2D_polars_breukels_and_engineering_{panel_index}.csv", index=False)
+
+    df = pd.DataFrame(
+        {
+            "alpha": alpha_array,
+            "cl": cl_smoothed,
+            "cd": cd_smoothed,
+            "cm": cm_smoothed,
+            "cl_breukels": cl_array,
+            "cd_breukels": cd_array,
+            "cm_breukels": cm_array,
+        }
+    )
+    df.to_csv(f"polar_engineering_{panel_index}.csv", index=False)
