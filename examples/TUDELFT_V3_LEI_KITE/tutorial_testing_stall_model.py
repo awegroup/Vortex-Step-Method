@@ -111,17 +111,6 @@ VSM_new_vector_diff_stall = Solver(
     is_with_artificial_damping=True,
 )
 
-
-# # interactive plot
-# interactive_plot(
-#     wing_aero_CAD_19ribs,
-#     vel=3.15,
-#     angle_of_attack=6.00,
-#     side_slip=10,
-#     yaw_rate=0,
-#     is_with_aerodynamic_details=True,
-# )
-
 aoa = 18
 side_slip = 0
 yaw_rate = 0
@@ -157,7 +146,7 @@ wing_aero_CAD_19ribs = setting_va(wing_aero_CAD_19ribs, Umag, aoa, side_slip, ya
 # for n_i in range(n_panels):
 #     plot_panel_coefficients(wing_aero_CAD_19ribs, n_i, alpha_range=[-30, 30])
 
-# # ## Plotting
+# ### Plotting GEOMETRY
 # # plot_geometry(
 # #     wing_aero_CAD_19ribs,
 # #     title=" ",
@@ -168,6 +157,26 @@ wing_aero_CAD_19ribs = setting_va(wing_aero_CAD_19ribs, Umag, aoa, side_slip, ya
 # #     view_elevation=15,
 # #     view_azimuth=-120,
 # # )
+
+
+# #### INTERACTIVE PLOT
+# interactive_plot(
+#     wing_aero_CAD_19ribs,
+#     vel=3.15,
+#     angle_of_attack=6.00,
+#     side_slip=10,
+#     yaw_rate=0,
+#     is_with_aerodynamic_details=True,
+# )
+
+
+### PLOTTING 2D POLARS
+plot_panel_coefficients(
+    wing_aero_CAD_19ribs,
+    int(n_panels / 2),
+    alpha_range=[-30, 30],
+    is_show=True,
+)
 
 # ### plotting distributions
 # results = VSM_base.solve(wing_aero_CAD_19ribs)

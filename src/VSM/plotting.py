@@ -922,7 +922,16 @@ def plot_polars(
         show_plot(fig)
 
 
-def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-20, 30]):
+def plot_panel_coefficients(
+    wing_aero,
+    panel_index,
+    alpha_range=[-20, 30],
+    title=None,
+    data_type=".pdf",
+    save_path=None,
+    is_save=False,
+    is_show=True,
+):
     """
     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
 
@@ -932,6 +941,10 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-20, 30]):
         alpha_range (tuple, optional): Range of angles of attack in radians.
                                        Defaults to (-0.5, 0.5) radians.
     """
+    set_plot_style()
+    if title is None:
+        title = f"2D_polar_of_panel_{panel_index}"
+
     # Select the specified panel
     panel = wing_aero.panels[panel_index]
 
@@ -945,148 +958,221 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-20, 30]):
     cd_array = np.array([panel.calculate_cd_cm(alpha)[0] for alpha in alpha_array])
     cm_array = np.array([panel.calculate_cd_cm(alpha)[1] for alpha in alpha_array])
 
-    cl_array_new = []
-    cd_array_new = []
-    cm_array_new = []
-    for alpha in alpha_array:
-        if np.rad2deg(alpha) < -1 and np.rad2deg(alpha) > -18:
-            cl = -0.1 + 0.005 * np.rad2deg(alpha) + 0.005 * np.deg2rad(1)
-            cd = panel.calculate_cd_cm(alpha)[0]
-        elif np.rad2deg(alpha) < -18:
-            cl = (
-                -0.1
-                - 0.005 * (np.rad2deg(alpha) + 1)
-                + 0.005 * (-np.deg2rad(alpha) - 18)
-            )
-            cd = (
-                -0.009 * (np.rad2deg(alpha) + 18)
-                + panel.calculate_cd_cm(np.deg2rad(-18))[0]
-            )
-        elif np.rad2deg(alpha) > 19:
-            cd = (
-                0.02 * (np.rad2deg(alpha) - 19)
-                + panel.calculate_cd_cm(np.deg2rad(19))[0]
-            )
-            cl = 0.9 + np.rad2deg(alpha) * 0.01 - 0.01 * 19
-        else:
-            cl = panel.calculate_cl(alpha)
-            cd = panel.calculate_cd_cm(alpha)[0]
-        cl_array_new.append(cl)
-        cd_array_new.append(cd)
-        cm_array_new.append(panel.calculate_cd_cm(alpha)[1])
-
-    from scipy.interpolate import interp1d
-    from scipy.ndimage import gaussian_filter1d
-
-    def smooth_discontinuous_values(
-        alpha, y, method="cubic", smoothing_window=1, use_gaussian=True
-    ):
-        """
-        Smooths y-values corresponding to discontinuous alpha values.
-
-        Args:
-            alpha (np.ndarray): Array of alpha values (x-axis).
-            y (np.ndarray): Array of y values (y-axis).
-            method (str): Interpolation method ('linear', 'cubic', etc.). Default is 'linear'.
-            smoothing_window (int): Size of the smoothing window. Default is 5.
-            use_gaussian (bool): Whether to use Gaussian filter for smoothing. Default is True.
-
-        Returns:
-            np.ndarray, np.ndarray: Smoothed alpha and y values.
-        """
-        # Interpolate y values on the regular alpha grid
-        interpolator = interp1d(alpha, y, kind=method, fill_value="extrapolate")
-        y_interpolated = interpolator(alpha)
-
-        # Apply smoothing
-        if use_gaussian:
-            y_smoothed = gaussian_filter1d(y_interpolated, smoothing_window)
-        else:
-            # Simple moving average
-            y_smoothed = np.convolve(
-                y_interpolated,
-                np.ones(smoothing_window) / smoothing_window,
-                mode="same",
-            )
-
-        return y_smoothed
-
-    cl_smoothed = smooth_discontinuous_values(alpha_array, cl_array_new)
-    cd_smoothed = smooth_discontinuous_values(alpha_array, cd_array_new)
-    cm_smoothed = smooth_discontinuous_values(alpha_array, cm_array_new)
-
-    # Create a new smooth array that uses the old values for alpha < -3 and alpha > 19
-    cl_smoothed = np.where(
-        np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
-        cl_smoothed,
-        cl_array,
-    )
-    cd_smoothed = np.where(
-        np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
-        cd_smoothed,
-        cd_array,
-    )
-    cm_smoothed = np.where(
-        np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
-        cm_smoothed,
-        cm_array,
-    )
-
-    # Create a 1x3 subplot
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 3, figsize=(10, 5))
+    ax1, ax2, ax3 = axs
 
     # Cl vs Alpha plot
-    ax1.plot(np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ NEW", color="blue")
-    ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$", color="black")
-    ax1.set_xlabel("Angle of Attack (degrees)")
+    ax1.plot(
+        np.rad2deg(alpha_array), cl_array, label=r"$C_{\mathrm{l}}$", color="black"
+    )
+    ax1.set_xlabel(r"$\alpha$ [deg] (angle of attack)")
     ax1.set_ylabel(r"$C_{\mathrm{l}}$")
     ax1.grid(True)
     ax1.legend()
 
     # Cd vs Alpha plot
-    ax2.plot(np.rad2deg(alpha_array), cd_smoothed, label="$C_d$", color="blue")
-    ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ OLD", color="black")
-    ax2.set_xlabel("Angle of Attack (degrees)")
+    ax2.plot(
+        np.rad2deg(alpha_array), cd_array, label=r"$C_{\mathrm{d}}$", color="black"
+    )
+    ax2.set_xlabel(r"$\alpha$ [deg] (angle of attack)")
     ax2.set_ylabel(r"$C_{\mathrm{d}}$")
     ax2.grid(True)
+    ax2.legend()
+    ax2.set_title(title)
 
     # Cm vs Alpha plot
-    ax3.plot(np.rad2deg(alpha_array), cm_smoothed, label="$C_m$", color="blue")
-    ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$", color="black")
-    ax3.set_xlabel("Angle of Attack (degrees)")
+    ax3.plot(
+        np.rad2deg(alpha_array), cm_array, label=r"$C_{\mathrm{m}}$", color="black"
+    )
+    ax3.set_xlabel(r"$\alpha$ [deg] (angle of attack)")
     ax3.set_ylabel(r"$C_{\mathrm{m}}$")
     ax3.grid(True)
+    ax3.legend()
 
     # Adjust layout and display
     plt.tight_layout()
-    # plt.show()
-    plt.savefig(f"2D_polars_breukels_and_engineering_{panel_index}.pdf")
 
-    import pandas as pd
+    # Ensure the figure is fully rendered
+    fig.canvas.draw()
 
-    # Create a pandas DataFrame with the results
-    # df = pd.DataFrame(
-    #     {
-    #         "aoa": np.rad2deg(alpha_array),
-    #         "C_l_breukels": cl_array,
-    #         "C_d_breukels": cd_array,
-    #         "C_m_breukels": cm_array,
-    #         "C_l_engineering": cl_smoothed,
-    #         "C_d_engineering": cd_smoothed,
-    #         "C_m_engineering": cm_smoothed,
-    #     }
-    # )
-    # df.to_csv(f"2D_polars_breukels_and_engineering_{panel_index}.csv", index=False)
+    # saving plot
+    if is_save and save_path is not None:
+        save_plot(fig, save_path, title, data_type)
 
-    df = pd.DataFrame(
-        {
-            "alpha": alpha_array,
-            "cl": cl_smoothed,
-            "cd": cd_smoothed,
-            "cm": cm_smoothed,
-            "cl_breukels": cl_array,
-            "cd_breukels": cd_array,
-            "cm_breukels": cm_array,
-        }
-    )
-    df.to_csv(f"polar_engineering_{panel_index}.csv", index=False)
+    # showing plot
+    if is_show:
+        show_plot(fig)
+
+
+# def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-20, 30]):
+#     """
+#     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
+
+#     Args:
+#         wing_aero (object): Wing aerodynamic object containing panels
+#         panel_index (int): Index of the panel to plot
+#         alpha_range (tuple, optional): Range of angles of attack in radians.
+#                                        Defaults to (-0.5, 0.5) radians.
+#     """
+#     # Select the specified panel
+#     panel = wing_aero.panels[panel_index]
+
+#     # Create an array of angles of attack
+#     alpha_array = np.deg2rad(np.linspace(alpha_range[0], alpha_range[1], 50))
+
+#     # Calculate coefficients
+#     cl_array = np.array([panel.calculate_cl(alpha) for alpha in alpha_array])
+
+#     # For Cd and Cm, the method returns a tuple
+#     cd_array = np.array([panel.calculate_cd_cm(alpha)[0] for alpha in alpha_array])
+#     cm_array = np.array([panel.calculate_cd_cm(alpha)[1] for alpha in alpha_array])
+
+
+#     # plt.show()
+#     plt.show()
+
+#     cl_array_new = []
+#     cd_array_new = []
+#     cm_array_new = []
+#     for alpha in alpha_array:
+#         if np.rad2deg(alpha) < -1 and np.rad2deg(alpha) > -18:
+#             cl = -0.1 + 0.005 * np.rad2deg(alpha) + 0.005 * np.deg2rad(1)
+#             cd = panel.calculate_cd_cm(alpha)[0]
+#         elif np.rad2deg(alpha) < -18:
+#             cl = (
+#                 -0.1
+#                 - 0.005 * (np.rad2deg(alpha) + 1)
+#                 + 0.005 * (-np.deg2rad(alpha) - 18)
+#             )
+#             cd = (
+#                 -0.009 * (np.rad2deg(alpha) + 18)
+#                 + panel.calculate_cd_cm(np.deg2rad(-18))[0]
+#             )
+#         elif np.rad2deg(alpha) > 19:
+#             cd = (
+#                 0.02 * (np.rad2deg(alpha) - 19)
+#                 + panel.calculate_cd_cm(np.deg2rad(19))[0]
+#             )
+#             cl = 0.9 + np.rad2deg(alpha) * 0.01 - 0.01 * 19
+#         else:
+#             cl = panel.calculate_cl(alpha)
+#             cd = panel.calculate_cd_cm(alpha)[0]
+#         cl_array_new.append(cl)
+#         cd_array_new.append(cd)
+#         cm_array_new.append(panel.calculate_cd_cm(alpha)[1])
+
+#     from scipy.interpolate import interp1d
+#     from scipy.ndimage import gaussian_filter1d
+
+#     def smooth_discontinuous_values(
+#         alpha, y, method="cubic", smoothing_window=1, use_gaussian=True
+#     ):
+#         """
+#         Smooths y-values corresponding to discontinuous alpha values.
+
+#         Args:
+#             alpha (np.ndarray): Array of alpha values (x-axis).
+#             y (np.ndarray): Array of y values (y-axis).
+#             method (str): Interpolation method ('linear', 'cubic', etc.). Default is 'linear'.
+#             smoothing_window (int): Size of the smoothing window. Default is 5.
+#             use_gaussian (bool): Whether to use Gaussian filter for smoothing. Default is True.
+
+#         Returns:
+#             np.ndarray, np.ndarray: Smoothed alpha and y values.
+#         """
+#         # Interpolate y values on the regular alpha grid
+#         interpolator = interp1d(alpha, y, kind=method, fill_value="extrapolate")
+#         y_interpolated = interpolator(alpha)
+
+#         # Apply smoothing
+#         if use_gaussian:
+#             y_smoothed = gaussian_filter1d(y_interpolated, smoothing_window)
+#         else:
+#             # Simple moving average
+#             y_smoothed = np.convolve(
+#                 y_interpolated,
+#                 np.ones(smoothing_window) / smoothing_window,
+#                 mode="same",
+#             )
+
+#         return y_smoothed
+
+#     cl_smoothed = smooth_discontinuous_values(alpha_array, cl_array_new)
+#     cd_smoothed = smooth_discontinuous_values(alpha_array, cd_array_new)
+#     cm_smoothed = smooth_discontinuous_values(alpha_array, cm_array_new)
+
+#     # Create a new smooth array that uses the old values for alpha < -3 and alpha > 19
+#     cl_smoothed = np.where(
+#         np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
+#         cl_smoothed,
+#         cl_array,
+#     )
+#     cd_smoothed = np.where(
+#         np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
+#         cd_smoothed,
+#         cd_array,
+#     )
+#     cm_smoothed = np.where(
+#         np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
+#         cm_smoothed,
+#         cm_array,
+#     )
+
+#     # Create a 1x3 subplot
+#     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
+
+#     # Cl vs Alpha plot
+#     ax1.plot(np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ NEW", color="blue")
+#     ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$", color="black")
+#     ax1.set_xlabel("Angle of Attack (degrees)")
+#     ax1.set_ylabel(r"$C_{\mathrm{l}}$")
+#     ax1.grid(True)
+#     ax1.legend()
+
+#     # Cd vs Alpha plot
+#     ax2.plot(np.rad2deg(alpha_array), cd_smoothed, label="$C_d$", color="blue")
+#     ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ OLD", color="black")
+#     ax2.set_xlabel("Angle of Attack (degrees)")
+#     ax2.set_ylabel(r"$C_{\mathrm{d}}$")
+#     ax2.grid(True)
+
+#     # Cm vs Alpha plot
+#     ax3.plot(np.rad2deg(alpha_array), cm_smoothed, label="$C_m$", color="blue")
+#     ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$", color="black")
+#     ax3.set_xlabel("Angle of Attack (degrees)")
+#     ax3.set_ylabel(r"$C_{\mathrm{m}}$")
+#     ax3.grid(True)
+
+#     # Adjust layout and display
+#     plt.tight_layout()
+#     # plt.show()
+#     plt.savefig(f"2D_polars_breukels_and_engineering_{panel_index}.pdf")
+
+#     import pandas as pd
+
+#     # Create a pandas DataFrame with the results
+#     # df = pd.DataFrame(
+#     #     {
+#     #         "aoa": np.rad2deg(alpha_array),
+#     #         "C_l_breukels": cl_array,
+#     #         "C_d_breukels": cd_array,
+#     #         "C_m_breukels": cm_array,
+#     #         "C_l_engineering": cl_smoothed,
+#     #         "C_d_engineering": cd_smoothed,
+#     #         "C_m_engineering": cm_smoothed,
+#     #     }
+#     # )
+#     # df.to_csv(f"2D_polars_breukels_and_engineering_{panel_index}.csv", index=False)
+
+#     df = pd.DataFrame(
+#         {
+#             "alpha": alpha_array,
+#             "cl": cl_smoothed,
+#             "cd": cd_smoothed,
+#             "cm": cm_smoothed,
+#             "cl_breukels": cl_array,
+#             "cd_breukels": cd_array,
+#             "cm_breukels": cm_array,
+#         }
+#     )
+#     df.to_csv(f"polar_engineering_{panel_index}.csv", index=False)
