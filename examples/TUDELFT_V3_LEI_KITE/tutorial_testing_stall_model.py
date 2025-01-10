@@ -24,7 +24,7 @@ while not os.path.isfile(os.path.join(root_dir, ".gitignore")):
 save_folder = Path(root_dir) / "results" / "TUDELFT_V3_LEI_KITE"
 
 # Defining discretisation
-n_panels = 54
+n_panels = 54  # 54
 spanwise_panel_distribution = "split_provided"
 
 ### rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
@@ -61,17 +61,17 @@ print(
 for i, CAD_rib_i in enumerate(
     rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
 ):
-    # CAD_wing.add_section(CAD_rib_i[0], CAD_rib_i[1], CAD_rib_i[2])
+    CAD_wing.add_section(CAD_rib_i[0], CAD_rib_i[1], CAD_rib_i[2])
 
-    import pandas as pd
+    # import pandas as pd
 
-    df_polar_data = pd.read_csv(f"polar_engineering_{i}.csv")
-    alpha = df_polar_data["alpha"].values
-    cl = df_polar_data["cl"].values
-    cd = df_polar_data["cd"].values
-    cm = df_polar_data["cm"].values
-    polar_data = ["polar_data", np.array([alpha, cl, cd, cm])]
-    CAD_wing.add_section(CAD_rib_i[0], CAD_rib_i[1], polar_data)
+    # df_polar_data = pd.read_csv(f"polar_engineering_{i}.csv")
+    # alpha = df_polar_data["alpha"].values
+    # cl = df_polar_data["cl"].values
+    # cd = df_polar_data["cd"].values
+    # cm = df_polar_data["cm"].values
+    # polar_data = ["polar_data", np.array([alpha, cl, cd, cm])]
+    # CAD_wing.add_section(CAD_rib_i[0], CAD_rib_i[1], polar_data)
 
 
 wing_aero_CAD_19ribs = WingAerodynamics([CAD_wing])
@@ -146,7 +146,55 @@ wing_aero_CAD_19ribs = setting_va(
 )
 
 # for n_i in range(n_panels):
-#     plot_panel_coefficients(wing_aero_CAD_19ribs, n_i, alpha_range=[-30, 30])
+#     plot_panel_coefficients(wing_aero_CAD_19ribs, n_i, alpha_range=[-40, 40])
+
+# # store the first and last polars
+# import pandas as pd
+
+# df = pd.read_csv(
+#     Path(root_dir) / "examples" / "TUDELFT_V3_LEI_KITE" / "polar_engineering_0.csv"
+# )
+# df.to_csv(
+#     Path(root_dir) / "examples" / "TUDELFT_V3_LEI_KITE" / "corrected_polar_0.csv",
+#     index=False,
+# )
+# df = pd.read_csv(
+#     Path(root_dir) / "examples" / "TUDELFT_V3_LEI_KITE" / "polar_engineering_17.csv"
+# )
+# df.to_csv(
+#     Path(root_dir) / "examples" / "TUDELFT_V3_LEI_KITE" / "corrected_polar_18.csv",
+#     index=False,
+# )
+
+# for i in np.arange(1, 18, 1):
+#     path_to_csv_i = (
+#         Path(root_dir)
+#         / "examples"
+#         / "TUDELFT_V3_LEI_KITE"
+#         / f"polar_engineering_{i-1}.csv"
+#     )
+#     df_polar_data_i = pd.read_csv(path_to_csv_i)
+
+#     path_to_csv_i_p1 = (
+#         Path(root_dir)
+#         / "examples"
+#         / "TUDELFT_V3_LEI_KITE"
+#         / f"polar_engineering_{i}.csv"
+#     )
+#     df_polar_data_i_p1 = pd.read_csv(path_to_csv_i_p1)
+
+#     # Compute the average for all columns with matching names
+#     df_polar_average = (df_polar_data_i + df_polar_data_i_p1) / 2
+
+#     # Save the averaged DataFrame
+#     df_polar_average.to_csv(
+#         Path(root_dir)
+#         / "examples"
+#         / "TUDELFT_V3_LEI_KITE"
+#         / f"corrected_polar_{i}.csv",
+#         index=False,
+#     )
+
 
 # ### Plotting GEOMETRY
 # # plot_geometry(
@@ -161,61 +209,61 @@ wing_aero_CAD_19ribs = setting_va(
 # # )
 
 
-#### INTERACTIVE PLOT
-interactive_plot(
-    wing_aero_CAD_19ribs,
-    vel=Umag,
-    angle_of_attack=angle_of_attack,
-    side_slip=side_slip,
-    yaw_rate=yaw_rate,
-    is_with_aerodynamic_details=True,
-)
+# #### INTERACTIVE PLOT
+# interactive_plot(
+#     wing_aero_CAD_19ribs,
+#     vel=Umag,
+#     angle_of_attack=angle_of_attack,
+#     side_slip=side_slip,
+#     yaw_rate=yaw_rate,
+#     is_with_aerodynamic_details=True,
+# )
 
 
-### PLOTTING 2D POLARS
-plot_panel_coefficients(
-    wing_aero_CAD_19ribs,
-    int(n_panels / 2),
-    alpha_range=[-30, 30],
-    is_show=True,
-)
+# ### PLOTTING 2D POLARS
+# plot_panel_coefficients(
+#     wing_aero_CAD_19ribs,
+#     int(n_panels / 2),
+#     alpha_range=[-30, 30],
+#     is_show=True,
+# )
 
 ### plotting distributions
-results = VSM_base.solve(wing_aero_CAD_19ribs)
-results_with_stall_correction = VSM_with_stall_correction.solve(wing_aero_CAD_19ribs)
-CAD_y_coordinates = [
-    panels.aerodynamic_center[1] for panels in wing_aero_CAD_19ribs.panels
-]
-results_no_gamma_feedback = VSM_no_gamma_feedback.solve(wing_aero_CAD_19ribs)
-results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
-    wing_aero_CAD_19ribs
-)
+# results = VSM_base.solve(wing_aero_CAD_19ribs)
+# results_with_stall_correction = VSM_with_stall_correction.solve(wing_aero_CAD_19ribs)
+# CAD_y_coordinates = [
+#     panels.aerodynamic_center[1] for panels in wing_aero_CAD_19ribs.panels
+# ]
+# results_no_gamma_feedback = VSM_no_gamma_feedback.solve(wing_aero_CAD_19ribs)
+# results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
+#     wing_aero_CAD_19ribs
+# )
 
-plot_distribution(
-    y_coordinates_list=[
-        CAD_y_coordinates,
-        CAD_y_coordinates,
-        # CAD_y_coordinates,
-        # CAD_y_coordinates,
-    ],
-    results_list=[
-        results,
-        results_with_stall_correction,
-        # results_no_gamma_feedback,
-        # results_no_gamma_feedback_stall,
-    ],
-    label_list=[
-        "VSM",
-        "VSM with stall correction",
-        # "VSM_no_gamma_feedback",
-        # "VSM_no_gamma_feedback_stall",
-    ],
-    title=f"CAD_spanwise_distributions_alpha_{aoa:.1f}_beta_{side_slip:.1f}_yaw_{yaw_rate:.1f}_Umag_{Umag:.1f}",
-    data_type=".pdf",
-    save_path=Path(save_folder) / "spanwise_distributions",
-    is_save=False,
-    is_show=True,
-)
+# plot_distribution(
+#     y_coordinates_list=[
+#         CAD_y_coordinates,
+#         CAD_y_coordinates,
+#         # CAD_y_coordinates,
+#         # CAD_y_coordinates,
+#     ],
+#     results_list=[
+#         results,
+#         results_with_stall_correction,
+#         # results_no_gamma_feedback,
+#         # results_no_gamma_feedback_stall,
+#     ],
+#     label_list=[
+#         "VSM",
+#         "VSM with stall correction",
+#         # "VSM_no_gamma_feedback",
+#         # "VSM_no_gamma_feedback_stall",
+#     ],
+#     title=f"CAD_spanwise_distributions_alpha_{angle_of_attack:.1f}_beta_{side_slip:.1f}_yaw_{yaw_rate:.1f}_Umag_{Umag:.1f}",
+#     data_type=".pdf",
+#     save_path=Path(save_folder) / "spanwise_distributions",
+#     is_save=False,
+#     is_show=True,
+# )
 
 ### plotting alpha-polar
 save_path = Path(root_dir) / "results" / "TUD_V3_LEI_KITE"
@@ -294,7 +342,7 @@ plot_polars(
         # "CFD_Lebesque Rey 30e5",
     ],
     literature_path_list=[],
-    angle_range=np.linspace(0, 20, 10),
+    angle_range=np.linspace(-20, 20, 40),
     angle_type="side_slip",
     angle_of_attack=np.deg2rad(6.8),
     side_slip=0,

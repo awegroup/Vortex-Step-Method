@@ -436,6 +436,7 @@ class WingAerodynamics:
         panels,
         is_only_f_and_gamma_output,
         is_new_vector_definition,
+        reference_point=[-0.17, 0.00, 9.25],  # roughly the cg of V3
     ):
 
         cl_array, cd_array, cm_array = (
@@ -608,50 +609,80 @@ class WingAerodynamics:
             ##### MOMENTS ######
             ####################
 
-            # Get the moment magnitude
-            moment_induced_va_mag = moment[i]
-            # moment_lever_arm
-            # The moment is defined, and represents the value at 1/4c
-            # The force is however computed at 3/4c control point
-            # The moment lever arm is then defined as the distance between these two points
-            moment_lever_arm_dir = y_airf_chord
+            # # Get the moment magnitude
+            # moment_induced_va_mag = moment[i]
+            # # moment_lever_arm
+            # # The moment is defined, and represents the value at 1/4c
+            # # The force is however computed at 3/4c control point
+            # # The moment lever arm is then defined as the distance between these two points
+            # moment_lever_arm_dir = y_airf_chord
 
-            # Moment direction computation
-            # Use cross product to define moment vector direction,
-            #   using the total force direction and the lever arm direction
-            ftotal_induced_va_unit = ftotal_induced_va / jit_norm(ftotal_induced_va)
-            dir_moment_induced_va = jit_cross(
-                ftotal_induced_va_unit, moment_lever_arm_dir
-            )
-            dir_moment_induced_va = dir_moment_induced_va / jit_norm(
-                dir_moment_induced_va
-            )
+            # # Moment direction computation
+            # # Use cross product to define moment vector direction,
+            # #   using the total force direction and the lever arm direction
+            # ftotal_induced_va_unit = ftotal_induced_va / jit_norm(ftotal_induced_va)
+            # dir_moment_induced_va = jit_cross(
+            #     ftotal_induced_va_unit, moment_lever_arm_dir
+            # )
+            # dir_moment_induced_va = dir_moment_induced_va / jit_norm(
+            #     dir_moment_induced_va
+            # )
 
-            # Moment vector computation
-            moment_induced_va = moment_induced_va_mag * dir_moment_induced_va
+            # # Moment vector computation
+            # moment_induced_va = moment_induced_va_mag * dir_moment_induced_va
 
-            ### Converting moments to the global reference frame
-            mx_global_2D = jit_dot(moment_induced_va, np.array([1, 0, 0]))
-            my_global_2D = jit_dot(moment_induced_va, np.array([0, 1, 0]))
-            mz_global_2D = jit_dot(moment_induced_va, np.array([0, 0, 1]))
+            # ### Converting moments to the global reference frame
+            # mx_global_2D = jit_dot(moment_induced_va, np.array([1, 0, 0]))
+            # my_global_2D = jit_dot(moment_induced_va, np.array([0, 1, 0]))
+            # mz_global_2D = jit_dot(moment_induced_va, np.array([0, 0, 1]))
 
-            # 3D, by multiplying with the panel width
-            mx_global_3D = mx_global_2D * panel_width
-            my_global_3D = my_global_2D * panel_width
-            mz_global_3D = mz_global_2D * panel_width
+            # # 3D, by multiplying with the panel width
+            # mx_global_3D = mx_global_2D * panel_width
+            # my_global_3D = my_global_2D * panel_width
+            # mz_global_3D = mz_global_2D * panel_width
 
-            # Summing up totals
-            mx_global_3D_sum += mx_global_3D
-            my_global_3D_sum += my_global_3D
-            mz_global_3D_sum += mz_global_3D
+            # # Summing up totals
+            # mx_global_3D_sum += mx_global_3D
+            # my_global_3D_sum += my_global_3D
+            # mz_global_3D_sum += mz_global_3D
 
-            # Storing results
-            mx_global_3D_list.append(mx_global_3D)
-            my_global_3D_list.append(my_global_3D)
-            mz_global_3D_list.append(mz_global_3D)
-            m_global_3D_list.append(
-                np.array([mx_global_3D, my_global_3D, mz_global_3D])
-            )
+            # # Storing results
+            # mx_global_3D_list.append(mx_global_3D)
+            # my_global_3D_list.append(my_global_3D)
+            # mz_global_3D_list.append(mz_global_3D)
+            # m_global_3D_list.append(
+            #     np.array([mx_global_3D, my_global_3D, mz_global_3D])
+            # )
+
+            # (1) Panel aerodynamic center in global frame:
+            panel_ac_global = panel_i.aerodynamic_center  # 3D [x, y, z]
+
+            # (2) Convert local (2D) pitching moment to a 3D vector in global coords.
+            #     Use the axis around which the moment is defined,
+            #     which is the z-axis pointing "spanwise"
+            moment_axis_global = panel_i.z_airf
+
+            # Scale by panel width if your 'moment[i]' is 2D moment-per-unit-span:
+            M_local_3D = moment[i] * moment_axis_global * panel_i.width
+
+            # (3) Vector from panel AC to the chosen reference point:
+            r_vector = panel_ac_global - reference_point  # e.g. CG, wing root, etc.
+
+            # (4) Cross product to shift the force from panel AC to ref. point:
+            force_global_3D = np.array([fx_global_3D, fy_global_3D, fz_global_3D])
+            M_shift = np.cross(r_vector, force_global_3D)
+
+            # (5) Total panel moment about the reference point:
+            M_ref_panel = M_local_3D + M_shift
+
+            # (6) Accumulate or store:
+            mx_global_3D_sum += M_ref_panel[0]
+            my_global_3D_sum += M_ref_panel[1]
+            mz_global_3D_sum += M_ref_panel[2]
+            mx_global_3D_list.append(M_ref_panel[0])
+            my_global_3D_list.append(M_ref_panel[1])
+            mz_global_3D_list.append(M_ref_panel[2])
+            m_global_3D_list.append(M_ref_panel)
 
         if is_only_f_and_gamma_output:
             return {
