@@ -436,7 +436,7 @@ class WingAerodynamics:
         panels,
         is_only_f_and_gamma_output,
         is_new_vector_definition,
-        reference_point=[-0.17, 0.00, 9.25],  # roughly the cg of V3
+        reference_point,
     ):
 
         cl_array, cd_array, cm_array = (
