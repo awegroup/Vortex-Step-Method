@@ -598,7 +598,6 @@ def generate_polar_data(
     side_slip=0,
     yaw_rate=0,
     Umag=10,
-    reference_point=None,
 ):
     """
     Generates the polar data for the given solver and wing_aero.
@@ -654,12 +653,7 @@ def generate_polar_data(
             yaw_rate,
         )
 
-        if reference_point is not None:
-            results = solver.solve(
-                wing_aero, gamma_distribution=gamma, reference_point=reference_point
-            )
-        else:
-            results = solver.solve(wing_aero, gamma_distribution=gamma)
+        results = solver.solve(wing_aero, gamma_distribution=gamma)
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
