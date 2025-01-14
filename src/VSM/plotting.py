@@ -5,6 +5,8 @@ import tempfile
 import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+
 from pathlib import Path
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -632,26 +634,15 @@ def generate_polar_data(
     gamma = None
     for i, angle_i in enumerate(angle_range):
         if angle_type == "angle_of_attack":
-            angle_of_attack = np.deg2rad(angle_i)
+            wing_aero.va_initialize(Umag, angle_i, side_slip, yaw_rate)
         elif angle_type == "side_slip":
-            side_slip = np.deg2rad(angle_i)
+            wing_aero.va_initialize(Umag, angle_of_attack, angle_i, yaw_rate)
         else:
             raise ValueError(
                 "angle_type should be either 'angle_of_attack' or 'side_slip'"
             )
 
         # Set the inflow conditions
-        wing_aero.va = (
-            np.array(
-                [
-                    np.cos(angle_of_attack) * np.cos(side_slip),
-                    np.sin(side_slip),
-                    np.sin(angle_of_attack),
-                ]
-            )
-            * Umag,
-            yaw_rate,
-        )
 
         results = solver.solve(wing_aero, gamma_distribution=gamma)
         cl[i] = results["cl"]
@@ -715,8 +706,8 @@ def plot_polars(
         angle_type: type of the angle | default: "angle_of_attack", options:
               - `"angle_of_attack`: will loop over an angle_of_attack range
               - `"side_slip"`: will loop over an side_slip range
-        angle_of_attack: angle of attack | default: 0
-        side_slip: side slip angle | default: 0
+        angle_of_attack: angle of attack [deg] | default: 0
+        side_slip: side slip angle [deg] | default: 0
         yaw_rate: yaw rate | default: 0
         Umag: magnitude of the velocity | default: 10
         title: title of the plot | default: "polar"
@@ -1004,7 +995,9 @@ def plot_panel_coefficients(
         show_plot(fig)
 
 
-def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-40, 40]):
+def process_panel_coefficients_panel_i(
+    wing_aero, panel_index, PROJECT_DIR, alpha_range=[-40, 40]
+):
     """
     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
 
@@ -1018,7 +1011,7 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-40, 40]):
     panel = wing_aero.panels[panel_index]
 
     # Create an array of angles of attack
-    alpha_array = np.deg2rad(np.linspace(alpha_range[0], alpha_range[1], 70))
+    alpha_array = np.deg2rad(np.linspace(alpha_range[0], alpha_range[1], 80))
 
     # Calculate coefficients
     cl_array = np.array([panel.calculate_cl(alpha) for alpha in alpha_array])
@@ -1028,7 +1021,7 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-40, 40]):
     cm_array = np.array([panel.calculate_cd_cm(alpha)[1] for alpha in alpha_array])
 
     # plt.show()
-    plt.show()
+    # plt.show()
 
     cl_array_new = []
     cd_array_new = []
@@ -1036,31 +1029,61 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-40, 40]):
     for alpha in alpha_array:
         if np.rad2deg(alpha) < -1 and np.rad2deg(alpha) > -18:
             # cl = -0.1 + 0.005 * np.rad2deg(alpha) + 0.005 * np.deg2rad(1)
-            cl = -0.3
+            cl = -0.3 - np.abs(0.7 * (np.rad2deg(alpha) / 40))
             cd = panel.calculate_cd_cm(alpha)[0]
         elif np.rad2deg(alpha) < -18:
-            cl = (
-                -0.3
-                # - 0.005 * (np.rad2deg(alpha) + 1)
-                # + 0.005 * (-np.deg2rad(alpha) - 18)
-            )
+            cl = -0.3 - 0.7 * np.abs(np.rad2deg(alpha) / 40)
             cd = (
-                -0.02 * (np.rad2deg(alpha) + 18)
+                -0.01 * (np.rad2deg(alpha) + 18)
                 + panel.calculate_cd_cm(np.deg2rad(-18))[0]
             )
         elif np.rad2deg(alpha) > 19:
             cd = (
-                0.03 * (np.rad2deg(alpha) - 19)
+                0.01 * (np.rad2deg(alpha) - 19)
                 + panel.calculate_cd_cm(np.deg2rad(19))[0]
             )
-            # cl = 0.9 + np.rad2deg(alpha) * 0.01 - 0.01 * 19
-            cl = panel.calculate_cl(alpha)
+            cl = 1.05 + 0.2 * np.abs(np.rad2deg(alpha) / 40)
         else:
             cl = panel.calculate_cl(alpha)
             cd = panel.calculate_cd_cm(alpha)[0]
         cl_array_new.append(cl)
         cd_array_new.append(cd)
         cm_array_new.append(panel.calculate_cd_cm(alpha)[1])
+
+    def run_neuralfoil(PROJECT_DIR=PROJECT_DIR):
+        import neuralfoil as nf
+
+        Re = 5.6e5
+        model_size = "xxlarge"
+        dat_file_path = Path(
+            PROJECT_DIR,
+            "examples",
+            "TUDELFT_V3_LEI_KITE",
+            "polar_engineering",
+            "profiles",
+            "y1_corrected.dat",
+        )
+        alpha_values_deg = np.linspace(-40, 40, 80)
+        neuralfoil_alphas = alpha_values_deg
+
+        aero = nf.get_aero_from_dat_file(
+            filename=dat_file_path,
+            alpha=neuralfoil_alphas,
+            Re=Re,
+            model_size=model_size,
+        )
+        df_neuralfoil = pd.DataFrame(
+            {
+                "alpha": neuralfoil_alphas,
+                "cl": aero["CL"],
+                "cd": aero["CD"],
+                "cm": aero["CM"],
+            }
+        )
+        return df_neuralfoil
+
+    df_neuralfoil = run_neuralfoil(PROJECT_DIR)
+    cm_array_new = df_neuralfoil["cm"].values
 
     from scipy.interpolate import interp1d
     from scipy.ndimage import gaussian_filter1d
@@ -1103,70 +1126,70 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-40, 40]):
     cm_smoothed = smooth_discontinuous_values(alpha_array, cm_array_new)
 
     # Create a new smooth array that uses the old values for alpha < -3 and alpha > 19
-    cl_smoothed = np.where(
-        np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(50)),
-        cl_smoothed,
-        cl_array,
-    )
-    cd_smoothed = np.where(
-        np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
-        cd_smoothed,
-        cd_array,
-    )
-    cm_smoothed = np.where(
-        np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
-        cm_smoothed,
-        cm_array,
-    )
-
-    # # Create a 1x3 subplot
-    # fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
-
-    # # Cl vs Alpha plot
-    # ax1.plot(np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ NEW", color="blue")
-    # ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$", color="black")
-    # ax1.set_xlabel("Angle of Attack (degrees)")
-    # ax1.set_ylabel(r"$C_{\mathrm{l}}$")
-    # ax1.grid(True)
-    # ax1.legend()
-
-    # # Cd vs Alpha plot
-    # ax2.plot(np.rad2deg(alpha_array), cd_smoothed, label="$C_d$", color="blue")
-    # ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ OLD", color="black")
-    # ax2.set_xlabel("Angle of Attack (degrees)")
-    # ax2.set_ylabel(r"$C_{\mathrm{d}}$")
-    # ax2.grid(True)
-
-    # # Cm vs Alpha plot
-    # ax3.plot(np.rad2deg(alpha_array), cm_smoothed, label="$C_m$", color="blue")
-    # ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$", color="black")
-    # ax3.set_xlabel("Angle of Attack (degrees)")
-    # ax3.set_ylabel(r"$C_{\mathrm{m}}$")
-    # ax3.grid(True)
-
-    # # Adjust layout and display
-    # ax1.set_xlim(-30, 30)
-    # ax2.set_xlim(-30, 30)
-    # ax3.set_xlim(-30, 30)
-    # plt.tight_layout()
-    # # plt.show()
-    # plt.savefig(f"2D_polars_breukels_and_engineering_{panel_index}.pdf")
-
-    import pandas as pd
-
-    # Create a pandas DataFrame with the results
-    # df = pd.DataFrame(
-    #     {
-    #         "aoa": np.rad2deg(alpha_array),
-    #         "C_l_breukels": cl_array,
-    #         "C_d_breukels": cd_array,
-    #         "C_m_breukels": cm_array,
-    #         "C_l_engineering": cl_smoothed,
-    #         "C_d_engineering": cd_smoothed,
-    #         "C_m_engineering": cm_smoothed,
-    #     }
+    # cl_smoothed = np.where(
+    #     np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(50)),
+    #     cl_smoothed,
+    #     cl_array,
     # )
-    # df.to_csv(f"2D_polars_breukels_and_engineering_{panel_index}.csv", index=False)
+    # cd_smoothed = np.where(
+    #     np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
+    #     cd_smoothed,
+    #     cd_array,
+    # )
+    # cm_smoothed = np.where(
+    #     np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
+    #     cm_smoothed,
+    #     cm_array,
+    # )
+
+    # Create a 1x3 subplot
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
+
+    # Cl vs Alpha plot
+    ax1.plot(
+        np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ Corrected", color="blue"
+    )
+    ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$ Breukels", color="black")
+    ax1.set_xlabel(r"$\alpha$ [°]")
+    ax1.set_ylabel(r"$C_{\mathrm{l}}$")
+    ax1.grid(True)
+    ax1.legend()
+
+    # Cd vs Alpha plot
+    ax2.plot(
+        np.rad2deg(alpha_array), cd_smoothed, label="$C_d$ Corrected", color="blue"
+    )
+    ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ Breukels", color="black")
+    ax2.set_xlabel(r"$\alpha$ [°]")
+    ax2.set_ylabel(r"$C_{\mathrm{d}}$")
+    ax2.grid(True)
+
+    # Cm vs Alpha plot
+    ax3.plot(
+        np.rad2deg(alpha_array), cm_smoothed, label="$C_m$ Corrected", color="blue"
+    )
+    ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$ Breukels", color="black")
+    ax3.set_xlabel(r"$\alpha$ [°]")
+    ax3.set_ylabel(r"$C_{\mathrm{m}}$")
+    ax3.grid(True)
+
+    # Adjust layout and display
+    ax1.set_xlim(-40, 40)
+    ax2.set_xlim(-40, 40)
+    ax3.set_xlim(-40, 40)
+    plt.tight_layout()
+    # plt.show()
+    polar_folder_path = Path(
+        PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
+    )
+
+    figure_path = Path(
+        polar_folder_path,
+        "figures",
+        f"2D_polars_breukels_and_engineering_{panel_index}.pdf",
+    )
+    plt.savefig(figure_path)
+    plt.close()
 
     df = pd.DataFrame(
         {
@@ -1179,4 +1202,66 @@ def plot_panel_coefficients(wing_aero, panel_index, alpha_range=[-40, 40]):
             "cm_breukels": cm_array,
         }
     )
-    df.to_csv(f"polar_engineering_{panel_index}.csv", index=False)
+    df.to_csv(
+        Path(polar_folder_path, "csv_files", f"polar_engineering_{panel_index}.csv"),
+        index=False,
+    )
+    ### make sure first and last are added
+    if panel_index == 0:
+        df.to_csv(
+            Path(polar_folder_path, "csv_files", f"corrected_polar_0.csv"), index=False
+        )
+    elif panel_index == 17:
+        df.to_csv(
+            Path(polar_folder_path, "csv_files", f"polar_engineering_17.csv"),
+            index=False,
+        )
+        df.to_csv(
+            Path(polar_folder_path, "csv_files", f"corrected_polar_18.csv"),
+            index=False,
+        )
+
+
+def process_panel_coefficients(
+    wing_aero,
+    PROJECT_DIR,
+    n_panels,
+    alpha_range=[-40, 40],
+):
+
+    for i in range(n_panels):
+        process_panel_coefficients_panel_i(
+            wing_aero=wing_aero,
+            panel_index=i,
+            PROJECT_DIR=PROJECT_DIR,
+            alpha_range=alpha_range,
+        )
+
+    polar_folder_path = Path(
+        PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
+    )
+
+    # take the average for each panel of the side panels
+    for i in np.arange(1, 18, 1):
+        path_to_csv_i = Path(
+            polar_folder_path,
+            "csv_files",
+            f"polar_engineering_{i-1}.csv",
+        )
+        df_polar_data_i = pd.read_csv(path_to_csv_i)
+
+        path_to_csv_i_p1 = Path(
+            polar_folder_path,
+            "csv_files",
+            f"polar_engineering_{i}.csv",
+        )
+        df_polar_data_i_p1 = pd.read_csv(path_to_csv_i_p1)
+
+        # Compute the average for all columns with matching names
+        df_polar_average = (df_polar_data_i + df_polar_data_i_p1) / 2
+
+        # Save the averaged DataFrame
+        df_polar_average.to_csv(
+            Path(polar_folder_path, "csv_files", f"corrected_polar_{i}.csv"),
+            index=False,
+        )

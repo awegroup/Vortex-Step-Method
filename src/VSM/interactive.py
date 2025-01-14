@@ -430,19 +430,8 @@ def running_VSM(
 ) -> Dict[str, Any]:
     """Run the Vortex Source Method on the given wing_aero object, based on AoA."""
     # setting va
-    side_slip = np.deg2rad(side_slip)
-    aoa_rad = np.deg2rad(angle_of_attack)  # Use the passed AoA value
-    vel_app = (
-        np.array(
-            [
-                np.cos(aoa_rad) * np.cos(side_slip),
-                np.sin(side_slip),
-                np.sin(aoa_rad),
-            ]
-        )
-        * vel
-    )
-    wing_aero.va = (vel_app, yaw_rate)
+
+    wing_aero.va_initialize(vel, angle_of_attack, side_slip, yaw_rate)
 
     # configuring the solver
     VSM_solver = Solver(

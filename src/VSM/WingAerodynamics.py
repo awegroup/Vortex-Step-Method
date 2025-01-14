@@ -573,6 +573,9 @@ class WingAerodynamics:
                     lift_induced_va, spanwise_direction
                 ) + jit_dot(drag_induced_va, spanwise_direction)
 
+            ##TODO: adding negative sign to side force, because y should be defined positive to the left.
+            side_prescribed_va = side_prescribed_va
+
             ### Converting forces to the global reference frame
             fx_global_2D = jit_dot(ftotal_induced_va, np.array([1, 0, 0]))
             fy_global_2D = jit_dot(ftotal_induced_va, np.array([0, 1, 0]))
@@ -821,6 +824,42 @@ class WingAerodynamics:
     ###########################
     ## UPDATE FUNCTIONS
     ###########################
+
+    def va_initialize(
+        self,
+        Umag: float = 3.15,
+        angle_of_attack: float = 6.8,
+        side_slip: float = 0.0,
+        yaw_rate: float = 0.0,
+    ):
+        """
+        Initializes the apparent velocity (va) and yaw rate for the WingAero object.
+
+        Parameters:
+        Umag (float): Magnitude of the velocity.
+        angle_of_attack (float): Angle of attack in degrees.
+        side_slip (float): Sideslip angle in degrees, a minus is added because its defined counter-clockwise.
+        yaw_rate (float): Yaw rate, default is 0.0.
+        """
+        # Convert angles to radians
+        aoa_rad = np.deg2rad(angle_of_attack)
+        # a (-) is added because its defined counter-clockwise
+        side_slip_rad = -np.deg2rad(side_slip)
+
+        # Calculate apparent velocity vector
+        vel_app = (
+            np.array(
+                [
+                    np.cos(aoa_rad) * np.cos(side_slip_rad),
+                    np.sin(side_slip_rad),
+                    np.sin(aoa_rad),
+                ]
+            )
+            * Umag
+        )
+
+        # Set the va attribute using the setter
+        self.va = (vel_app, yaw_rate)
 
     def update_effective_angle_of_attack_if_VSM(
         self,
