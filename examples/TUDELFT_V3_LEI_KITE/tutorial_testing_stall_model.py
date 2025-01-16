@@ -17,15 +17,9 @@ from VSM.plotting import (
 )
 from VSM.interactive import interactive_plot
 
-# Find the root directory of the repository
-PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
-while not os.path.isfile(os.path.join(PROJECT_DIR, ".gitignore")):
-    PROJECT_DIR = os.path.abspath(os.path.join(PROJECT_DIR, ".."))
-    if PROJECT_DIR == "/":
-        raise FileNotFoundError("Could not find the root directory of the repository.")
-save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 
-### rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+
 csv_file_path = (
     Path(PROJECT_DIR)
     / "processed_data"
@@ -53,24 +47,24 @@ for i in range(len(LE_x_array)):
 #############################################
 #############################################
 #############################################
-### Processing panel coefficients
-n_panels_breukels = 18
-CAD_wing_breukels = Wing(n_panels_breukels, "split_provided")
-for i, CAD_rib_i in enumerate(
-    rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
-):
-    CAD_wing_breukels.add_section(CAD_rib_i[0], CAD_rib_i[1], CAD_rib_i[2])
-wing_aero_CAD_19ribs_breukels = WingAerodynamics([CAD_wing_breukels])
-process_panel_coefficients(
-    wing_aero_CAD_19ribs_breukels,
-    PROJECT_DIR,
-    n_panels_breukels,
-    alpha_range=[-40, 40],
-)
-import testing_neuralfoil as testing_neuralfoil
+# ### Processing panel coefficients
+# n_panels_breukels = 18
+# CAD_wing_breukels = Wing(n_panels_breukels, "split_provided")
+# for i, CAD_rib_i in enumerate(
+#     rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+# ):
+#     CAD_wing_breukels.add_section(CAD_rib_i[0], CAD_rib_i[1], CAD_rib_i[2])
+# wing_aero_CAD_19ribs_breukels = WingAerodynamics([CAD_wing_breukels])
+# process_panel_coefficients(
+#     wing_aero_CAD_19ribs_breukels,
+#     PROJECT_DIR,
+#     n_panels_breukels,
+#     alpha_range=[-40, 40],
+# )
+# import testing_neuralfoil as testing_neuralfoil
 
-for i in range(18):
-    testing_neuralfoil.main(n_i=i, PROJECT_DIR=PROJECT_DIR)
+# for i in range(18):
+#     testing_neuralfoil.main(n_i=i, PROJECT_DIR=PROJECT_DIR)
 #############################################
 #############################################
 #############################################
@@ -144,28 +138,28 @@ VSM_with_stall_correction = Solver(
 #     is_with_artificial_damping=True,
 # )
 
-# ### Plotting GEOMETRY
-# # plot_geometry(
-# #     wing_aero_CAD_19ribs,
-# #     title=" ",
-# #     data_type=".svg",
-# #     save_path=" ",
-# #     is_save=False,
-# #     is_show=True,
-# #     view_elevation=15,
-# #     view_azimuth=-120,
-# # )
-
-
-# #### INTERACTIVE PLOT
-# interactive_plot(
+# ## Plotting GEOMETRY
+# plot_geometry(
 #     wing_aero_CAD_19ribs,
-#     vel=Umag,
-#     angle_of_attack=angle_of_attack,
-#     side_slip=side_slip,
-#     yaw_rate=yaw_rate,
-#     is_with_aerodynamic_details=True,
+#     title=" ",
+#     data_type=".svg",
+#     save_path=" ",
+#     is_save=False,
+#     is_show=True,
+#     view_elevation=15,
+#     view_azimuth=-120,
 # )
+
+
+#### INTERACTIVE PLOT
+interactive_plot(
+    wing_aero_CAD_19ribs,
+    vel=Umag,
+    angle_of_attack=angle_of_attack,
+    side_slip=side_slip,
+    yaw_rate=yaw_rate,
+    is_with_aerodynamic_details=True,
+)
 
 # interactive_plot(
 #     wing_aero_CAD_19ribs,
@@ -176,6 +170,7 @@ VSM_with_stall_correction = Solver(
 #     is_with_aerodynamic_details=True,
 # )
 
+save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
 
 # ## plotting distributions
 # results = VSM_base.solve(wing_aero_CAD_19ribs)
@@ -187,7 +182,6 @@ VSM_with_stall_correction = Solver(
 # results_no_gamma_feedback_stall = VSM_no_gamma_feedback_stall.solve(
 #     wing_aero_CAD_19ribs
 # )
-
 # plot_distribution(
 #     y_coordinates_list=[
 #         CAD_y_coordinates,
@@ -224,51 +218,51 @@ path_cfd_lebesque = (
     / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
 )
 
-plot_polars(
-    solver_list=[
-        VSM_base,
-        VSM_base,
-        VSM_with_stall_correction,
-        VSM_with_stall_correction,
-        # VSM_no_gamma_feedback,
-        # VSM_no_gamma_feedback_stall,
-        # VSM_new_vector_diff,
-        # VSM_new_vector_diff_stall,
-    ],
-    wing_aero_list=[
-        wing_aero_CAD_19ribs_breukels,
-        wing_aero_CAD_19ribs,
-        wing_aero_CAD_19ribs_breukels,
-        wing_aero_CAD_19ribs,
-        # wing_aero_CAD_19ribs,
-        # wing_aero_CAD_19ribs,
-        # wing_aero_CAD_19ribs,
-        # wing_aero_CAD_19ribs,
-    ],
-    label_list=[
-        "VSM Breukels",
-        "VSM Corrected",
-        "VSM Breukels (+stall)",
-        "VSM Corrected (+stall)",
-        # "VSM CAD 19ribs , no gamma feedback",
-        # "VSM CAD 19ribs , no gamma feedback, with stall correction",
-        # "VSM new vector diff",
-        # "VSM new vector diff, with stall correction",
-        "CFD_Lebesque Rey 30e5",
-    ],
-    literature_path_list=[path_cfd_lebesque],
-    angle_range=np.linspace(-5, 25, 30),
-    angle_type="angle_of_attack",
-    angle_of_attack=0,
-    side_slip=0,
-    yaw_rate=0,
-    Umag=Umag,
-    title=f"alphasweep",
-    data_type=".pdf",
-    save_path=Path(save_folder) / "polars",
-    is_save=True,
-    is_show=True,
-)
+# plot_polars(
+#     solver_list=[
+#         VSM_base,
+#         VSM_base,
+#         VSM_with_stall_correction,
+#         VSM_with_stall_correction,
+#         # VSM_no_gamma_feedback,
+#         # VSM_no_gamma_feedback_stall,
+#         # VSM_new_vector_diff,
+#         # VSM_new_vector_diff_stall,
+#     ],
+#     wing_aero_list=[
+#         wing_aero_CAD_19ribs_breukels,
+#         wing_aero_CAD_19ribs,
+#         wing_aero_CAD_19ribs_breukels,
+#         wing_aero_CAD_19ribs,
+#         # wing_aero_CAD_19ribs,
+#         # wing_aero_CAD_19ribs,
+#         # wing_aero_CAD_19ribs,
+#         # wing_aero_CAD_19ribs,
+#     ],
+#     label_list=[
+#         "VSM Breukels",
+#         "VSM Corrected",
+#         "VSM Breukels (+stall)",
+#         "VSM Corrected (+stall)",
+#         # "VSM CAD 19ribs , no gamma feedback",
+#         # "VSM CAD 19ribs , no gamma feedback, with stall correction",
+#         # "VSM new vector diff",
+#         # "VSM new vector diff, with stall correction",
+#         "CFD_Lebesque Rey 30e5",
+#     ],
+#     literature_path_list=[path_cfd_lebesque],
+#     angle_range=np.linspace(-5, 25, 30),
+#     angle_type="angle_of_attack",
+#     angle_of_attack=0,
+#     side_slip=0,
+#     yaw_rate=0,
+#     Umag=Umag,
+#     title=f"alphasweep",
+#     data_type=".pdf",
+#     save_path=Path(save_folder) / "polars",
+#     is_save=True,
+#     is_show=True,
+# )
 #### plot beta sweep
 plot_polars(
     solver_list=[
@@ -303,7 +297,7 @@ plot_polars(
         # "CFD_Lebesque Rey 30e5",
     ],
     literature_path_list=[],
-    angle_range=np.linspace(-20, 20, 40),
+    angle_range=np.linspace(-20, 20, 20),
     angle_type="side_slip",
     angle_of_attack=6.8,
     side_slip=0,

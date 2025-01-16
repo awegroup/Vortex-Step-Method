@@ -99,6 +99,39 @@ def main(n_i, PROJECT_DIR):
 
     df_combined = pd.concat([df_combined, df_neuralfoil_expanded], ignore_index=True)
 
+    ### Adding flat-plate aerodynamics to it
+    cl_list = []
+    cd_list = []
+    cm_list = []
+    for alpha in df["alpha"].values:
+        # alpha = np.deg2rad(alpha)
+        if alpha < -10:
+            cl = 2 * ((np.sin(alpha)) ** 2) * np.cos(alpha)
+            cd = 2 * ((np.sin(alpha)) ** 3)
+            cm = 0.5 * ((np.sin(alpha)) ** 2)
+        elif alpha > -10 and alpha < 15:
+            cl = 2 * np.sin(alpha)
+            cd = 2 * np.sin(alpha) ** 2
+            cm = -(np.pi / 2) * alpha
+        else:
+            cl = 2 * ((np.sin(alpha)) ** 2) * np.cos(alpha)
+            cd = 2 * ((np.sin(alpha)) ** 3)
+            cm = 0.5 * ((np.sin(alpha)) ** 2)
+
+        # print(f"alpha: {alpha}, cl: {cl}, cd: {cd}, cm: {cm}")
+        cl_list.append(cl)
+        cd_list.append(cd)
+        cm_list.append(cm)
+
+    df_flat_plate = pd.DataFrame(
+        {
+            "alpha": np.rad2deg(df["alpha"].values),
+            "cl": cl_list,
+            "cd": cd_list,
+            "cm": cm_list,
+        }
+    )
+
     # ---------------------------
     # 4. Plotting the Data
     # ---------------------------
@@ -118,6 +151,13 @@ def main(n_i, PROJECT_DIR):
         label="NeuralFoil CL",
         color="red",
     )
+    ax.plot(
+        df_flat_plate["alpha"],
+        df_flat_plate["cl"],
+        "x--",
+        label="Flat Plate CL",
+        color="black",
+    )
     ax.set_xlabel(r"$\alpha$ [°]")
     ax.set_ylabel("Lift Coefficient (CL)")
     ax.legend()
@@ -133,6 +173,13 @@ def main(n_i, PROJECT_DIR):
         "d-.",
         label="NeuralFoil CD",
         color="red",
+    )
+    ax.plot(
+        df_flat_plate["alpha"],
+        df_flat_plate["cd"],
+        "x--",
+        label="Flat Plate CD",
+        color="black",
     )
     ax.set_xlabel(r"$\alpha$ [°]")
     ax.set_ylabel("Drag Coefficient (CD)")
@@ -150,17 +197,27 @@ def main(n_i, PROJECT_DIR):
         label="NeuralFoil CM",
         color="red",
     )
+    ax.plot(
+        df_flat_plate["alpha"],
+        df_flat_plate["cm"],
+        "x--",
+        label="Flat Plate CM",
+        color="black",
+    )
     ax.set_xlabel(r"$\alpha$ [°]")
     ax.set_ylabel("Pitching Moment Coefficient (CM)")
-    ax.set_ylim(-0.2, 0.2)
+    ax.set_ylim(-0.5, 0.5)
     ax.legend()
     ax.grid(True)
 
     plt.tight_layout()
     plt.savefig(Path(profiles_folder, f"polar_neural_foil_comparison_{n_i}.pdf"))
-    # plt.show()
+    plt.show()
     plt.close()
 
 
 if __name__ == "__main__":
-    main()
+    main(
+        n_i=8,
+        PROJECT_DIR="/home/jellepoland/ownCloud/phd/code/Vortex-Step-Method/",
+    )

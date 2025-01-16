@@ -894,9 +894,9 @@ def plot_polars(
 
     # Handling x-labels
     if angle_type == "angle_of_attack":
-        x_label = r"$\alpha$ [deg] (angle of attack)"
+        x_label = r"$\alpha$ [°]"
     elif angle_type == "side_slip":
-        x_label = r"$\beta$ [deg] (side slip angle)"
+        x_label = r"$\beta$ [°]"
 
     for ax in axs.flat:
         ax.set_xlabel(x_label)
