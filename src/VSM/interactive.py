@@ -511,19 +511,19 @@ def add_case_information(
         fig,
         x=1,
         y=0.73,
-        title=f"span = {span:.2f} [m]",
+        title=f"span = {span:.3f} [m]",
     )
     add_text_annotations(
         fig,
         x=1,
         y=0.70,
-        title=f"chord = {chord:.2f} [m]",
+        title=f"chord = {chord:.3f} [m]",
     )
     add_text_annotations(
         fig,
         x=1,
         y=0.67,
-        title=f"height = {height:.2f} [m]",
+        title=f"height = {height:.3f} [m]",
     )
 
     return fig
