@@ -185,7 +185,7 @@ def add_aerodynamic_vectors(
     """
     # Compute vector endpoint
     aerodynamic_center = panel.aerodynamic_center
-    vector = (force_vector / max_force) * scale
+    vector = (force_vector / max_force) * scale * 0.5
     vector_endpoint = aerodynamic_center + vector
 
     # Add the vector as a line
