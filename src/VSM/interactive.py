@@ -211,7 +211,7 @@ def add_aerodynamic_vectors(
             v=[vector[1]],
             w=[vector[2]],
             sizemode="absolute",
-            sizeref=0.1,  # Adjust for the size of the arrowhead
+            sizeref=np.linalg.norm(vector) / 10,  # Adjust for the size of the arrowhead
             anchor="tip",
             colorscale=[[0, "red"], [1, "red"]],
             showscale=False,
@@ -253,7 +253,7 @@ def create_3D_plot(
     """
     panels = wing_aero.panels
 
-    chord_average = np.average([panel.chord for panel in panels])
+    chord_average = np.max([panel.chord for panel in panels])
     max_force = np.max([np.linalg.norm(force) for force in forces_of_panels])
 
     if is_with_aerodynamic_details:
@@ -357,8 +357,8 @@ def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figur
                     kite_geometry_ranges["x"][1],
                 ],  # Only show ticks at the ends
                 ticktext=[
-                    f"{kite_geometry_ranges['x'][0]:.1f}",
-                    f"{kite_geometry_ranges['x'][1]:.1f}",
+                    f"{kite_geometry_ranges['x'][0]:.2f}",
+                    f"{kite_geometry_ranges['x'][1]:.2f}",
                 ],  # Label for the ticks
             ),
             yaxis=dict(
@@ -374,8 +374,8 @@ def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figur
                     kite_geometry_ranges["y"][1],
                 ],  # Only show ticks at the ends
                 ticktext=[
-                    f"{kite_geometry_ranges['y'][0]:.1f}",
-                    f"{kite_geometry_ranges['y'][1]:.1f}",
+                    f"{kite_geometry_ranges['y'][0]:.2f}",
+                    f"{kite_geometry_ranges['y'][1]:.2f}",
                 ],  # Label for the ticks
             ),
             zaxis=dict(
@@ -391,8 +391,8 @@ def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figur
                     kite_geometry_ranges["z"][1],
                 ],  # Only show ticks at the ends
                 ticktext=[
-                    f"{kite_geometry_ranges['z'][0]:.1f}",
-                    f"{kite_geometry_ranges['z'][1]:.1f}",
+                    f"{kite_geometry_ranges['z'][0]:.2f}",
+                    f"{kite_geometry_ranges['z'][1]:.2f}",
                 ],  # Label for the ticks
             ),
             aspectmode="data",  # Allow different axis lengths
@@ -468,12 +468,18 @@ def add_text_annotations(fig, x, y, title: str = "Your Text Here"):
 
 def add_case_information(
     fig,
+    panels,
     vel: float,
     angle_of_attack: float,
     side_slip: float,
     yaw_rate: float,
     results: Dict[str, Any],
 ) -> go.Figure:
+    kite_geometry_ranges = calculate_kite_geometry_ranges(panels)
+    chord = kite_geometry_ranges["x"][1] - kite_geometry_ranges["x"][0]
+    span = kite_geometry_ranges["y"][1] - kite_geometry_ranges["y"][0]
+    height = kite_geometry_ranges["z"][1] - kite_geometry_ranges["z"][0]
+
     add_text_annotations(fig, x=1, y=1.00, title=f"velocity = {vel:.2f} [m/s]")
     add_text_annotations(
         fig, x=1, y=0.97, title=f"angle of attack = {angle_of_attack:.2f} [deg]"
@@ -500,6 +506,26 @@ def add_case_information(
         title=f"CS = {results['cs']:.2f}",
     )
 
+    add_text_annotations(fig, x=1, y=0.76, title="-------------------")
+    add_text_annotations(
+        fig,
+        x=1,
+        y=0.73,
+        title=f"span = {span:.2f} [m]",
+    )
+    add_text_annotations(
+        fig,
+        x=1,
+        y=0.70,
+        title=f"chord = {chord:.2f} [m]",
+    )
+    add_text_annotations(
+        fig,
+        x=1,
+        y=0.67,
+        title=f"height = {height:.2f} [m]",
+    )
+
     return fig
 
 
@@ -522,7 +548,9 @@ def update_plot(
     fig = create_3D_plot(
         fig, wing_aero, results["F_distribution"], is_with_aerodynamic_details
     )
-    fig = add_case_information(fig, vel, angle_of_attack, side_slip, yaw_rate, results)
+    fig = add_case_information(
+        fig, wing_aero.panels, vel, angle_of_attack, side_slip, yaw_rate, results
+    )
     fig = update_fig_layout(fig, wing_aero.panels, title)
 
 
