@@ -73,7 +73,7 @@ for i in range(len(LE_x_array)):
 #### NORMAL OPERATION ####
 # Defining discretisation
 n_panels = 54
-spanwise_panel_distribution = "split_provided"
+spanwise_panel_distribution = "unchanged"
 CAD_wing = Wing(n_panels, spanwise_panel_distribution)
 CAD_wing_breukels = Wing(n_panels, spanwise_panel_distribution)
 csv_folder_path = Path(
@@ -155,12 +155,13 @@ VSM_with_stall_correction = Solver(
 interactive_plot(
     wing_aero_CAD_19ribs,
     vel=Umag,
-    angle_of_attack=angle_of_attack,
+    angle_of_attack=angle_of_attack,e
     side_slip=side_slip,
     yaw_rate=yaw_rate,
     is_with_aerodynamic_details=True,
 )
 
+breakpoint()
 # interactive_plot(
 #     wing_aero_CAD_19ribs,
 #     vel=Umag,
