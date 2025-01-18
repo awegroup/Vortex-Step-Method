@@ -719,7 +719,16 @@ def plot_polars(
     Returns:
         None
     """
+    # Set the plot style
     set_plot_style()
+
+    # Checking type and configuring the x_label
+    if angle_type == "angle_of_attack":
+        x_label = r"$\alpha$ [°]"
+    elif angle_type == "side_slip":
+        x_label = r"$\beta$ [°]"
+    else:
+        raise ValueError("angle_type should be either 'angle_of_attack' or 'side_slip'")
 
     if (len(wing_aero_list) + len(literature_path_list)) != len(label_list) or len(
         solver_list
@@ -731,9 +740,6 @@ def plot_polars(
                 len(label_list),
             )
         )
-
-    # Set the plot style
-    set_plot_style()
 
     # generating polar data
     polar_data_list = []
@@ -892,14 +898,35 @@ def plot_polars(
             )
             axs[1, 2].set_ylabel(r"$C_{\mathrm{m,z}}$")
 
-    # Handling x-labels
-    if angle_type == "angle_of_attack":
-        x_label = r"$\alpha$ [°]"
-    elif angle_type == "side_slip":
-        x_label = r"$\beta$ [°]"
-
+    # Add axis labels
     for ax in axs.flat:
         ax.set_xlabel(x_label)
+
+    ### Ensuring that a value does not ruin the naturally zooomed in ylim
+    for i, ax in enumerate(axs.flat):
+        if angle_type == "angle_of_attack":
+            if i == 2:  # Cl/Cd
+                y_min_allowed, y_max_allowed = -15, 15
+            elif i == 4:  # CMy
+                y_min_allowed, y_max_allowed = -2, 2
+            else:
+                y_min_allowed, y_max_allowed = -1.5, 1.5
+        elif angle_type == "side_slip":
+            y_min_allowed, y_max_allowed = -1.5, 1.5
+
+        # Collect all y-data from the lines in the current axis
+        y_data = np.concatenate([line.get_ydata() for line in ax.get_lines()])
+
+        # Identify data within the allowed range
+        in_range = y_data[(y_data >= y_min_allowed) & (y_data <= y_max_allowed)]
+
+        if in_range.size > 0:
+            # Optionally add some padding to the y-limits
+            padding = 0.05 * (in_range.max() - in_range.min())
+            ax.set_ylim(in_range.min() - padding, in_range.max() + padding)
+        else:
+            # If no data is within the range, you might choose to set default limits or skip
+            pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
 
     # Ensure the figure is fully rendered
     fig.canvas.draw()
@@ -996,7 +1023,7 @@ def plot_panel_coefficients(
 
 
 def process_panel_coefficients_panel_i(
-    wing_aero, panel_index, PROJECT_DIR, alpha_range=[-40, 40]
+    wing_aero, panel_index, PROJECT_DIR, n_panels, alpha_range=[-40, 40]
 ):
     """
     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
@@ -1211,13 +1238,13 @@ def process_panel_coefficients_panel_i(
         df.to_csv(
             Path(polar_folder_path, "csv_files", f"corrected_polar_0.csv"), index=False
         )
-    elif panel_index == 17:
+    elif panel_index == (n_panels - 1):
         df.to_csv(
-            Path(polar_folder_path, "csv_files", f"polar_engineering_17.csv"),
+            Path(polar_folder_path, "csv_files", f"polar_engineering_{n_panels-1}.csv"),
             index=False,
         )
         df.to_csv(
-            Path(polar_folder_path, "csv_files", f"corrected_polar_18.csv"),
+            Path(polar_folder_path, "csv_files", f"corrected_polar_{n_panels}.csv"),
             index=False,
         )
 
@@ -1226,6 +1253,7 @@ def process_panel_coefficients(
     wing_aero,
     PROJECT_DIR,
     n_panels,
+    polar_folder_path,
     alpha_range=[-40, 40],
 ):
 
@@ -1234,15 +1262,12 @@ def process_panel_coefficients(
             wing_aero=wing_aero,
             panel_index=i,
             PROJECT_DIR=PROJECT_DIR,
+            n_panels=n_panels,
             alpha_range=alpha_range,
         )
 
-    polar_folder_path = Path(
-        PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
-    )
-
     # take the average for each panel of the side panels
-    for i in np.arange(1, 18, 1):
+    for i in np.arange(1, n_panels, 1):
         path_to_csv_i = Path(
             polar_folder_path,
             "csv_files",

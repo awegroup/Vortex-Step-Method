@@ -66,15 +66,15 @@ for i in range(n_ribs):
 
         LE_y_array[i] = LE_y
 
-        # if np.abs(TE_y) > np.abs(LE_y):
-        #     larger_value = TE_y
-        #     smaller_value = LE_y
-        #     LE_y = larger_value
-        #     TE_y = smaller_value
-    else:
-        height_ratio = 2.628 / 3.688
-        LE_z *= height_ratio
-        TE_z *= height_ratio
+    # if np.abs(TE_y) > np.abs(LE_y):
+    #     larger_value = TE_y
+    #     smaller_value = LE_y
+    #     LE_y = larger_value
+    #     TE_y = smaller_value
+    # else:
+    #     height_ratio = 2.628 / 3.688
+    #     LE_z *= height_ratio
+    #     TE_z *= height_ratio
 
     LE = np.array([LE_x, LE_y, LE_z])
     TE = np.array([TE_x, TE_y, TE_z])
@@ -129,6 +129,42 @@ interactive_plot(
     side_slip=side_slip,
     yaw_rate=yaw_rate,
     is_with_aerodynamic_details=True,
+)
+
+## Saving geometry
+df = pd.DataFrame(
+    {
+        "LE_x": [
+            section[0][0]
+            for section in rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+        ],
+        "LE_y": [
+            section[0][1]
+            for section in rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+        ],
+        "LE_z": [
+            section[0][2]
+            for section in rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+        ],
+        "TE_x": [
+            section[1][0]
+            for section in rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+        ],
+        "TE_y": [
+            section[1][1]
+            for section in rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+        ],
+        "TE_z": [
+            section[1][2]
+            for section in rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
+        ],
+        "d_tube": d_tube_array,
+        "camber": camber_array,
+    }
+)
+df.to_csv(
+    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv",
+    index=False,
 )
 
 ### Findings

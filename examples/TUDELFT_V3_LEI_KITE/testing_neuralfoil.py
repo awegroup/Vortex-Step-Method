@@ -212,12 +212,14 @@ def main(n_i, PROJECT_DIR):
 
     plt.tight_layout()
     plt.savefig(Path(profiles_folder, f"polar_neural_foil_comparison_{n_i}.pdf"))
-    plt.show()
+    # plt.show()
     plt.close()
 
 
 if __name__ == "__main__":
+    PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+    panel_i = 8
     main(
-        n_i=8,
-        PROJECT_DIR="/home/jellepoland/ownCloud/phd/code/Vortex-Step-Method/",
+        n_i=panel_i,
+        PROJECT_DIR=PROJECT_DIR,
     )
