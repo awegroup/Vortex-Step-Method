@@ -35,7 +35,6 @@ class WingAerodynamics:
         - calculate_results: Calculates the results
         - update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack if VSM
         - calculate_stall_angle_list: Calculates the stall angle list
-        - calculate_results: Calculates the results
     """
 
     def __init__(
