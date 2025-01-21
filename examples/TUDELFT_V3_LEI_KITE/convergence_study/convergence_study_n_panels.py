@@ -72,9 +72,9 @@ def create_wing_aero(
     return wing_aero
 
 
-def run_solver(wing_aero, Umag, alpha, beta, yaw_rate):
+def run_solver(wing_aero, Umag, alpha, beta, yaw_rate, is_with_stall):
     wing_aero.va_initialize(Umag, alpha, beta, yaw_rate)
-    solver = Solver()
+    solver = Solver(is_with_artificial_damping=is_with_stall)
     results = solver.solve(wing_aero)
     cl = results["cl"]
     cd = results["cd"]
@@ -85,7 +85,15 @@ def run_solver(wing_aero, Umag, alpha, beta, yaw_rate):
     return cl, cd, cs, cmx, cmy, cmz
 
 
-def run_batch(Umag, alpha, beta, file_path, n_ribs, is_with_corrected_polar=True):
+def run_batch(
+    Umag,
+    alpha,
+    beta,
+    file_path,
+    n_ribs,
+    is_with_corrected_polar=True,
+    is_with_stall=True,
+):
     results = {}
     spanwise_panel_distributions = [
         # "unchanged",
@@ -103,7 +111,7 @@ def run_batch(Umag, alpha, beta, file_path, n_ribs, is_with_corrected_polar=True
         if distribution == "unchanged":
             n_panels_list = [n_panels]
         elif distribution == "split_provided":
-            n_panels_list = np.arange(n_panels, 150, n_panels).astype(int)
+            n_panels_list = np.arange(n_panels, 181, n_panels).astype(int)
         elif distribution == "linear":
             # n_panels_list = np.arange(n_panels, 125, n_panels).astype(int)
             n_panels_list = [
@@ -121,9 +129,11 @@ def run_batch(Umag, alpha, beta, file_path, n_ribs, is_with_corrected_polar=True
                 130,
                 140,
                 150,
+                160,
+                170,
             ]
         elif distribution == "cosine":
-            n_panels_list = [10, 15, 20, 25, 30, 35, 40, 45, 50, 75, 100]
+            n_panels_list = [20, 25, 30, 35, 40, 45, 50, 75, 100]
         elif distribution == "cosine_van_garrel":
             n_panels_list = [10, 15, 20, 25, 30, 35]
         else:
@@ -147,7 +157,7 @@ def run_batch(Umag, alpha, beta, file_path, n_ribs, is_with_corrected_polar=True
             yaw_rate = 0
 
             cl, cd, cs, cmx, cmy, cmz = run_solver(
-                wing_aero, Umag, alpha, beta, yaw_rate
+                wing_aero, Umag, alpha, beta, yaw_rate, is_with_stall
             )
 
             results[distribution][n_panels] = {
@@ -162,7 +172,7 @@ def run_batch(Umag, alpha, beta, file_path, n_ribs, is_with_corrected_polar=True
     return results
 
 
-def plot_results(results_breukels, results_polars, Umag, alpha, beta, file_path):
+def plot_results(results_list, label_list, Umag, alpha, beta, file_path):
     set_plot_style()
 
     # Define the aerodynamic coefficients to plot
@@ -180,32 +190,22 @@ def plot_results(results_breukels, results_polars, Umag, alpha, beta, file_path)
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     axes = axes.flatten()  # Flatten to easily iterate
 
-    max_value = 5
     for idx, output in enumerate(outputs):
         ax = axes[idx]
-        for distribution, panels_data in results_breukels.items():
-            # Extract sorted n_panels and corresponding output values
-            n_panels_sorted = sorted(panels_data.keys())
-            output_values = np.array([panels_data[n][output] for n in n_panels_sorted])
+        for result, label in zip(results_list, label_list):
+            for distribution, panels_data in result.items():
+                # Extract sorted n_panels and corresponding output values
+                n_panels_sorted = sorted(panels_data.keys())
+                output_values = np.array(
+                    [panels_data[n][output] for n in n_panels_sorted]
+                )
 
-            ax.plot(
-                n_panels_sorted,
-                output_values,
-                marker="o",
-                label="breukel-" + distribution,
-            )
-
-        for distribution, panels_data in results_polars.items():
-            # Extract sorted n_panels and corresponding output values
-            n_panels_sorted = sorted(panels_data.keys())
-            output_values = np.array([panels_data[n][output] for n in n_panels_sorted])
-            ax.plot(
-                n_panels_sorted,
-                output_values,
-                marker="o",
-                label="polar-" + distribution,
-            )
-
+                ax.plot(
+                    n_panels_sorted,
+                    output_values,
+                    marker="o",
+                    label=label + "-" + distribution,
+                )
         # Set labels and title
         ax.set_xlabel("Number of Panels")
         ax.set_ylabel(output_titles.get(output, output))
@@ -247,7 +247,7 @@ def plot_results(results_breukels, results_polars, Umag, alpha, beta, file_path)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
-        / f"convergence_n_panels_vw_{int(Umag)}_alpha_{alpha:.1f}_beta_{beta:.1f}_filename_{file_path.stem}.pdf"
+        / f"convergence_n_panels_vw_{int(Umag)}_alpha_{alpha:.1f}_beta_{beta:.1f}_filename_{file_path.stem}_stall_effect.pdf"
     )
 
 
@@ -270,8 +270,8 @@ if __name__ == "__main__":
     file_paths = [file_path_geometry_corrected]
     n_ribs_list = [36]
     Umag_list = [3.15]
-    alpha_list = [6.8, 11.9]
-    beta_list = [0, 10, 20]
+    alpha_list = [6.8]
+    beta_list = [20]
 
     # cl_list, cd_list, cs_list, cmx_list, cmy_list, cmz_list = [], [], [], [], [], []
     for file_path, n_ribs in zip(file_paths, n_ribs_list):
@@ -288,6 +288,7 @@ if __name__ == "__main__":
                         file_path=file_path,
                         n_ribs=n_ribs,
                         is_with_corrected_polar=False,
+                        is_with_stall=False,
                     )
                     results_polars = run_batch(
                         Umag=Umag,
@@ -296,11 +297,42 @@ if __name__ == "__main__":
                         file_path=file_path,
                         n_ribs=n_ribs,
                         is_with_corrected_polar=True,
+                        is_with_stall=False,
+                    )
+                    results_breukels_stall = run_batch(
+                        Umag=Umag,
+                        alpha=alpha,
+                        beta=beta,
+                        file_path=file_path,
+                        n_ribs=n_ribs,
+                        is_with_corrected_polar=False,
+                        is_with_stall=True,
+                    )
+                    results_polars_stall = run_batch(
+                        Umag=Umag,
+                        alpha=alpha,
+                        beta=beta,
+                        file_path=file_path,
+                        n_ribs=n_ribs,
+                        is_with_corrected_polar=True,
+                        is_with_stall=True,
                     )
 
-                    plot_results(
+                    results_list = [
                         results_breukels,
                         results_polars,
+                        results_breukels_stall,
+                        results_polars_stall,
+                    ]
+                    label_list = [
+                        "Breukels",
+                        "Corrected",
+                        "Breukels_Stall",
+                        "Corrected_Stall",
+                    ]
+                    plot_results(
+                        results_list,
+                        label_list,
                         Umag=Umag,
                         alpha=alpha,
                         beta=beta,

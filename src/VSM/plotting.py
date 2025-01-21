@@ -781,13 +781,13 @@ def plot_distribution(
     #  7 -> alpha corrected
     #  8 -> alpha uncorrected
     allowed_ranges = {
-        0: (-1.5, 1.5),  # CD
+        0: (-1.0, 1.0),  # CD
         1: (-1.5, 2.0),  # CL
         2: (-1.5, 1.5),  # CS
         3: (-1.0, 1.0),  # CMx
         4: (-1.0, 1.0),  # CMy
         5: (-1.0, 1.0),  # CMz
-        6: (-1, 1000),  # Gamma
+        6: (-200, 500),  # Gamma
         7: (-10, 150),  # alpha geometric
         8: (-10, 90),  # alpha corrected
     }
@@ -870,7 +870,7 @@ def generate_polar_data(
 
         # Set the inflow conditions
 
-        results = solver.solve(wing_aero, gamma_distribution=gamma)
+        results = solver.solve(wing_aero)
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]

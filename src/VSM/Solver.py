@@ -273,8 +273,13 @@ class Solver:
                 # damp, is_damping_applied = self.smooth_circulation(
                 #     circulation=gamma, smoothness_factor=0.1, damping_factor=0.5
                 # )
+                ## below works well for "split-provided" n_panel=105 V3
+                # damp, is_damping_applied = self.smooth_circulation(
+                # circulation=gamma, smoothness_factor=0.15, damping_factor=0.5
+                # )
+                ## below works well for "linear" n_panel=130 V3
                 damp, is_damping_applied = self.smooth_circulation(
-                    circulation=gamma, smoothness_factor=0.15, damping_factor=0.5
+                    circulation=gamma, smoothness_factor=0.08, damping_factor=0.5
                 )
                 logging.debug("damp: %s", damp)
                 # J_diag = self.compute_J_diag_finite_diff(

@@ -118,12 +118,12 @@ path_polar_data_dir = (
     / "polar_engineering"
     / "csv_files"
 )
-n_panels = 105
+n_panels = 130
 angle_of_attack = 19
 side_slip = 0
 yaw_rate = 0
 Umag = 3.15
-spanwise_panel_distribution = "split_provided"
+spanwise_panel_distribution = "linear"
 wing_aero_breukels = create_wing_aero(
     file_path,
     n_panels,
@@ -217,9 +217,9 @@ VSM_with_stall_correction = Solver(
 
 save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
 
-## plotting distributions
-for angle_of_attack in [6.8, 11.9]:
-    for side_slip in [0, 10, 20]:
+# ## plotting distributions
+for angle_of_attack in [6.8]:
+    for side_slip in [10, 20]:
         print(f"\nangle_of_attack: {angle_of_attack}, side_slip: {side_slip}")
         wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
         wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
@@ -299,30 +299,35 @@ for angle_of_attack in [6.8, 11.9]:
 #     is_save=True,
 #     is_show=True,
 # )
-# #### plot beta sweep
+# ### plot beta sweep
 # plot_polars(
 #     solver_list=[
-#         # VSM_base,
-#         # VSM_base,
+#         VSM_base,
+#         VSM_base,
 #         VSM_with_stall_correction,
 #         VSM_with_stall_correction,
-#         VSM_with_stall_correction,
-#         VSM_with_stall_correction,
+#         # VSM_with_stall_correction,
+#         # VSM_with_stall_correction,
 #     ],
 #     wing_aero_list=[
-#         wing_aero_polar_35,
-#         wing_aero_polar_70,
-#         wing_aero_polar_105,
-#         wing_aero_polar_140,
+#         wing_aero_breukels,
+#         wing_aero_polar,
+#         wing_aero_breukels,
+#         wing_aero_polar,
+#         # wing_aero_polar_35,
+#         # wing_aero_polar_70,
+#         # wing_aero_polar_105,
+#         # wing_aero_polar_140,
 #     ],
 #     label_list=[
-#         # "VSM Breukels",
-#         # "VSM Corrected",
-#         # "VSM Breukels (+stall)",
-#         "35 VSM Corrected (+stall)",
-#         "70 VSM Corrected (+stall)",
-#         "105 VSM Corrected (+stall)",
-#         "140 VSM Corrected (+stall)",
+#         "VSM Breukels",
+#         "VSM Corrected",
+#         "VSM Breukels (+stall)",
+#         "VSM Corrected (+stall)",
+#         # "35 VSM Corrected (+stall)",
+#         # "70 VSM Corrected (+stall)",
+#         # "105 VSM Corrected (+stall)",
+#         # "140 VSM Corrected (+stall)",
 #     ],
 #     literature_path_list=[],
 #     angle_range=np.linspace(-20, 20, 20),
@@ -331,7 +336,7 @@ for angle_of_attack in [6.8, 11.9]:
 #     side_slip=0,
 #     yaw_rate=0,
 #     Umag=3.15,
-#     title=f"betasweep_n_panels",
+#     title=f"betasweep_n_panels_130_linear",
 #     data_type=".pdf",
 #     save_path=Path(save_folder) / "polars",
 #     is_save=True,
