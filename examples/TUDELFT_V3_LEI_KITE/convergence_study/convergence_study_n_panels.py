@@ -2,6 +2,8 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+import math
+import json
 from VSM.WingGeometry import Wing
 from VSM.WingAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
@@ -110,12 +112,15 @@ def run_batch(
         if distribution == "unchanged":
             n_panels_list = [n_panels]
         elif distribution == "split_provided":
-            n_panels_list = np.arange(n_panels, 181, n_panels).astype(int)
-            n_panels_list = [35, 140]
+            n_panels_list = np.arange(n_panels, 250, n_panels).astype(int)
+            n_panels_list = [35, 70]
         elif distribution == "linear":
             # n_panels_list = np.arange(n_panels, 125, n_panels).astype(int)
             n_panels_list = [
+                5,
+                10,
                 20,
+                25,
                 30,
                 40,
                 50,
@@ -129,13 +134,15 @@ def run_batch(
                 130,
                 140,
                 150,
-                160,
-                170,
+                175,
+                200,
+                225,
+                250,
             ]
-            n_panels_list = [20, 100, 170]
+            n_panels_list = [10, 20]
         elif distribution == "cosine":
             n_panels_list = [20, 25, 30, 35, 40, 45, 50, 75, 100]
-            n_panels_list = [30, 100]
+            # n_panels_list = [30, 100]
         elif distribution == "cosine_van_garrel":
             n_panels_list = [10, 15, 20, 25, 30, 35]
         else:
@@ -253,44 +260,15 @@ def plot_results(results_list, label_list, Umag, alpha, beta, file_path):
     )
 
 
-def plot_3x3_special(result_list_list, label_list, beta_list):
-    """
-    Plots a 3x3 figure:
-      - Rows: beta_list[0], beta_list[1], beta_list[2] (top to bottom).
-      - Columns:
-          0 => C_L
-          1 => C_D
-          2 => (if row=0 => C_my) else => C_S
-      - Overlays lines from each element of result_list_list[row].
-        The function automatically detects distributions by checking the keys of each
-        single_result in result_list_list[row] (e.g., "split_provided", "linear", etc.).
-      - result_list_list has shape [#betas][#result_sets], e.g. 3 rows if 3 betas,
-        each row having one or more result sets.
-      - label_list: same length as #result_sets (e.g., ["Breukels", "Polars"]).
-      - beta_list: list of betas in the same order (up to 3).
+def plot_3x3_special_new(csv_file_dir, beta_list):
 
-    Each entry of result_list_list[row][res_idx] is a dict like:
-        {
-           "<some_distribution>": {
-               n_panels: { 'cl': ..., 'cd': ..., 'cs': ..., 'cmy': ... }
-           },
-           "<another_distribution>": {
-               n_panels: {...}
-           }
-        }
-    """
+    set_plot_style()
 
-    # If you use a custom style function, call it here (optional).
-    # set_plot_style()
-
-    # Force a 3x3 figure. Unused rows will be hidden if beta_list < 3.
     n_rows = 3
     n_cols = 3
-    fig, axes = plt.subplots(
-        n_rows, n_cols, figsize=(15, 8), sharex=False, sharey=False
-    )
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 10), sharex=True)
 
-    def get_coeff_and_label(row_idx, col_idx):
+    def get_coeff_and_label(row_idx, col_idx, n_rows=3, n_cols=3):
         """
         Determine which coefficient to plot in a given cell and
         whether to attach X or Y labels.
@@ -298,8 +276,8 @@ def plot_3x3_special(result_list_list, label_list, beta_list):
         col 0 => 'cl', col 1 => 'cd', col 2 => if row=0 => 'cmy' else => 'cs'
         """
         # Decide which subplots get axis labels:
-        is_with_ylabel = True  # col_idx == 0  # Y-label in first column
-        is_with_x_label = row_idx == n_rows - 1  # X-label on bottom row
+        is_with_ylabel = True  # Only first column gets y-label
+        is_with_x_label = row_idx == n_rows - 1  # Only bottom row gets x-label
 
         if col_idx == 0:
             return "cl", r"$C_L$", is_with_ylabel, is_with_x_label
@@ -312,123 +290,290 @@ def plot_3x3_special(result_list_list, label_list, beta_list):
             else:
                 return "cs", r"$C_S$", is_with_ylabel, is_with_x_label
 
-    # Iterate over each row (up to 3) based on beta_list
+    # Keep track of all lines/labels for a figure-level legend
+    all_handles = []
+    all_labels = []
+
+    # --- Main loop over rows (beta values) ---
     for row_idx in range(n_rows):
         if row_idx >= len(beta_list):
-            # Hide this row if we have fewer betas than 3
+            # Hide this row if we have fewer betas than rows
             for col_idx in range(n_cols):
                 axes[row_idx, col_idx].set_visible(False)
             continue
 
         beta = beta_list[row_idx]
-        row_results = result_list_list[row_idx]  # e.g., [res_breukels, res_polars, ...]
 
-        # Collect legend handles/labels for this row
-        row_handles = []
-        row_labels = []
+        # Read all CSV files matching beta in their name
+        for file in Path(csv_file_dir).rglob(f"*beta_{beta}*"):
+            # Example filename:
+            #    results_beta_35_dist_split_provided_corrected_True_stall_False.csv
+            # Adjust parsing logic for your actual naming convention
+            filename_parts = file.stem.split("_")
+            # e.g., ["results", "beta", "35", "dist", "split_provided", "corrected", "True", "stall", "False"]
 
-        # Combine all distribution keys found in this row’s results
-        distribution_keys = set()
-        for single_result in row_results:
-            distribution_keys.update(single_result.keys())
-        # Convert to a sorted list for consistent plotting order
-        distribution_keys = sorted(distribution_keys)
+            # Safely parse the required parts
+            try:
+                # For example:
+                #   distribution = filename_parts[4]
+                #   is_corrected_str = filename_parts[6]   # "True" or "False"
+                #   is_stall_str = filename_parts[8]       # "True" or "False"
+                #
+                # Adjust indices if your filename pattern is different
+                distribution = filename_parts[4]
+                is_corrected_str = filename_parts[6]
+                is_stall_str = filename_parts[8]
 
-        # Plot each column
-        for col_idx in range(n_cols):
-            ax = axes[row_idx, col_idx]
+                is_corrected = is_corrected_str.lower() == "true"
+                is_stall = is_stall_str.lower() == "true"
+            except IndexError:
+                # Fallback if the file name doesn't match the pattern
+                distribution = "unknown_dist"
+                is_corrected = False
+                is_stall = False
 
-            coeff_key, coeff_label, is_with_ylabel, is_with_x_label = (
-                get_coeff_and_label(row_idx, col_idx)
-            )
+            # Read CSV
+            df = pd.read_csv(file, index_col="coeff")
+            n_panels_sorted = df.columns.astype(int).tolist()
 
-            if is_with_ylabel:
-                ax.set_ylabel(coeff_label)  # , fontsize=12)
-            if is_with_x_label:
-                ax.set_xlabel(r"$N_{\mathrm{p}}$")  # , fontsize=12)
+            # Loop over columns in this row
+            for col_idx in range(n_cols):
+                ax = axes[row_idx, col_idx]
+                coeff_key, coeff_label, is_with_ylabel, is_with_x_label = (
+                    get_coeff_and_label(row_idx, col_idx)
+                )
 
-            # For each result set in row_results
-            for single_result, lbl in zip(row_results, label_list):
-                # Plot each distribution present in distribution_keys if available in single_result
-                for dist in distribution_keys:
-                    if dist not in single_result:
-                        # This single_result doesn't have dist => skip
-                        continue
-
-                    dist_data = single_result[
-                        dist
-                    ]  # e.g., { n_panels: {cl, cd, cs, cmy, ...} }
-                    n_panels_sorted = sorted(dist_data.keys())
-                    y_vals = [dist_data[np][coeff_key] for np in n_panels_sorted]
-
-                    if "Polar" in lbl:
-                        linestyle = "--"
-                    elif "Breukels" in lbl:
-                        linestyle = "-"
-                    else:
-                        linestyle = "-."
-
-                    if "linear" and "stall" and "010" in dist:
-                        markerstyle = "d"
-                    elif "linear" and "stall" in dist:
-                        markerstyle = "x"
-                    elif "split_provided" in dist:
-                        markerstyle = "s"
-                    elif "cosine" in dist:
-                        markerstyle = "*"
-                    elif "linear" in dist:
-                        markerstyle = "o"
-
-                    (line,) = ax.plot(
-                        n_panels_sorted,
-                        y_vals,
-                        marker=markerstyle,
-                        markersize=5,
-                        linestyle=linestyle,
-                        label=f"{lbl} - {dist.replace('_', ' ').title()}",
+                if col_idx == 0:
+                    # Option A: Vertical text, matching y-label orientation
+                    ax.text(
+                        -0.25,  # move left of the axis (experiment with how negative you need)
+                        0.5,  # halfway up the axis
+                        rf"$\beta =$ {beta}" + r"$^{\circ}$",
+                        rotation=0,
+                        va="center",
+                        ha="center",
+                        transform=ax.transAxes,
+                        # fontsize=11,  # Match the fontsize of other labels
+                        fontweight="normal",  # Ensure normal weight
+                        fontstyle="normal",  # Ensure normal style
+                        fontfamily="sans-serif",  # Match the font family
                     )
-                    row_handles.append(line)
-                    row_labels.append(f"{lbl} - {dist.replace('_', ' ').title()}")
 
-            ax.grid(True)
+                # Set axis labels if needed
+                ax.tick_params(labelbottom=False)
+                if is_with_ylabel:
+                    ax.set_ylabel(coeff_label, fontsize=11)
+                if is_with_x_label:
+                    ax.set_xlabel(r"$N_{\mathrm{p}}$", fontsize=11)
+                    ax.tick_params(labelbottom=True)
 
-        # Legend for this row on the left of the first subplot in the row
-        if row_handles and row_labels:
-            # Remove duplicates in labels (use a dict to preserve only last handle for each label)
-            unique_labels_dict = dict(zip(row_labels, row_handles))
-            final_labels = list(unique_labels_dict.keys())
-            final_handles = list(unique_labels_dict.values())
+                # Extract y-values for the chosen coefficient
+                y_vals = [df[str(n_panels)][coeff_key] for n_panels in n_panels_sorted]
 
-            axes[row_idx, 0].legend(
-                final_handles,
-                final_labels,
-                loc="center left",
-                bbox_to_anchor=(-1.4, 0.5),  # Adjust horizontal offset as needed
-                borderaxespad=0.0,
-                title=f"Distributions (β = {beta}°)",
-                # fontsize=10,
-            )
+                # Choose marker style based on distribution
+                if distribution == "split_provided":
+                    lbl_dist = "linear strut split"
+                    markerstyle = "*"
+                else:
+                    markerstyle = "o"
+                    lbl_dist = "linear"
 
-    ### Ensuring that a value does not ruin the naturally zooomed in ylim
-    for i, ax in enumerate(axes.flat):
-        y_min_allowed, y_max_allowed = -1.5, 1.5
+                # Determine color/linestyle/label
+                if is_corrected:
+                    color = "red"
+                    if is_stall:
+                        linestyle = "solid"
+                        lbl = "Polar + Stall"
+                    else:
+                        linestyle = "dashed"
+                        lbl = "Polar"
+                else:
+                    color = "blue"
+                    if is_stall:
+                        linestyle = "dashdot"
+                        lbl = "Breukels + Stall"
+                    else:
+                        linestyle = "dotted"
+                        lbl = "Breukels"
 
-        # Collect all y-data from the lines in the current axis
-        y_data = np.concatenate([line.get_ydata() for line in ax.get_lines()])
+                # Combine label with distribution
+                final_label = f"{lbl} - {lbl_dist}"
 
-        # Identify data within the allowed range
+                (line,) = ax.plot(
+                    n_panels_sorted,
+                    y_vals,
+                    marker=markerstyle,
+                    markersize=3.5,
+                    linestyle=linestyle,
+                    label=final_label,
+                    color=color,
+                )
+
+                # Collect all handles/labels for a global legend
+                all_handles.append(line)
+                all_labels.append(final_label)
+
+    # --- After plotting all subplots, adjust y-limits & create global legend ---
+
+    # 1) Adjust the y-limits to exclude extreme outliers
+    y_min_allowed, y_max_allowed = -1.5, 1.5
+    for ax in axes.flat:
+        if not ax.lines:
+            # Skip axes with no data
+            continue
+        y_data = np.concatenate([line.get_ydata() for line in ax.lines])
+        # Identify data within an allowed range
         in_range = y_data[(y_data >= y_min_allowed) & (y_data <= y_max_allowed)]
-
         if in_range.size > 0:
-            # Optionally add some padding to the y-limits
-            padding = 0.05 * (in_range.max() - in_range.min())
-            ax.set_ylim(in_range.min() - padding, in_range.max() + padding)
-        else:
-            # If no data is within the range, you might choose to set default limits or skip
-            pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
+            y_min, y_max = in_range.min(), in_range.max()
+            # Add small padding
+            padding = 0.05 * (y_max - y_min if (y_max - y_min) != 0 else 1.0)
+            ax.set_ylim(y_min - padding, y_max + padding)
+
+    # 2) Remove duplicate legend entries
+    unique_labels_dict = {}
+    for handle, label in zip(all_handles, all_labels):
+        unique_labels_dict[label] = handle
+    final_labels = list(unique_labels_dict.keys())
+    final_handles = list(unique_labels_dict.values())
+
+    # 3) Create a figure-level legend below the plots
+    # Adjust ncol to fit your needs
+    fig.legend(
+        handles=final_handles,
+        labels=final_labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.01),
+        ncol=3,
+        frameon=True,
+        # title="Legends",
+    )
 
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)  # Make space for legend below
     return fig, axes
+
+
+def run_batch_new(
+    Umag,
+    alpha,
+    beta,
+    file_path,
+    n_ribs,
+    distribution="linear",
+    is_with_corrected_polar=True,
+    is_with_stall=True,
+    smoothness_factor=0.08,
+):
+
+    n_panels = n_ribs - 1
+
+    print(f"\n{distribution}")
+    results = {}
+    if distribution == "unchanged":
+        n_panels_list = [n_panels]
+    elif distribution == "split_provided":
+        n_panels_list = np.arange(n_panels, 250, n_panels).astype(int)
+        # n_panels_list = [35, 70]
+    elif distribution == "linear":
+        # n_panels_list = np.arange(n_panels, 125, n_panels).astype(int)
+        n_panels_list = [
+            5,
+            10,
+            20,
+            25,
+            30,
+            40,
+            50,
+            60,
+            70,
+            80,
+            90,
+            100,
+            110,
+            120,
+            130,
+            140,
+            150,
+            175,
+            200,
+            225,
+            250,
+        ]
+        # n_panels_list = [10, 20]
+    elif distribution == "cosine":
+        n_panels_list = [20, 25, 30, 35, 40, 45, 50, 75, 100]
+        # n_panels_list = [30, 100]
+    elif distribution == "cosine_van_garrel":
+        n_panels_list = [10, 15, 20, 25, 30, 35]
+    else:
+        raise ValueError(f"Unknown distribution: {distribution}")
+
+    for n_panels in n_panels_list:
+        print(f"n_panels:{n_panels}")
+        wing_aero = create_wing_aero(
+            file_path,
+            n_panels,
+            distribution,
+            is_with_corrected_polar,
+            (
+                Path(PROJECT_DIR)
+                / "examples"
+                / "TUDELFT_V3_LEI_KITE"
+                / "polar_engineering"
+                / "csv_files"
+            ),
+        )
+        yaw_rate = 0
+
+        cl, cd, cs, cmx, cmy, cmz = run_solver(
+            wing_aero, Umag, alpha, beta, yaw_rate, is_with_stall, smoothness_factor
+        )
+
+        results[n_panels] = {
+            "cl": cl,
+            "cd": cd,
+            "cs": cs,
+            "cmx": cmx,
+            "cmy": cmy,
+            "cmz": cmz,
+        }
+
+    return results
+
+
+def save_results(beta_list, file_path, convergence_data_dir, n_ribs, Umag, alpha):
+    for beta in beta_list:
+        if beta == 0:
+            distribution_list = ["split_provided", "linear"]
+            is_stall_list = [False]
+        else:
+            distribution_list = ["linear"]
+            is_stall_list = [False, True]
+
+        is_polar_list = [False, True]
+
+        for is_polar in is_polar_list:
+            for distribution in distribution_list:
+                for is_stall in is_stall_list:
+                    results = run_batch_new(
+                        Umag,
+                        alpha,
+                        beta,
+                        file_path,
+                        n_ribs,
+                        distribution=distribution,
+                        is_with_corrected_polar=is_polar,
+                        is_with_stall=is_stall,
+                        smoothness_factor=0.08,
+                    )
+                    # converting dict to df
+                    df = pd.DataFrame(results)
+                    df.to_csv(
+                        Path(convergence_data_dir)
+                        / f"results_beta_{beta}_dist_{distribution}_corrected_{is_polar}_stall_{is_stall}.csv",
+                        index_label="coeff",
+                    )
 
 
 if __name__ == "__main__":
@@ -447,353 +592,160 @@ if __name__ == "__main__":
     file_path_geometry_corrected = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
     )
-    file_paths = [file_path_geometry_corrected]
-    n_ribs_list = [36]
-    Umag_list = [3.15]
-    alpha_list = [6.8]
-    beta_list = [0, 10, 20]
-
-    # 1) Define the 'cases' dictionary for special beta = 0, beta = 10, and "default" for everything else.
-    cases = {
-        0: {
-            "spanwise_panel_distributions": ["split_provided", "linear", "cosine"],
-            "params": [
-                dict(
-                    is_with_corrected_polar=False,
-                    is_with_stall=False,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=True,
-                    is_with_stall=False,
-                    smoothness_factor=0.08,
-                ),
-            ],
-        },
-        10: {
-            "spanwise_panel_distributions": ["split_provided", "linear"],
-            "params": [
-                dict(
-                    is_with_corrected_polar=False,
-                    is_with_stall=False,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=True,
-                    is_with_stall=False,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=False,
-                    is_with_stall=True,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=True,
-                    is_with_stall=True,
-                    smoothness_factor=0.08,
-                ),
-            ],
-        },
-        "default": {
-            "spanwise_panel_distributions": ["linear"],
-            "params": [
-                dict(
-                    is_with_corrected_polar=False,
-                    is_with_stall=False,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=True,
-                    is_with_stall=False,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=False,
-                    is_with_stall=True,
-                    smoothness_factor=0.08,
-                ),
-                dict(
-                    is_with_corrected_polar=True,
-                    is_with_stall=True,
-                    smoothness_factor=0.08,
-                ),
-            ],
-        },
-    }
-
-    # 2) A helper function that runs the correct set of run_batch calls for a given beta.
-    def run_batch_suite(Umag, alpha, beta, file_path, n_ribs):
-        """
-        Returns a list of results for the combination of (Umag, alpha, beta, file_path, n_ribs)
-        according to the definition in `cases`.
-        """
-        # Check if beta is special or default
-        config = cases[beta] if beta in cases else cases["default"]
-        dist_list = config["spanwise_panel_distributions"]
-
-        suite_results = []
-        for p in config["params"]:
-            # Build kwargs for run_batch
-            batch_kwargs = dict(
-                Umag=Umag,
-                alpha=alpha,
-                beta=beta,
-                file_path=file_path,
-                n_ribs=n_ribs,
-                is_with_corrected_polar=p["is_with_corrected_polar"],
-                is_with_stall=p["is_with_stall"],
-                smoothness_factor=p.get("smoothness_factor", None),
-                spanwise_panel_distribution_list=dist_list,
-            )
-            # Call run_batch
-            result = run_batch(**batch_kwargs)
-            suite_results.append(result)
-        return suite_results
-
-    result_list_list = []
-
-    # 3) Nested loops over file, n_ribs, Umag, alpha, beta
-    for file_path, n_ribs in zip(file_paths, n_ribs_list):
-        for Umag in Umag_list:
-            # Example Reynolds number (replace if your formula differs)
-            Re = 1.2 * Umag * 2.628 / 1.79
-            print(f"\n--- Umag: {Umag}  -->  Re ~ {Re:.2f}e5 ---")
-            for alpha in alpha_list:
-                print(f"    alpha: {alpha}")
-                for beta in beta_list:
-                    print(f"      beta: {beta}")
-
-                    # 4) Run the suite for each (Umag, alpha, beta)
-                    batch_results = run_batch_suite(
-                        Umag, alpha, beta, file_path, n_ribs
-                    )
-                    # Append the entire list (one entry per param set) to the master list
-                    result_list_list.append(batch_results)
-
-    # 5) Convert to DataFrame and save to CSV
-    #    This will give you a DataFrame with each row a list of run_batch() outputs.
-    #    If run_batch() itself returns dictionaries, you might want to flatten them first.
-    df_results = pd.DataFrame(result_list_list)
-    output_path = (
+    convergence_data_dir = (
         Path(PROJECT_DIR)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
-        / "convergence_n_panels_results.csv"
+        / "csv_files"
     )
-    df_results.to_csv(output_path, index=False)
-    print(f"\nSaved convergence study results to: {output_path}")
+    file_path = file_path_geometry_corrected
+    n_ribs = 36
+    Umag = 3.15
+    alpha = 6.8
+    beta_list = [0, 10, 20]
 
-    # 6) Optional: call your plot function
-    label_list = [
-        "Breukels",
-        "Polar",
-        "Breukels + Stall",
-        "Polar + Stall",
-    ]
-    fig, axes = plot_3x3_special(result_list_list, label_list, beta_list)
+    # save_results(beta_list, file_path, convergence_data_dir, n_ribs, Umag, alpha)
+    fig, axes = plot_3x3_special_new(convergence_data_dir, beta_list)
     fig.savefig(
         Path(PROJECT_DIR)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
-        / "convergence_n_panels_special.pdf"
+        / "convergence_n_panels_new.pdf"
     )
-    # fig.show() or plt.show() if you want an interactive window
 
-    # cl_list, cd_list, cs_list, cmx_list, cmy_list, cmz_list = [], [], [], [], [], []
+    # breakpoint()
+    # # 1) Define the 'cases' dictionary for special beta = 0, beta = 10, and "default" for everything else.
+    # cases = {
+    #     0: {
+    #         "spanwise_panel_distributions": ["split_provided", "linear"],
+    #         "params": [
+    #             dict(
+    #                 is_with_corrected_polar=False,
+    #                 is_with_stall=False,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=True,
+    #                 is_with_stall=False,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #         ],
+    #     },
+    #     10: {
+    #         "spanwise_panel_distributions": ["linear"],
+    #         "params": [
+    #             dict(
+    #                 is_with_corrected_polar=False,
+    #                 is_with_stall=False,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=False,
+    #                 is_with_stall=False,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=True,
+    #                 is_with_stall=True,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=True,
+    #                 is_with_stall=True,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #         ],
+    #     },
+    #     20: {
+    #         "spanwise_panel_distributions": ["linear"],
+    #         "params": [
+    #             dict(
+    #                 is_with_corrected_polar=False,
+    #                 is_with_stall=False,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=False,
+    #                 is_with_stall=False,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=True,
+    #                 is_with_stall=True,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #             dict(
+    #                 is_with_corrected_polar=True,
+    #                 is_with_stall=True,
+    #                 smoothness_factor=0.08,
+    #             ),
+    #         ],
+    #     },
+    # }
+
+    # # 2) A helper function that runs the correct set of run_batch calls for a given beta.
+    # def run_batch_suite(Umag, alpha, beta, file_path, n_ribs):
+    #     """
+    #     Returns a list of results for the combination of (Umag, alpha, beta, file_path, n_ribs)
+    #     according to the definition in `cases`.
+    #     """
+    #     # Check if beta is special or default
+    #     config = cases[beta] if beta in cases else cases["default"]
+    #     dist_list = config["spanwise_panel_distributions"]
+
+    #     suite_results = []
+    #     for p in config["params"]:
+    #         # Build kwargs for run_batch
+    #         batch_kwargs = dict(
+    #             Umag=Umag,
+    #             alpha=alpha,
+    #             beta=beta,
+    #             file_path=file_path,
+    #             n_ribs=n_ribs,
+    #             is_with_corrected_polar=p["is_with_corrected_polar"],
+    #             is_with_stall=p["is_with_stall"],
+    #             smoothness_factor=p.get("smoothness_factor", None),
+    #             spanwise_panel_distribution_list=dist_list,
+    #         )
+    #         # Call run_batch
+    #         result = run_batch(**batch_kwargs)
+    #         suite_results.append(result)
+    #     return suite_results
+
     # result_list_list = []
+
+    # # 3) Nested loops over file, n_ribs, Umag, alpha, beta
     # for file_path, n_ribs in zip(file_paths, n_ribs_list):
     #     for Umag in Umag_list:
-    #         print(f"\n--- Umag:{Umag} Re:{1.2*Umag*2.628/(1.79):.2f}e5 ---")
+    #         # Example Reynolds number (replace if your formula differs)
+    #         Re = 1.2 * Umag * 2.628 / 1.79
+    #         print(f"\n--- Umag: {Umag}  -->  Re ~ {Re:.2f}e5 ---")
     #         for alpha in alpha_list:
-    #             print(f"\n--- alpha:{alpha} ---")
+    #             print(f"    alpha: {alpha}")
     #             for beta in beta_list:
-    #                 print(f"\n--- beta:{beta} ---")
+    #                 print(f"      beta: {beta}")
 
-    #                 if beta == 0:
-    #                     spanwise_panel_distributions = [
-    #                         "split_provided",
-    #                         "linear",
-    #                         "cosine",
-    #                     ]
-    #                     results_breukels = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=False,
-    #                         is_with_stall=False,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_polars = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=True,
-    #                         is_with_stall=False,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     result_list_list.append(
-    #                         [
-    #                             results_breukels,
-    #                             results_polars,
-    #                         ]
-    #                     )
-    #                 elif beta == 10:
-    #                     spanwise_panel_distributions = [
-    #                         "split_provided",
-    #                         "linear",
-    #                     ]
-    #                     results_breukels = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=False,
-    #                         is_with_stall=False,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_polars = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=True,
-    #                         is_with_stall=False,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_breukels_stall = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=False,
-    #                         is_with_stall=True,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_polars_stall = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=True,
-    #                         is_with_stall=True,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     result_list_list.append(
-    #                         [
-    #                             results_breukels,
-    #                             results_polars,
-    #                             results_breukels_stall,
-    #                             results_polars_stall,
-    #                         ]
-    #                     )
-    #                 else:
-    #                     spanwise_panel_distributions = [
-    #                         # "split_provided",
-    #                         "linear",
-    #                     ]
-    #                     results_breukels = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=False,
-    #                         is_with_stall=False,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_polars = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=True,
-    #                         is_with_stall=False,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_breukels_stall = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=False,
-    #                         is_with_stall=True,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_polars_stall = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=True,
-    #                         is_with_stall=True,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_breukels_stall_005 = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=False,
-    #                         is_with_stall=True,
-    #                         smoothness_factor=0.10,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     results_polars_stall_005 = run_batch(
-    #                         Umag=Umag,
-    #                         alpha=alpha,
-    #                         beta=beta,
-    #                         file_path=file_path,
-    #                         n_ribs=n_ribs,
-    #                         is_with_corrected_polar=True,
-    #                         is_with_stall=True,
-    #                         smoothness_factor=0.10,
-    #                         spanwise_panel_distribution_list=spanwise_panel_distributions,
-    #                     )
-    #                     result_list_list.append(
-    #                         [
-    #                             results_breukels,
-    #                             results_polars,
-    #                             results_breukels_stall,
-    #                             results_polars_stall,
-    #                             results_breukels_stall_005,
-    #                             results_polars_stall_005,
-    #                         ]
-    #                     )
+    #                 # 4) Run the suite for each (Umag, alpha, beta)
+    #                 batch_results = run_batch_suite(
+    #                     Umag, alpha, beta, file_path, n_ribs
+    #                 )
+    #                 # Append the entire list (one entry per param set) to the master list
+    #                 result_list_list.append(batch_results)
 
-    # ### Save the results
+    # # Define your label list as before
     # label_list = [
     #     "Breukels",
+    #     "Breukels + Stall",
     #     "Polar",
-    #     "Breukels + Stall (0.08)",
-    #     "Polar + Stall (0.08)",
-    #     "Breukels + Stall (0.10)",
-    #     "Polar + Stall (0.10)",
+    #     "Polar + Stall",
     # ]
-    # df_results = pd.DataFrame(result_list_list)
-    # df_results.to_csv(
-    #     Path(PROJECT_DIR)
-    #     / "examples"
-    #     / "TUDELFT_V3_LEI_KITE"
-    #     / "convergence_study"
-    #     / "convergence_n_panels_results.csv"
-    # )
 
+    # # Call your plotting function with the loaded results
     # fig, axes = plot_3x3_special(result_list_list, label_list, beta_list)
+
+    # # Close the figure to free up memory
     # fig.savefig(
     #     Path(PROJECT_DIR)
     #     / "examples"
@@ -801,3 +753,203 @@ if __name__ == "__main__":
     #     / "convergence_study"
     #     / "convergence_n_panels_special.pdf"
     # )
+
+# cl_list, cd_list, cs_list, cmx_list, cmy_list, cmz_list = [], [], [], [], [], []
+# result_list_list = []
+# for file_path, n_ribs in zip(file_paths, n_ribs_list):
+#     for Umag in Umag_list:
+#         print(f"\n--- Umag:{Umag} Re:{1.2*Umag*2.628/(1.79):.2f}e5 ---")
+#         for alpha in alpha_list:
+#             print(f"\n--- alpha:{alpha} ---")
+#             for beta in beta_list:
+#                 print(f"\n--- beta:{beta} ---")
+
+#                 if beta == 0:
+#                     spanwise_panel_distributions = [
+#                         "split_provided",
+#                         "linear",
+#                         "cosine",
+#                     ]
+#                     results_breukels = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=False,
+#                         is_with_stall=False,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_polars = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=True,
+#                         is_with_stall=False,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     result_list_list.append(
+#                         [
+#                             results_breukels,
+#                             results_polars,
+#                         ]
+#                     )
+#                 elif beta == 10:
+#                     spanwise_panel_distributions = [
+#                         "split_provided",
+#                         "linear",
+#                     ]
+#                     results_breukels = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=False,
+#                         is_with_stall=False,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_polars = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=True,
+#                         is_with_stall=False,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_breukels_stall = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=False,
+#                         is_with_stall=True,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_polars_stall = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=True,
+#                         is_with_stall=True,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     result_list_list.append(
+#                         [
+#                             results_breukels,
+#                             results_polars,
+#                             results_breukels_stall,
+#                             results_polars_stall,
+#                         ]
+#                     )
+#                 else:
+#                     spanwise_panel_distributions = [
+#                         # "split_provided",
+#                         "linear",
+#                     ]
+#                     results_breukels = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=False,
+#                         is_with_stall=False,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_polars = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=True,
+#                         is_with_stall=False,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_breukels_stall = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=False,
+#                         is_with_stall=True,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_polars_stall = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=True,
+#                         is_with_stall=True,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_breukels_stall_005 = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=False,
+#                         is_with_stall=True,
+#                         smoothness_factor=0.10,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     results_polars_stall_005 = run_batch(
+#                         Umag=Umag,
+#                         alpha=alpha,
+#                         beta=beta,
+#                         file_path=file_path,
+#                         n_ribs=n_ribs,
+#                         is_with_corrected_polar=True,
+#                         is_with_stall=True,
+#                         smoothness_factor=0.10,
+#                         spanwise_panel_distribution_list=spanwise_panel_distributions,
+#                     )
+#                     result_list_list.append(
+#                         [
+#                             results_breukels,
+#                             results_polars,
+#                             results_breukels_stall,
+#                             results_polars_stall,
+#                             results_breukels_stall_005,
+#                             results_polars_stall_005,
+#                         ]
+#                     )
+
+# ### Save the results
+# label_list = [
+#     "Breukels",
+#     "Polar",
+#     "Breukels + Stall (0.08)",
+#     "Polar + Stall (0.08)",
+#     "Breukels + Stall (0.10)",
+#     "Polar + Stall (0.10)",
+# ]
+# df_results = pd.DataFrame(result_list_list)
+# df_results.to_csv(
+#     Path(PROJECT_DIR)
+#     / "examples"
+#     / "TUDELFT_V3_LEI_KITE"
+#     / "convergence_study"
+#     / "convergence_n_panels_results.csv"
+# )
+
+# fig, axes = plot_3x3_special(result_list_list, label_list, beta_list)
+# fig.savefig(
+#     Path(PROJECT_DIR)
+#     / "examples"
+#     / "TUDELFT_V3_LEI_KITE"
+#     / "convergence_study"
+#     / "convergence_n_panels_special.pdf"
+# )

@@ -138,6 +138,7 @@ wing_aero_polar = create_wing_aero(
     is_with_corrected_polar=True,
     path_polar_data_dir=path_polar_data_dir,
 )
+breakpoint()
 wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
@@ -197,14 +198,13 @@ VSM_with_stall_correction = Solver(
 
 # #### INTERACTIVE PLOT
 # interactive_plot(
-#     wing_aero_CAD_19ribs,
+#     wing_aero_breukels,
 #     vel=Umag,
-#     angle_of_attack=angle_of_attack,e
+#     angle_of_attack=angle_of_attack,
 #     side_slip=side_slip,
 #     yaw_rate=yaw_rate,
 #     is_with_aerodynamic_details=True,
 # )
-
 # breakpoint()
 # # interactive_plot(
 # #     wing_aero_CAD_19ribs,

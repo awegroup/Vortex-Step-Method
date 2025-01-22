@@ -137,16 +137,6 @@ def main(n_i, PROJECT_DIR):
     ### Saving the dfs to the profiles folder
     df["alpha"] = np.rad2deg(df["alpha"])
     df_corrected = df.copy()
-    df_breukels = df.copy()
-    df_corrected = df_corrected[["alpha", "cl", "cd", "cm"]]
-    df_breukels = df_breukels[["alpha", "cl_breukels", "cd_breukels", "cm_breukels"]]
-    df_breukels = df_breukels.rename(
-        columns={
-            "cl_breukels": "cl",
-            "cd_breukels": "cd",
-            "cm_breukels": "cm",
-        }
-    )
     df_corrected.to_csv(Path(profiles_folder, f"df_corrected_{n_i}.csv"), index=False)
     df_neuralfoil.to_csv(Path(profiles_folder, f"df_neuralfoil_{n_i}.csv"), index=False)
     df_flat_plate.to_csv(Path(profiles_folder, f"df_flat_plate_{n_i}.csv"), index=False)
@@ -160,7 +150,7 @@ def main(n_i, PROJECT_DIR):
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
     # Subplot 1: CL vs Alpha
-    # df["alpha"] = np.rad2deg(df["alpha"])
+    df["alpha"] = np.rad2deg(df["alpha"])
     ax = axes[0]
     ax.plot(df["alpha"], df["cl"], "o-", label="Corrected CL", color="blue")
     ax.plot(df["alpha"], df["cl_breukels"], "s--", label="Breukels CL", color="green")
