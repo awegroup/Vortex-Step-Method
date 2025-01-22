@@ -60,6 +60,7 @@ class Solver:
         is_only_f_and_gamma_output: bool = False,
         is_new_vector_definition: bool = True,
         reference_point: list = [-0.17, 0.00, 9.25],
+        smoothness_factor: float = 0.08,  # for smoothing stall model
         ## TODO: would be nice to having these defined here instead of inside the panel class?
         # aerodynamic_center_location: float = 0.25,
         # control_point_location: float = 0.75,
@@ -82,6 +83,7 @@ class Solver:
         self.is_with_gamma_feedback = is_with_gamma_feedback
         self.is_new_vector_definition = is_new_vector_definition
         self.reference_point = reference_point
+        self.smoothness_factor = smoothness_factor
 
     def solve(self, wing_aero, gamma_distribution=None):
         """Solve the aerodynamic model
@@ -279,7 +281,9 @@ class Solver:
                 # )
                 ## below works well for "linear" n_panel=130 V3
                 damp, is_damping_applied = self.smooth_circulation(
-                    circulation=gamma, smoothness_factor=0.08, damping_factor=0.5
+                    circulation=gamma,
+                    smoothness_factor=self.smoothness_factor,
+                    damping_factor=0.5,
                 )
                 logging.debug("damp: %s", damp)
                 # J_diag = self.compute_J_diag_finite_diff(

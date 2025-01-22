@@ -98,83 +98,73 @@ def plot_on_ax(
     label: str,
     color: str = None,
     linestyle: str = "-",
-    marker: Optional[str] = None,
-    markersize: Optional[int] = None,
+    marker: str = None,
+    markersize: int = None,
     is_with_grid: bool = True,
     is_return_ax: bool = False,
     x_label: str = "X-axis",
     y_label: str = "Y-axis",
     is_with_x_label: bool = True,
     is_with_y_label: bool = True,
-    is_with_x_tick_label: bool = True,
-    is_with_y_tick_label: bool = True,
     is_with_x_ticks: bool = True,
     is_with_y_ticks: bool = True,
     title: str = None,
 ):
-    """
-    Plot data on a given axis with customizable markers, lines, and labels.
+    """Plot data on a given axis."""
 
-    Args:
-        ax: Matplotlib axis object.
-        x: x-axis data.
-        y: y-axis data.
-        label: Legend label for the plot.
-        color: Line or marker color.
-        linestyle: Style of the line (default: solid "-").
-        marker: Marker style (default: None, meaning no markers).
-        markersize: Size of markers (default: None).
-        is_with_grid: Whether to show grid lines (default: True).
-        is_return_ax: Whether to return the axis object (default: False).
-        x_label: Label for the x-axis (default: "X-axis").
-        y_label: Label for the y-axis (default: "Y-axis").
-        is_with_x_label: Whether to display x-axis label (default: True).
-        is_with_y_label: Whether to display y-axis label (default: True).
-        is_with_x_ticks: Whether to show x-axis ticks (default: True).
-        is_with_y_ticks: Whether to show y-axis ticks (default: True).
-
-    Returns:
-        ax: Matplotlib axis object (if is_return_ax=True).
-    """
-    # Handle tick visibility
-    if not is_with_x_tick_label:
-        ax.tick_params(labelbottom=False)
-    if not is_with_y_tick_label:
-        ax.tick_params(labelleft=False)
+    # turning off the ticks
     if not is_with_x_ticks:
-        ax.tick_params(bottom=False)
+        ax.tick_params(labelbottom=False)
     if not is_with_y_ticks:
-        ax.tick_params(left=False)
+        ax.tick_params(left=False, right=False, labelleft=False)
 
-    # Handle grid visibility
     if is_with_grid:
-        ax.grid(True)
+        ax.tick_params(
+            bottom=False,
+            top=False,
+            left=False,
+            right=False,
+        )
     else:
         ax.grid(False)
 
-    # Plot the data
-    plot_kwargs = {
-        "label": label,
-        "linestyle": linestyle,
-        "color": color,
-    }
-    if marker:
-        plot_kwargs["marker"] = marker
-    if markersize:
-        plot_kwargs["markersize"] = markersize
+    if color is None:
+        if marker is None:
+            if markersize is None:
+                ax.plot(x, y, label=label, linestyle=linestyle)
+            else:
+                ax.plot(x, y, label=label, linestyle=linestyle, markersize=markersize)
+        else:
+            ax.plot(x, y, label=label, linestyle=linestyle, marker=marker)
+    else:
+        if marker is None:
+            ax.plot(x, y, label=label, color=color, linestyle=linestyle)
+        else:
+            if markersize is None:
+                ax.plot(
+                    x,
+                    y,
+                    label=label,
+                    color=color,
+                    linestyle=linestyle,
+                    marker=marker,
+                )
+            else:
+                ax.plot(
+                    x,
+                    y,
+                    label=label,
+                    color=color,
+                    linestyle=linestyle,
+                    marker=marker,
+                    markersize=markersize,
+                )
+    if title is not None:
+        ax.set_title(title)
 
-    ax.plot(x, y, **plot_kwargs)
-
-    # Set axis labels
     if is_with_x_label:
         ax.set_xlabel(x_label)
     if is_with_y_label:
         ax.set_ylabel(y_label)
-
-    # Set the title if provided
-    if title:
-        ax.set_title(title)
-
-    # Return the axis object if requested
     if is_return_ax:
         return ax

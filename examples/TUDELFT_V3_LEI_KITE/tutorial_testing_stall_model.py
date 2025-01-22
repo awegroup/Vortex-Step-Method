@@ -342,3 +342,73 @@ for angle_of_attack in [6.8]:
 #     is_save=True,
 #     is_show=True,
 # ),
+
+
+solver_list = (
+    [
+        # VSM_base,
+        VSM_base,
+        VSM_with_stall_correction,
+        VSM_base,
+        VSM_with_stall_correction,
+        # VSM_with_stall_correction,
+        # VSM_with_stall_correction,
+    ],
+)
+wing_aero_list = (
+    [
+        wing_aero_breukels,
+        wing_aero_breukels,
+        wing_aero_polar,
+        wing_aero_polar,
+    ],
+)
+#         wing_aero_polar_35,
+#         wing_aero_polar_70,
+#         wing_aero_polar_105,
+#         wing_aero_polar_140,
+#     ],
+label_list = (
+    [
+        "VSM_Breukels",
+        "VSM_Breukels_stall",
+        "VSM_Corrected",
+        "VSM_Corrected_stall",
+        # "35 VSM Corrected (+stall)",
+        # "70 VSM Corrected (+stall)",
+        # "105 VSM Corrected (+stall)",
+        # "140 VSM Corrected (+stall)",
+        # "CFD_Lebesque Rey 30e5",
+    ],
+)
+angle_range = np.linspace(-10, 25, 20)
+angle_type = "angle_of_attack"
+angle_of_attack = 0
+side_slip = 0
+yaw_rate = 0
+Umag = Umag
+
+from VSM.plotting import generate_polar_data
+
+save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
+
+polar_data_list = []
+for i, (solver, wing_aero, label) in enumerate(
+    zip(solver_list, wing_aero_list, label_list)
+):
+    polar_data, reynolds_number = generate_polar_data(
+        solver=solver,
+        wing_aero=wing_aero,
+        angle_range=angle_range,
+        angle_type=angle_type,
+        angle_of_attack=angle_of_attack,
+        side_slip=side_slip,
+        yaw_rate=yaw_rate,
+        Umag=Umag,
+    )
+    df = pd.DataFrame(polar_data, columns=["alpha", "cl", "cd", "cm"])
+    df.to_csv(Path(save_folder) / f"_{label}.csv")
+
+    polar_data_list.append(polar_data)
+    # Appending Reynolds numbers to the labels of the solvers
+    label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
