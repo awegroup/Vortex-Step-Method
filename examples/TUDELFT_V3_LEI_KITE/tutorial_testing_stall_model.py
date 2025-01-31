@@ -74,43 +74,43 @@ def create_wing_aero(
     return wing_aero
 
 
-# file_path = (
-#     Path(PROJECT_DIR)
-#     / "processed_data"
-#     / "TUDELFT_V3_LEI_KITE"
-#     / "rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs.csv"
-# )
+# ############################################
+# ############################################
+# ############################################
+### Processing panel coefficients
 file_path = (
     Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
 )
-
-# ############################################
-# ############################################
-# ############################################
-# ### Processing panel coefficients
-# n_panels = 35
-# spanwise_panel_distribution = "unchanged"
-# wing_aero_breukels = create_wing_aero(file_path, n_panels, spanwise_panel_distribution, is_with_corrected_polar=False)
-# process_panel_coefficients(
-#     wing_aero_breukels,
-#     PROJECT_DIR,
-#     n_panels,
-#     polar_folder_path=Path(
-#         PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
-#     ),
-#     alpha_range=[-40, 40],
-# )
+n_panels = 35
+spanwise_panel_distribution = "unchanged"
+wing_aero_breukels = create_wing_aero(
+    file_path, n_panels, spanwise_panel_distribution, is_with_corrected_polar=False
+)
+process_panel_coefficients(
+    wing_aero_breukels,
+    PROJECT_DIR,
+    n_panels,
+    polar_folder_path=Path(
+        PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
+    ),
+    alpha_range=[-40, 40],
+)
 # import testing_neuralfoil as testing_neuralfoil
 
 # # Plot all profiles in the profiles folder
 # for i in range(n_panels):
 #     testing_neuralfoil.main(n_i=i, PROJECT_DIR=PROJECT_DIR)
-# ############################################
-# ############################################
-# ############################################
 
+breakpoint()
+# ############################################
+# ############################################
+# ############################################
 
 #### NORMAL OPERATION ####
+file_path = (
+    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
+)
+
 path_polar_data_dir = (
     Path(PROJECT_DIR)
     / "examples"
@@ -118,8 +118,8 @@ path_polar_data_dir = (
     / "polar_engineering"
     / "csv_files"
 )
-n_panels = 130
-angle_of_attack = 19
+n_panels = 150
+angle_of_attack = 10
 side_slip = 0
 yaw_rate = 0
 Umag = 3.15
@@ -138,7 +138,7 @@ wing_aero_polar = create_wing_aero(
     is_with_corrected_polar=True,
     path_polar_data_dir=path_polar_data_dir,
 )
-breakpoint()
+# breakpoint()
 wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 

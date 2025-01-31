@@ -285,7 +285,7 @@ class Solver:
                     smoothness_factor=self.smoothness_factor,
                     damping_factor=0.5,
                 )
-                logging.debug("damp: %s", damp)
+                # logging.debug("damp: %s", damp)
                 # J_diag = self.compute_J_diag_finite_diff(
                 #     gamma,
                 #     AIC_x,

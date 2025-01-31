@@ -1248,6 +1248,323 @@ def plot_panel_coefficients(
         show_plot(fig)
 
 
+# def process_panel_coefficients_panel_i(
+#     wing_aero, panel_index, PROJECT_DIR, n_panels, alpha_range=[-40, 40]
+# ):
+#     """
+#     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
+
+#     Args:
+#         wing_aero (object): Wing aerodynamic object containing panels
+#         panel_index (int): Index of the panel to plot
+#         alpha_range (tuple, optional): Range of angles of attack in radians.
+#                                        Defaults to (-0.5, 0.5) radians.
+#     """
+#     # Select the specified panel
+#     panel = wing_aero.panels[panel_index]
+
+#     # Create an array of angles of attack
+#     alpha_array_deg = np.linspace(-40, 40, 81)
+#     alpha_array = np.deg2rad(alpha_array_deg)
+
+#     # Calculate coefficients
+#     cl_array = np.array(
+#         [panel.calculate_cl(alpha) for alpha in np.deg2rad(alpha_array_deg)]
+#     )
+#     cd_array = np.array(
+#         [panel.calculate_cd_cm(alpha)[0] for alpha in np.deg2rad(alpha_array_deg)]
+#     )
+#     cm_array = np.array(
+#         [panel.calculate_cd_cm(alpha)[1] for alpha in np.deg2rad(alpha_array_deg)]
+#     )
+
+#     def run_neuralfoil(PROJECT_DIR=PROJECT_DIR):
+#         import neuralfoil as nf
+
+#         Re = 5.6e5
+#         model_size = "xxlarge"
+#         dat_file_path = Path(
+#             PROJECT_DIR,
+#             "examples",
+#             "TUDELFT_V3_LEI_KITE",
+#             "polar_engineering",
+#             "profiles",
+#             "y1_corrected.dat",
+#         )
+#         alpha_values_deg = np.linspace(-40, 40, 81)
+#         neuralfoil_alphas = alpha_values_deg
+
+#         aero = nf.get_aero_from_dat_file(
+#             filename=dat_file_path,
+#             alpha=neuralfoil_alphas,
+#             Re=Re,
+#             model_size=model_size,
+#         )
+#         df_neuralfoil = pd.DataFrame(
+#             {
+#                 "alpha": neuralfoil_alphas,
+#                 "cl": aero["CL"],
+#                 "cd": aero["CD"],
+#                 "cm": aero["CM"],
+#             }
+#         )
+#         return df_neuralfoil
+
+#     df_neuralfoil = run_neuralfoil(PROJECT_DIR)
+#     cm_array_new = df_neuralfoil["cm"].values
+#     print(f"len(cm_array): {len(cm_array)}, len(cm_array_new): {len(cm_array_new)}")
+
+#     ### Adding NeuralFoil to Breukels Polars outside the -3 to 20 range
+
+#     cl_array_new = []
+#     cd_array_new = []
+#     cm_array_new = []
+#     for alpha in alpha_array:
+
+#         if np.rad2deg(alpha) < -1 and np.rad2deg(alpha) > -18:
+#             cl = -0.3 - np.abs(0.7 * (np.rad2deg(alpha) / 40))
+#             cd = panel.calculate_cd_cm(alpha)[0]
+#         elif np.rad2deg(alpha) < -18:
+#             cl = -0.3 - 0.7 * np.abs(np.rad2deg(alpha) / 40)
+#             blend_factor = (np.rad2deg(alpha) + 18) / 2  # Smooth transition factor
+#             cd = (1 - blend_factor) * panel.calculate_cd_cm(np.deg2rad(-18))[
+#                 0
+#             ] + blend_factor * (-0.01 * (np.rad2deg(alpha) + 18))
+#         elif np.rad2deg(alpha) > 19:
+#             cd = (
+#                 0.01 * (np.rad2deg(alpha) - 19)
+#                 + panel.calculate_cd_cm(np.deg2rad(19))[0]
+#             )
+#             cl = 1.05 + 0.2 * np.abs(np.rad2deg(alpha) / 40)
+#         else:
+#             cl = panel.calculate_cl(alpha)
+#             cd = panel.calculate_cd_cm(alpha)[0]
+
+#         cl_array_new.append(cl)
+#         cd_array_new.append(cd)
+
+#     def smooth_discontinuous_values(
+#         alpha, y, method="cubic", smoothing_window=1, use_gaussian=True
+#     ):
+#         """
+#         Smooths y-values corresponding to discontinuous alpha values.
+
+#         Args:
+#             alpha (np.ndarray): Array of alpha values (x-axis).
+#             y (np.ndarray): Array of y values (y-axis).
+#             method (str): Interpolation method ('linear', 'cubic', etc.). Default is 'linear'.
+#             smoothing_window (int): Size of the smoothing window. Default is 5.
+#             use_gaussian (bool): Whether to use Gaussian filter for smoothing. Default is True.
+
+#         Returns:
+#             np.ndarray, np.ndarray: Smoothed alpha and y values.
+#         """
+#         from scipy.interpolate import interp1d
+#         from scipy.ndimage import gaussian_filter1d
+
+#         # Interpolate y values on the regular alpha grid
+#         print(f"len(alpha): {len(alpha)}, len(y): {len(y)}")
+#         interpolator = interp1d(alpha, y, kind=method, fill_value="extrapolate")
+#         y_interpolated = interpolator(alpha)
+
+#         # Apply smoothing
+#         if use_gaussian:
+#             y_smoothed = gaussian_filter1d(y_interpolated, smoothing_window)
+#         else:
+#             # Simple moving average
+#             y_smoothed = np.convolve(
+#                 y_interpolated,
+#                 np.ones(smoothing_window) / smoothing_window,
+#                 mode="same",
+#             )
+
+#         return y_smoothed
+
+#     def smooth_values(alpha, y, window_size=5):
+#         """
+#         Smooths y-values by applying a moving average filter over a sorted alpha.
+
+#         Parameters
+#         ----------
+#         alpha : array-like
+#             The x-axis array (e.g., angle of attack).
+#         y : array-like
+#             The corresponding y-values (e.g., coefficients).
+#         window_size : int, optional
+#             The size of the smoothing window. Defaults to 5.
+
+#         Returns
+#         -------
+#         alpha_sorted : np.ndarray
+#             The sorted array of alpha values.
+#         y_smoothed : np.ndarray
+#             The y-values after applying the moving average smoothing.
+#         """
+
+#         # Ensure alpha and y are numpy arrays
+#         alpha = np.array(alpha)
+#         y = np.array(y)
+
+#         # Basic check for length mismatch
+#         if len(alpha) != len(y):
+#             raise ValueError(
+#                 f"alpha and y must be the same length, got {len(alpha)} vs {len(y)}"
+#             )
+
+#         # Sort by alpha (in case it's not already monotonic)
+#         sort_idx = np.argsort(alpha)
+#         alpha_sorted = alpha[sort_idx]
+#         y_sorted = y[sort_idx]
+
+#         # Simple moving-average smoothing
+#         # 'same' mode ensures the output has the same length as the input
+#         kernel = np.ones(window_size) / window_size
+#         y_smoothed = np.convolve(y_sorted, kernel, mode="same")
+
+#         return alpha_sorted, y_smoothed
+
+#     cl_smoothed = smooth_discontinuous_values(
+#         np.copy(alpha_array_deg), np.copy(cl_array_new)
+#     )
+#     cd_smoothed = smooth_discontinuous_values(
+#         np.copy(alpha_array_deg), np.copy(cd_array_new)
+#     )
+#     # cm_smoothed = smooth_discontinuous_values(
+#     #     np.copy(alpha_array_deg), np.copy(cm_array_new)
+#     # )
+
+#     # Create a new smooth array that uses the old values for alpha < -3 and alpha > 19
+#     # cl_smoothed = np.where(
+#     #     np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(50)),
+#     #     cl_smoothed,
+#     #     cl_array,
+#     # )
+#     # cd_smoothed = np.where(
+#     #     np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
+#     #     cd_smoothed,
+#     #     cd_array,
+#     # )
+#     # cm_smoothed = np.where(
+#     #     np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
+#     #     cm_smoothed,
+#     #     cm_array,
+#     # )
+
+#     # cl_smoothed = smooth_values(alpha_array_deg, cl_array_new)
+#     # cd_smoothed = smooth_values(alpha_array_deg, cd_array_new)
+#     # cm_smoothed = smooth_values(alpha_array_deg, cm_array_new)
+#     # cl_smoothed = np.copy(cl_array_new)
+#     # cd_smoothed = np.copy(cd_array_new)
+#     cm_smoothed = np.copy(df_neuralfoil["cm"].values)
+
+#     # Create a 1x3 subplot
+#     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
+
+#     # Cl vs Alpha plot
+#     alpha_array = np.deg2rad(alpha_array_deg)
+#     print(f"len(alpha_array): {len(alpha_array)}, len(cl_smoothed): {len(cl_smoothed)}")
+#     print(f"len(cl_array): {len(cl_array)}")
+#     print(f"len(cl_array_new): {len(cl_array_new)}")
+#     print(f"len cl smooth: {len(cl_smoothed)}")
+#     print(f"len cd smooth: {len(cd_smoothed)}")
+#     print(f"len cd array: {len(cd_array)}")
+#     print(f"len cm smooth: {len(cm_smoothed)}")
+#     print(f"len cm array: {len(cm_array)}")
+
+#     ax1.plot(
+#         np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ Corrected", color="blue"
+#     )
+#     ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$ Breukels", color="black")
+#     ax1.plot(
+#         np.rad2deg(alpha_array),
+#         df_neuralfoil["cl"].values,
+#         label="$C_l$ NeuralFoil",
+#         color="red",
+#     )
+#     ax1.set_xlabel(r"$\alpha$ [°]")
+#     ax1.set_ylabel(r"$C_{\mathrm{l}}$")
+#     ax1.grid(True)
+#     ax1.legend()
+
+#     # Cd vs Alpha plot
+#     ax2.plot(
+#         np.rad2deg(alpha_array), cd_smoothed, label="$C_d$ Corrected", color="blue"
+#     )
+#     ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ Breukels", color="black")
+#     ax2.plot(
+#         np.rad2deg(alpha_array),
+#         df_neuralfoil["cd"].values,
+#         label="$C_d$ NeuralFoil",
+#         color="red",
+#     )
+#     ax2.set_xlabel(r"$\alpha$ [°]")
+#     ax2.set_ylabel(r"$C_{\mathrm{d}}$")
+#     ax2.grid(True)
+
+#     # Cm vs Alpha plot
+#     ax3.plot(
+#         np.rad2deg(alpha_array), cm_smoothed, label="$C_m$ Corrected", color="blue"
+#     )
+#     ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$ Breukels", color="black")
+#     ax3.plot(
+#         np.rad2deg(alpha_array),
+#         df_neuralfoil["cm"].values,
+#         label="$C_m$ NeuralFoil",
+#         color="red",
+#     )
+#     ax3.set_xlabel(r"$\alpha$ [°]")
+#     ax3.set_ylabel(r"$C_{\mathrm{m}}$")
+#     ax3.grid(True)
+
+#     # Adjust layout and display
+#     ax1.set_xlim(-40, 40)
+#     ax2.set_xlim(-40, 40)
+#     ax3.set_xlim(-40, 40)
+#     plt.tight_layout()
+#     # plt.show()
+#     polar_folder_path = Path(
+#         PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
+#     )
+
+#     figure_path = Path(
+#         polar_folder_path,
+#         "figures",
+#         f"2D_polars_breukels_and_engineering_{panel_index}.pdf",
+#     )
+#     plt.savefig(figure_path)
+#     plt.close()
+
+#     df = pd.DataFrame(
+#         {
+#             "alpha": alpha_array,
+#             "cl": cl_smoothed,
+#             "cd": cd_smoothed,
+#             "cm": cm_smoothed,
+#             "cl_breukels": cl_array,
+#             "cd_breukels": cd_array,
+#             "cm_breukels": cm_array,
+#         }
+#     )
+#     df.to_csv(
+#         Path(polar_folder_path, "csv_files", f"polar_engineering_{panel_index}.csv"),
+#         index=False,
+#     )
+#     ### make sure first and last are added
+#     if panel_index == 0:
+#         df.to_csv(
+#             Path(polar_folder_path, "csv_files", f"corrected_polar_0.csv"), index=False
+#         )
+#     elif panel_index == (n_panels - 1):
+#         df.to_csv(
+#             Path(polar_folder_path, "csv_files", f"polar_engineering_{n_panels-1}.csv"),
+#             index=False,
+#         )
+#         df.to_csv(
+#             Path(polar_folder_path, "csv_files", f"corrected_polar_{n_panels}.csv"),
+#             index=False,
+#         )
+
+
 def process_panel_coefficients_panel_i(
     wing_aero, panel_index, PROJECT_DIR, n_panels, alpha_range=[-40, 40]
 ):
@@ -1260,50 +1577,8 @@ def process_panel_coefficients_panel_i(
         alpha_range (tuple, optional): Range of angles of attack in radians.
                                        Defaults to (-0.5, 0.5) radians.
     """
-    # Select the specified panel
-    panel = wing_aero.panels[panel_index]
 
-    # Create an array of angles of attack
-    alpha_array = np.deg2rad(np.linspace(alpha_range[0], alpha_range[1], 80))
-
-    # Calculate coefficients
-    cl_array = np.array([panel.calculate_cl(alpha) for alpha in alpha_array])
-
-    # For Cd and Cm, the method returns a tuple
-    cd_array = np.array([panel.calculate_cd_cm(alpha)[0] for alpha in alpha_array])
-    cm_array = np.array([panel.calculate_cd_cm(alpha)[1] for alpha in alpha_array])
-
-    # plt.show()
-    # plt.show()
-
-    cl_array_new = []
-    cd_array_new = []
-    cm_array_new = []
-    for alpha in alpha_array:
-        if np.rad2deg(alpha) < -1 and np.rad2deg(alpha) > -18:
-            # cl = -0.1 + 0.005 * np.rad2deg(alpha) + 0.005 * np.deg2rad(1)
-            cl = -0.3 - np.abs(0.7 * (np.rad2deg(alpha) / 40))
-            cd = panel.calculate_cd_cm(alpha)[0]
-        elif np.rad2deg(alpha) < -18:
-            cl = -0.3 - 0.7 * np.abs(np.rad2deg(alpha) / 40)
-            cd = (
-                -0.01 * (np.rad2deg(alpha) + 18)
-                + panel.calculate_cd_cm(np.deg2rad(-18))[0]
-            )
-        elif np.rad2deg(alpha) > 19:
-            cd = (
-                0.01 * (np.rad2deg(alpha) - 19)
-                + panel.calculate_cd_cm(np.deg2rad(19))[0]
-            )
-            cl = 1.05 + 0.2 * np.abs(np.rad2deg(alpha) / 40)
-        else:
-            cl = panel.calculate_cl(alpha)
-            cd = panel.calculate_cd_cm(alpha)[0]
-        cl_array_new.append(cl)
-        cd_array_new.append(cd)
-        cm_array_new.append(panel.calculate_cd_cm(alpha)[1])
-
-    def run_neuralfoil(PROJECT_DIR=PROJECT_DIR):
+    def run_neuralfoil(alpha_array_deg, PROJECT_DIR=PROJECT_DIR):
         import neuralfoil as nf
 
         Re = 5.6e5
@@ -1316,18 +1591,16 @@ def process_panel_coefficients_panel_i(
             "profiles",
             "y1_corrected.dat",
         )
-        alpha_values_deg = np.linspace(-40, 40, 80)
-        neuralfoil_alphas = alpha_values_deg
 
         aero = nf.get_aero_from_dat_file(
             filename=dat_file_path,
-            alpha=neuralfoil_alphas,
+            alpha=alpha_array_deg,
             Re=Re,
             model_size=model_size,
         )
         df_neuralfoil = pd.DataFrame(
             {
-                "alpha": neuralfoil_alphas,
+                "alpha": alpha_array_deg,
                 "cl": aero["CL"],
                 "cd": aero["CD"],
                 "cm": aero["CM"],
@@ -1335,93 +1608,320 @@ def process_panel_coefficients_panel_i(
         )
         return df_neuralfoil
 
-    df_neuralfoil = run_neuralfoil(PROJECT_DIR)
-    cm_array_new = df_neuralfoil["cm"].values
+    # Select the specified panel
+    panel = wing_aero.panels[panel_index]
 
-    from scipy.interpolate import interp1d
-    from scipy.ndimage import gaussian_filter1d
+    # Create an array of angles of attack
+    alpha_array_deg = np.linspace(-60, 60, 121)
+    # Breukels Coefficients
+    cl_br = np.array(
+        [panel.calculate_cl(alpha) for alpha in np.deg2rad(alpha_array_deg)]
+    )
+    cd_br = np.array(
+        [panel.calculate_cd_cm(alpha)[0] for alpha in np.deg2rad(alpha_array_deg)]
+    )
+    cm_br = np.array(
+        [panel.calculate_cd_cm(alpha)[1] for alpha in np.deg2rad(alpha_array_deg)]
+    )
 
-    def smooth_discontinuous_values(
-        alpha, y, method="cubic", smoothing_window=1, use_gaussian=True
+    # Neuralfoil Coefficients
+    df_neuralfoil = run_neuralfoil(alpha_array_deg, PROJECT_DIR)
+    alpha = df_neuralfoil["alpha"].values
+    cl_nf = df_neuralfoil["cl"].values
+    cd_nf = df_neuralfoil["cd"].values
+    cm_nf = df_neuralfoil["cm"].values
+
+    def get_value_at_alpha(alpha_array, data_array, alpha_value):
+        """
+        Given alpha_array (sorted) and data_array of the same length,
+        return the data value at alpha_value by linear interpolation if
+        alpha_value is between two existing alpha_array entries, or exact
+        if alpha_value matches an entry.
+
+        If alpha_value is below alpha_array[0], return data_array[0].
+        If alpha_value is above alpha_array[-1], return data_array[-1].
+        """
+        if alpha_value <= alpha_array[0]:
+            return data_array[0]
+        if alpha_value >= alpha_array[-1]:
+            return data_array[-1]
+
+        # Find the insertion index
+        i = np.searchsorted(alpha_array, alpha_value)
+
+        # If it's an exact match, just return it.
+        if i < len(alpha_array) and alpha_array[i] == alpha_value:
+            return data_array[i]
+
+        # Otherwise, linear interpolation between i-1 and i
+        a1 = alpha_array[i - 1]
+        a2 = alpha_array[i]
+        d1 = data_array[i - 1]
+        d2 = data_array[i]
+        frac = (alpha_value - a1) / (a2 - a1)
+        return d1 * (1 - frac) + d2 * frac
+
+    # -------------------------------------------------
+    # Suppose we have two sets of alpha boundaries and transitions:
+    #   For CL
+    cl_low_alpha = 0
+    cl_high_alpha = 18
+    cl_delta_trans_low = 15
+    cl_delta_trans_high = 10
+
+    #   For CD
+    cd_low_alpha = -10
+    cd_high_alpha = 18
+    cd_delta_trans_low = 10
+    cd_delta_trans_high = 15
+
+    # alpha, cl_nf, cl_br, cd_nf, cd_br, etc. must be arrays of equal length
+    # and alpha must be sorted ascending for the interpolation to work properly.
+    # We'll assume you already have them in that form.
+    # -------------------------------------------------
+
+    # 1) Compute the "edge" values for CL transitions
+    cl_nf_lower_edge = get_value_at_alpha(
+        alpha_array_deg, cl_nf, cl_low_alpha - cl_delta_trans_low
+    )
+    cl_br_lower_edge = get_value_at_alpha(alpha_array_deg, cl_br, cl_low_alpha)
+
+    cl_br_upper_edge = get_value_at_alpha(alpha_array_deg, cl_br, cl_high_alpha)
+    cl_nf_upper_edge = get_value_at_alpha(
+        alpha_array_deg, cl_nf, cl_high_alpha + cl_delta_trans_high
+    )
+
+    # 2) Compute the "edge" values for CD transitions
+    cd_nf_lower_edge = get_value_at_alpha(
+        alpha_array_deg, cd_nf, cd_low_alpha - cd_delta_trans_low
+    )
+    cd_br_lower_edge = get_value_at_alpha(alpha_array_deg, cd_br, cd_low_alpha)
+
+    cd_br_upper_edge = get_value_at_alpha(alpha_array_deg, cd_br, cd_high_alpha)
+    cd_nf_upper_edge = get_value_at_alpha(
+        alpha_array_deg, cd_nf, cd_high_alpha + cd_delta_trans_high
+    )
+
+    cl_new, cd_new, cm_new = [], [], []
+
+    for alpha_i, cl_nf_i, cd_nf_i, cm_nf_i, cl_br_i, cd_br_i in zip(
+        alpha, cl_nf, cd_nf, cm_nf, cl_br, cd_br
     ):
-        """
-        Smooths y-values corresponding to discontinuous alpha values.
+        #
+        # --------------------- CL LOGIC ---------------------
+        #
+        # Lower edge region => NF
+        if alpha_i <= (cl_low_alpha - cl_delta_trans_low):
+            cl = cl_nf_i
 
-        Args:
-            alpha (np.ndarray): Array of alpha values (x-axis).
-            y (np.ndarray): Array of y values (y-axis).
-            method (str): Interpolation method ('linear', 'cubic', etc.). Default is 'linear'.
-            smoothing_window (int): Size of the smoothing window. Default is 5.
-            use_gaussian (bool): Whether to use Gaussian filter for smoothing. Default is True.
+        # Lower transition zone => Interpolate from NF-edge to BR-edge
+        elif (cl_low_alpha - cl_delta_trans_low) <= alpha_i < cl_low_alpha:
+            # fraction from 0 at left edge to 1 at right edge
+            denom = float(cl_delta_trans_low)  # in case it's an int
+            frac = (alpha_i - (cl_low_alpha - cl_delta_trans_low)) / denom
 
-        Returns:
-            np.ndarray, np.ndarray: Smoothed alpha and y values.
-        """
-        # Interpolate y values on the regular alpha grid
-        interpolator = interp1d(alpha, y, kind=method, fill_value="extrapolate")
-        y_interpolated = interpolator(alpha)
+            # Edge-based interpolation
+            #   frac=0 => cl_nf_lower_edge
+            #   frac=1 => cl_br_lower_edge
+            cl = (1 - frac) * cl_nf_lower_edge + frac * cl_br_lower_edge
 
-        # Apply smoothing
-        if use_gaussian:
-            y_smoothed = gaussian_filter1d(y_interpolated, smoothing_window)
+        # Between low_alpha and high_alpha => use BR
+        elif cl_low_alpha <= alpha_i < cl_high_alpha:
+            cl = cl_br_i
+
+        # Upper transition zone => Interpolate from BR-edge back to NF-edge
+        elif cl_high_alpha <= alpha_i < (cl_high_alpha + cl_delta_trans_high):
+            denom = float(cl_delta_trans_high)
+            frac = (alpha_i - cl_high_alpha) / denom
+
+            #   frac=0 => cl_br_upper_edge
+            #   frac=1 => cl_nf_upper_edge
+            cl = (1 - frac) * cl_br_upper_edge + frac * cl_nf_upper_edge
+
+        # Above high_alpha + delta_trans => NF
+        elif (cl_high_alpha + cl_delta_trans_high) <= alpha_i:
+            cl = cl_nf_i
         else:
-            # Simple moving average
-            y_smoothed = np.convolve(
-                y_interpolated,
-                np.ones(smoothing_window) / smoothing_window,
-                mode="same",
+            raise ValueError(
+                "No condition met for CL; something is off in the algorithm."
             )
+
+        #
+        # --------------------- CD LOGIC ---------------------
+        #
+        # Lower edge region => NF
+        if alpha_i <= (cd_low_alpha - cd_delta_trans_low):
+            cd = cd_nf_i
+
+        # Lower transition zone => Interpolate from NF-edge to BR-edge
+        elif (cd_low_alpha - cd_delta_trans_low) <= alpha_i < cd_low_alpha:
+            denom = float(cd_delta_trans_low)
+            frac = (alpha_i - (cd_low_alpha - cd_delta_trans_low)) / denom
+            #   frac=0 => cd_nf_lower_edge
+            #   frac=1 => cd_br_lower_edge
+            cd = (1 - frac) * cd_nf_lower_edge + frac * cd_br_lower_edge
+
+        # Between cd_low_alpha and cd_high_alpha => BR
+        elif cd_low_alpha <= alpha_i < cd_high_alpha:
+            cd = cd_br_i
+
+        # Upper transition zone => BR-edge back to NF-edge
+        elif cd_high_alpha <= alpha_i < (cd_high_alpha + cd_delta_trans_high):
+            denom = float(cd_delta_trans_high)
+            frac = (alpha_i - cd_high_alpha) / denom
+            #   frac=0 => cd_br_upper_edge
+            #   frac=1 => cd_nf_upper_edge
+            cd = (1 - frac) * cd_br_upper_edge + frac * cd_nf_upper_edge
+
+        # Above cd_high_alpha + cd_delta_trans => NF
+        elif (cd_high_alpha + cd_delta_trans_high) <= alpha_i:
+            cd = cd_nf_i
+        else:
+            raise ValueError(
+                "No condition met for CD; something is off in the algorithm."
+            )
+
+        #
+        # --------------------- CM LOGIC ---------------------
+        #
+        # If you always take NF for cm, do so:
+        cm = cm_nf_i
+        # Or create your own boundary-based transitions similarly if needed.
+
+        cl_new.append(cl)
+        cd_new.append(cd)
+        cm_new.append(cm)
+
+    def smooth_values(alpha, y, window_size=7):
+        """
+        Smooths y-values by applying a moving average filter over a sorted alpha.
+
+        Parameters
+        ----------
+        alpha : array-like
+            The x-axis array (e.g., angle of attack).
+        y : array-like
+            The corresponding y-values (e.g., coefficients).
+        window_size : int, optional
+            The size of the smoothing window. Defaults to 5.
+
+        Returns
+        -------
+        alpha_sorted : np.ndarray
+            The sorted array of alpha values.
+        y_smoothed : np.ndarray
+            The y-values after applying the moving average smoothing.
+        """
+
+        # Ensure alpha and y are numpy arrays
+        alpha = np.array(alpha)
+        y = np.array(y)
+
+        # Basic check for length mismatch
+        if len(alpha) != len(y):
+            raise ValueError(
+                f"alpha and y must be the same length, got {len(alpha)} vs {len(y)}"
+            )
+
+        # Sort by alpha (in case it's not already monotonic)
+        sort_idx = np.argsort(alpha)
+        alpha_sorted = alpha[sort_idx]
+        y_sorted = y[sort_idx]
+
+        # Simple moving-average smoothing
+        # 'same' mode ensures the output has the same length as the input
+        kernel = np.ones(window_size) / window_size
+        y_smoothed = np.convolve(y_sorted, kernel, mode="same")
 
         return y_smoothed
 
-    cl_smoothed = smooth_discontinuous_values(alpha_array, cl_array_new)
-    cd_smoothed = smooth_discontinuous_values(alpha_array, cd_array_new)
-    cm_smoothed = smooth_discontinuous_values(alpha_array, cm_array_new)
+    cl_smooth = smooth_values(alpha_array_deg, cl_new)
+    cd_smooth = smooth_values(alpha_array_deg, cd_new)
+    cm_smooth = np.copy(cm_new)
 
-    # Create a new smooth array that uses the old values for alpha < -3 and alpha > 19
-    # cl_smoothed = np.where(
-    #     np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(50)),
-    #     cl_smoothed,
-    #     cl_array,
-    # )
-    # cd_smoothed = np.where(
-    #     np.logical_or(alpha_array < np.deg2rad(-18), alpha_array > np.deg2rad(19)),
-    #     cd_smoothed,
-    #     cd_array,
-    # )
-    # cm_smoothed = np.where(
-    #     np.logical_or(alpha_array < np.deg2rad(-1), alpha_array > np.deg2rad(19)),
-    #     cm_smoothed,
-    #     cm_array,
-    # )
+    # taken only the smoothened values outside the defined ranges
+    cl_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cl_low_alpha + 1),
+            alpha_array_deg > (cl_high_alpha - 1),
+        ),
+        cl_smooth,
+        cl_new,
+    )
+    cd_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cd_low_alpha + 1),
+            alpha_array_deg > (cd_high_alpha - 1),
+        ),
+        cd_smooth,
+        cd_new,
+    )
+
+    ## a second smoothening loop
+    cl_smooth = smooth_values(alpha_array_deg, cl_new)
+    cd_smooth = smooth_values(alpha_array_deg, cd_new)
+    cm_smooth = np.copy(cm_new)
+
+    # taken only the smoothened values outside the defined ranges
+    cl_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cl_low_alpha + 1),
+            alpha_array_deg > (cl_high_alpha - 1),
+        ),
+        cl_smooth,
+        cl_new,
+    )
+    cd_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cd_low_alpha + 1),
+            alpha_array_deg > (cd_high_alpha - 1),
+        ),
+        cd_smooth,
+        cd_new,
+    )
+
+    # create a mask such that only alpha values between -40 and 40 remain
+    mask = (alpha_array_deg >= -40) & (alpha <= 40)
+    alpha_array_deg = alpha_array_deg[mask]
+    cl_smooth = cl_smooth[mask]
+    cd_smooth = cd_smooth[mask]
+    cm_smooth = cm_smooth[mask]
+    cl_new = np.array(cl_new)[mask]
+    cd_new = np.array(cd_new)[mask]
+    cm_new = np.array(cm_new)[mask]
+    cl_br = cl_br[mask]
+    cd_br = cd_br[mask]
+    cm_br = cm_br[mask]
+    cl_nf = cl_nf[mask]
+    cd_nf = cd_nf[mask]
+    cm_nf = cm_nf[mask]
 
     # Create a 1x3 subplot
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
 
-    # Cl vs Alpha plot
-    ax1.plot(
-        np.rad2deg(alpha_array), cl_smoothed, label="$C_l$ Corrected", color="blue"
-    )
-    ax1.plot(np.rad2deg(alpha_array), cl_array, label="$C_l$ Breukels", color="black")
+    ax1.plot(alpha_array_deg, cl_smooth, label="$C_l$ Smooth", color="blue")
+    ax1.plot(alpha_array_deg, cl_new, label="$C_l$ Corrected", color="pink")
+    ax1.plot(alpha_array_deg, cl_br, label="$C_l$ Breukels", color="black")
+    ax1.plot(alpha_array_deg, cl_nf, label="$C_l$ NeuralFoil", color="red")
     ax1.set_xlabel(r"$\alpha$ [°]")
     ax1.set_ylabel(r"$C_{\mathrm{l}}$")
     ax1.grid(True)
     ax1.legend()
 
     # Cd vs Alpha plot
-    ax2.plot(
-        np.rad2deg(alpha_array), cd_smoothed, label="$C_d$ Corrected", color="blue"
-    )
-    ax2.plot(np.rad2deg(alpha_array), cd_array, label="$C_d$ Breukels", color="black")
+    ax2.plot(alpha_array_deg, cd_smooth, label="$C_d$ Smooth", color="blue")
+    ax2.plot(alpha_array_deg, cd_new, label="$C_d$ Corrected", color="pink")
+    ax2.plot(alpha_array_deg, cd_br, label="$C_d$ Breukels", color="black")
+    ax2.plot(alpha_array_deg, cd_nf, label="$C_d$ NeuralFoil", color="red")
     ax2.set_xlabel(r"$\alpha$ [°]")
     ax2.set_ylabel(r"$C_{\mathrm{d}}$")
     ax2.grid(True)
 
     # Cm vs Alpha plot
-    ax3.plot(
-        np.rad2deg(alpha_array), cm_smoothed, label="$C_m$ Corrected", color="blue"
-    )
-    ax3.plot(np.rad2deg(alpha_array), cm_array, label="$C_m$ Breukels", color="black")
+    ax3.plot(alpha_array_deg, cm_smooth, label="$C_m$ Smooth", color="blue")
+    ax3.plot(alpha_array_deg, cm_new, label="$C_m$ Corrected", color="pink")
+    ax3.plot(alpha_array_deg, cm_br, label="$C_m$ Breukels", color="black")
+    ax3.plot(alpha_array_deg, cm_nf, label="$C_m$ NeuralFoil", color="red")
     ax3.set_xlabel(r"$\alpha$ [°]")
     ax3.set_ylabel(r"$C_{\mathrm{m}}$")
     ax3.grid(True)
@@ -1431,7 +1931,8 @@ def process_panel_coefficients_panel_i(
     ax2.set_xlim(-40, 40)
     ax3.set_xlim(-40, 40)
     plt.tight_layout()
-    # plt.show()
+    plt.show()
+    breakpoint()
     polar_folder_path = Path(
         PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
     )
@@ -1446,13 +1947,13 @@ def process_panel_coefficients_panel_i(
 
     df = pd.DataFrame(
         {
-            "alpha": alpha_array,
-            "cl": cl_smoothed,
-            "cd": cd_smoothed,
-            "cm": cm_smoothed,
-            "cl_breukels": cl_array,
-            "cd_breukels": cd_array,
-            "cm_breukels": cm_array,
+            "alpha": np.deg2rad(alpha_array_deg),
+            "cl": cl_new,
+            "cd": cd_new,
+            "cm": cm_new,
+            "cl_breukels": cl_br,
+            "cd_breukels": cd_br,
+            "cm_breukels": cm_br,
         }
     )
     df.to_csv(
