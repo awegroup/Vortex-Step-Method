@@ -111,15 +111,15 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
         is_with_x_label = row_idx == n_rows - 1  # Only bottom row gets x-label
 
         if col_idx == 0:
-            return "cl", r"$C_L$", is_with_ylabel, is_with_x_label
+            return "cl", r"$C_{\mathrm{L}}$", is_with_ylabel, is_with_x_label
         elif col_idx == 1:
-            return "cd", r"$C_D$", is_with_ylabel, is_with_x_label
+            return "cd", r"$C_{\mathrm{D}}$", is_with_ylabel, is_with_x_label
         else:
             # Third column: row=0 => 'cmy', row>0 => 'cs'
             if row_idx == 0 or row_idx == 1 or row_idx == 2:
-                return "cmy", r"$C_{m_y}$", is_with_ylabel, is_with_x_label
+                return "cmy", r"$C_{\mathrm{M,y}}$", is_with_ylabel, is_with_x_label
             else:
-                return "cs", r"$C_S$", is_with_ylabel, is_with_x_label
+                return "cs", r"$C_{\mathrm{s}}$", is_with_ylabel, is_with_x_label
 
     # Keep track of all lines/labels for a figure-level legend
     all_handles = []
@@ -172,30 +172,51 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
                     get_coeff_and_label(row_idx, col_idx)
                 )
 
-                if col_idx == 0:
-                    # Option A: Vertical text, matching y-label orientation
-                    ax.text(
-                        -0.25,  # move left of the axis (experiment with how negative you need)
-                        0.5,  # halfway up the axis
-                        rf"$\alpha =$ {alpha}"
-                        + r"$^{\circ}$"
-                        + f"\n"
-                        + rf"$\beta =$ {beta}"
-                        + r"$^{\circ}$",
-                        rotation=0,
-                        va="center",
-                        ha="center",
-                        transform=ax.transAxes,
-                        # fontsize=11,  # Match the fontsize of other labels
-                        fontweight="normal",  # Ensure normal weight
-                        fontstyle="normal",  # Ensure normal style
-                        fontfamily="sans-serif",  # Match the font family
-                    )
+                # if col_idx == 0:
+                #     # Option A: Vertical text, matching y-label orientation
+                #     ax.text(
+                #         -0.25,  # move left of the axis (experiment with how negative you need)
+                #         0.5,  # halfway up the axis
+                #         rf"$\alpha =$ {alpha}"
+                #         + r"$^{\circ}$"
+                #         + f"\n"
+                #         + rf"$\beta =$ {beta}"
+                #         + r"$^{\circ}$",
+                #         rotation=0,
+                #         va="center",
+                #         ha="center",
+                #         transform=ax.transAxes,
+                #         # fontsize=11,  # Match the fontsize of other labels
+                #         # fontweight="normal",  # Ensure normal weight
+                #         # fontstyle="normal",  # Ensure normal style
+                #         # fontfamily="sans-serif",  # Match the font family
+                #     )
+                # ax.annotate(
+                #     "",
+                #     xy=(0.5, 1.05),
+                #     xycoords="axes fraction",
+                #     xytext=(0.5, 0.95),
+                #     textcoords="axes fraction",
+                #     arrowprops=dict(arrowstyle="<|-|>", lw=1.5),
+                # )
 
                 # Set axis labels if needed
                 ax.tick_params(labelbottom=False)
                 if is_with_ylabel:
-                    ax.set_ylabel(coeff_label, fontsize=11)
+                    if col_idx == 0:
+                        label = (
+                            rf"$\alpha =$ {alpha}"
+                            + r"$^{\circ}$"
+                            + f"\n"
+                            + rf"$\beta =$ {beta}"
+                            + r"$^{\circ}$"
+                            + f"\n"
+                            + f"\n"
+                            + coeff_label
+                        )
+                    else:
+                        label = coeff_label
+                    ax.set_ylabel(label, fontsize=11)
                 if is_with_x_label:
                     ax.set_xlabel(r"$N_{\mathrm{p}}$", fontsize=11)
                     ax.tick_params(labelbottom=True)
@@ -274,12 +295,25 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
 
     # 3) Create a figure-level legend below the plots
     # Adjust ncol to fit your needs
+    # adjusting the ordering of the legend
+    # swap 4 and 7
+    final_handles[4], final_handles[7] = final_handles[7], final_handles[4]
+    final_labels[4], final_labels[7] = final_labels[7], final_labels[4]
+
+    # swap 4 and 5
+    final_handles[4], final_handles[5] = final_handles[5], final_handles[4]
+    final_labels[4], final_labels[5] = final_labels[5], final_labels[4]
+
+    # swap 6 and 7
+    final_handles[6], final_handles[7] = final_handles[7], final_handles[6]
+    final_labels[6], final_labels[7] = final_labels[7], final_labels[6]
+
     fig.legend(
         handles=final_handles,
         labels=final_labels,
         loc="lower center",
         bbox_to_anchor=(0.5, 0.01),
-        ncol=3,
+        ncol=4,
         frameon=True,
         # title="Legends",
     )
@@ -439,76 +473,90 @@ if __name__ == "__main__":
     file_path_geometry_corrected = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
     )
-    # convergence_data_dir = (
-    #     Path(PROJECT_DIR)
-    #     / "examples"
-    #     / "TUDELFT_V3_LEI_KITE"
-    #     / "convergence_study"
-    #     / "csv_files"
-    # )
-    # file_path = (
-    #     Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
-    # )
-    # path_polar_data_dir = (
-    #     Path(PROJECT_DIR) / "examples" / "TUDELFT_V3_LEI_KITE" / "polar_engineering" / "csv_files"
-    # )
-
-    # n_ribs = 36
-    # Umag = 3.15
-    # alpha_list = [6.8, 20, 20]
-    # beta_list = [10, 10, 20]
-
-    # save_results(alpha_list, beta_list, file_path, convergence_data_dir, n_ribs, Umag,path_polar_data_dir)
-    # fig, axes = plot_3x3_special_new(convergence_data_dir, alpha_list, beta_list)
-    # fig.savefig(
-    #     Path(PROJECT_DIR)
-    #     / "examples"
-    #     / "TUDELFT_V3_LEI_KITE"
-    #     / "convergence_study"
-    #     / "convergence_n_panels_new.pdf"
-    # )
-
-    ## trying a no billow version
     convergence_data_dir = (
         Path(PROJECT_DIR)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
-        / "csv_files_no_billow"
+        / "csv_files"
     )
     file_path = (
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_LEI_KITE"
-        / "rib_list_height_scaled.csv"
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
     )
     path_polar_data_dir = (
         Path(PROJECT_DIR)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "polar_engineering"
-        / "csv_files_no_billow"
+        / "csv_files"
     )
 
-    n_ribs = 19
+    n_ribs = 36
     Umag = 3.15
     alpha_list = [6.8, 20, 20]
     beta_list = [10, 10, 20]
 
-    save_results(
-        alpha_list,
-        beta_list,
-        file_path,
-        convergence_data_dir,
-        n_ribs,
-        Umag,
-        path_polar_data_dir,
-    )
+    # save_results(
+    #     alpha_list,
+    #     beta_list,
+    #     file_path,
+    #     convergence_data_dir,
+    #     n_ribs,
+    #     Umag,
+    #     path_polar_data_dir,
+    # )
     fig, axes = plot_3x3_special_new(convergence_data_dir, alpha_list, beta_list)
     fig.savefig(
         Path(PROJECT_DIR)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
-        / "convergence_n_panels_no_billow.pdf"
+        / "convergence_n_panels_new.pdf"
     )
+
+    #################################
+    # ## trying a no billow version
+    #################################
+    # convergence_data_dir = (
+    #     Path(PROJECT_DIR)
+    #     / "examples"
+    #     / "TUDELFT_V3_LEI_KITE"
+    #     / "convergence_study"
+    #     / "csv_files_no_billow"
+    # )
+    # file_path = (
+    #     Path(PROJECT_DIR)
+    #     / "data"
+    #     / "TUDELFT_V3_LEI_KITE"
+    #     / "rib_list_height_scaled.csv"
+    # )
+    # path_polar_data_dir = (
+    #     Path(PROJECT_DIR)
+    #     / "examples"
+    #     / "TUDELFT_V3_LEI_KITE"
+    #     / "polar_engineering"
+    #     / "csv_files_no_billow"
+    # )
+
+    # n_ribs = 19
+    # Umag = 3.15
+    # alpha_list = [6.8, 20, 20]
+    # beta_list = [10, 10, 20]
+
+    # save_results(
+    #     alpha_list,
+    #     beta_list,
+    #     file_path,
+    #     convergence_data_dir,
+    #     n_ribs,
+    #     Umag,
+    #     path_polar_data_dir,
+    # )
+    # fig, axes = plot_3x3_special_new(convergence_data_dir, alpha_list, beta_list)
+    # fig.savefig(
+    #     Path(PROJECT_DIR)
+    #     / "examples"
+    #     / "TUDELFT_V3_LEI_KITE"
+    #     / "convergence_study"
+    #     / "convergence_n_panels_no_billow.pdf"
+    # )

@@ -1565,9 +1565,7 @@ def plot_panel_coefficients(
 #         )
 
 
-def process_panel_coefficients_panel_i(
-    wing_aero, panel_index, PROJECT_DIR, n_panels, alpha_range=[-40, 40]
-):
+def process_panel_coefficients_panel_i(wing_aero, panel_index, PROJECT_DIR, n_panels):
     """
     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
 
@@ -1578,26 +1576,107 @@ def process_panel_coefficients_panel_i(
                                        Defaults to (-0.5, 0.5) radians.
     """
 
-    def run_neuralfoil(alpha_array_deg, PROJECT_DIR=PROJECT_DIR):
+    # def run_neuralfoil(alpha_array_deg, PROJECT_DIR=PROJECT_DIR):
+    #     import neuralfoil as nf
+
+    #     Re = 5.6e5
+    #     model_size = "xxlarge"
+    #     dat_file_path = Path(
+    #         PROJECT_DIR,
+    #         "examples",
+    #         "TUDELFT_V3_LEI_KITE",
+    #         "polar_engineering",
+    #         "profiles",
+    #         "y1_corrected.dat",
+    #     )
+
+    #     aero = nf.get_aero_from_dat_file(
+    #         filename=dat_file_path,
+    #         alpha=alpha_array_deg,
+    #         Re=Re,
+    #         model_size=model_size,
+    #     )
+    #     df_neuralfoil = pd.DataFrame(
+    #         {
+    #             "alpha": alpha_array_deg,
+    #             "cl": aero["CL"],
+    #             "cd": aero["CD"],
+    #             "cm": aero["CM"],
+    #         }
+    #     )
+    #     return df_neuralfoil
+
+    def run_neuralfoil(alpha_array_deg, panel_index):
+        """
+        Run neuralfoil with a specific panel index.
+
+        Parameters:
+            PROJECT_DIR (str or Path): The base project directory.
+            panel_index (int): An integer between 0 and 34.
+
+        Returns:
+            DataFrame: A pandas DataFrame containing alpha, CL, CD, and CM.
+        """
         import neuralfoil as nf
 
-        Re = 5.6e5
-        model_size = "xxlarge"
+        # Validate the panel_index
+        if not (0 <= panel_index <= 34):
+            raise ValueError("panel_index must be between 0 and 34.")
+
+        # Compute the distance from the symmetry panel (panel 17)
+        d = abs(panel_index - 17)
+
+        # Map the distance d to the profile number using a dictionary.
+        profile_mapping = {
+            0: 1,
+            1: 2,
+            2: 2,
+            3: 3,
+            4: 3,
+            5: 4,
+            6: 4,
+            7: 5,
+            8: 6,
+            9: 7,
+            10: 8,
+            11: 9,
+            12: 9,
+            13: 10,
+            14: 10,
+            15: 11,
+            16: 11,
+            17: 12,
+        }
+        profile_num = profile_mapping.get(d)
+        if profile_num is None:
+            raise ValueError(
+                f"Unexpected value for d = {d} from panel_index = {panel_index}."
+            )
+
+        # Build the file path based on the profile number.
         dat_file_path = Path(
             PROJECT_DIR,
             "examples",
             "TUDELFT_V3_LEI_KITE",
             "polar_engineering",
             "profiles",
-            "y1_corrected.dat",
+            "surfplan",
+            f"prof_{profile_num}.dat",
         )
 
+        # Define the operating parameters.
+        Re = 5.6e5
+        model_size = "xxlarge"
+
+        # Compute the aerodynamic coefficients.
         aero = nf.get_aero_from_dat_file(
             filename=dat_file_path,
             alpha=alpha_array_deg,
             Re=Re,
             model_size=model_size,
         )
+
+        # Package the results into a DataFrame.
         df_neuralfoil = pd.DataFrame(
             {
                 "alpha": alpha_array_deg,
@@ -1606,6 +1685,7 @@ def process_panel_coefficients_panel_i(
                 "cm": aero["CM"],
             }
         )
+
         return df_neuralfoil
 
     # Select the specified panel
@@ -1625,7 +1705,7 @@ def process_panel_coefficients_panel_i(
     )
 
     # Neuralfoil Coefficients
-    df_neuralfoil = run_neuralfoil(alpha_array_deg, PROJECT_DIR)
+    df_neuralfoil = run_neuralfoil(alpha_array_deg, panel_index)
     alpha = df_neuralfoil["alpha"].values
     cl_nf = df_neuralfoil["cl"].values
     cd_nf = df_neuralfoil["cd"].values
@@ -1931,8 +2011,7 @@ def process_panel_coefficients_panel_i(
     ax2.set_xlim(-40, 40)
     ax3.set_xlim(-40, 40)
     plt.tight_layout()
-    plt.show()
-    breakpoint()
+    # plt.show()
     polar_folder_path = Path(
         PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
     )
@@ -1948,12 +2027,18 @@ def process_panel_coefficients_panel_i(
     df = pd.DataFrame(
         {
             "alpha": np.deg2rad(alpha_array_deg),
-            "cl": cl_new,
-            "cd": cd_new,
-            "cm": cm_new,
+            "cl": cl_smooth,
+            "cd": cd_smooth,
+            "cm": cm_smooth,
+            "cl_new": cl_new,
+            "cd_new": cd_new,
+            "cm_new": cm_new,
             "cl_breukels": cl_br,
             "cd_breukels": cd_br,
             "cm_breukels": cm_br,
+            "cl_neuralfoil": cl_nf,
+            "cd_neuralfoil": cd_nf,
+            "cm_neuralfoil": cm_nf,
         }
     )
     df.to_csv(
@@ -1981,7 +2066,6 @@ def process_panel_coefficients(
     PROJECT_DIR,
     n_panels,
     polar_folder_path,
-    alpha_range=[-40, 40],
 ):
 
     for i in range(n_panels):
@@ -1990,7 +2074,6 @@ def process_panel_coefficients(
             panel_index=i,
             PROJECT_DIR=PROJECT_DIR,
             n_panels=n_panels,
-            alpha_range=alpha_range,
         )
 
     # take the average for each panel of the side panels

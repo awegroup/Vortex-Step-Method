@@ -74,39 +74,6 @@ def create_wing_aero(
     return wing_aero
 
 
-# ############################################
-# ############################################
-# ############################################
-### Processing panel coefficients
-file_path = (
-    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
-)
-n_panels = 35
-spanwise_panel_distribution = "unchanged"
-wing_aero_breukels = create_wing_aero(
-    file_path, n_panels, spanwise_panel_distribution, is_with_corrected_polar=False
-)
-process_panel_coefficients(
-    wing_aero_breukels,
-    PROJECT_DIR,
-    n_panels,
-    polar_folder_path=Path(
-        PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
-    ),
-    alpha_range=[-40, 40],
-)
-# import testing_neuralfoil as testing_neuralfoil
-
-# # Plot all profiles in the profiles folder
-# for i in range(n_panels):
-#     testing_neuralfoil.main(n_i=i, PROJECT_DIR=PROJECT_DIR)
-
-breakpoint()
-# ############################################
-# ############################################
-# ############################################
-
-#### NORMAL OPERATION ####
 file_path = (
     Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
 )
@@ -217,88 +184,88 @@ VSM_with_stall_correction = Solver(
 
 save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
 
-# ## plotting distributions
-for angle_of_attack in [6.8]:
-    for side_slip in [10, 20]:
-        print(f"\nangle_of_attack: {angle_of_attack}, side_slip: {side_slip}")
-        wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-        wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+# # ## plotting distributions
+# for angle_of_attack in [6.8]:
+#     for side_slip in [10, 20]:
+#         print(f"\nangle_of_attack: {angle_of_attack}, side_slip: {side_slip}")
+#         wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+#         wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-        plot_distribution(
-            y_coordinates_list=[
-                [panels.aerodynamic_center[1] for panels in wing_aero_breukels.panels],
-                [panels.aerodynamic_center[1] for panels in wing_aero_breukels.panels],
-                [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
-                [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
-            ],
-            results_list=[
-                VSM_base.solve(wing_aero_breukels),
-                VSM_with_stall_correction.solve(wing_aero_breukels),
-                VSM_base.solve(wing_aero_polar),
-                VSM_with_stall_correction.solve(wing_aero_polar),
-            ],
-            label_list=[
-                "VSM Breukels",
-                "VSM Breukels stall",
-                "VSM Corrected",
-                "VSM Corrected stall",
-            ],
-            title=f"spanwise_distribution_effects_alpha_{angle_of_attack:.1f}_beta_{side_slip:.1f}_smoothing",
-            data_type=".pdf",
-            save_path=Path(save_folder) / "spanwise_distributions",
-            is_save=True,
-            is_show=False,
-        )
+#         plot_distribution(
+#             y_coordinates_list=[
+#                 [panels.aerodynamic_center[1] for panels in wing_aero_breukels.panels],
+#                 [panels.aerodynamic_center[1] for panels in wing_aero_breukels.panels],
+#                 [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
+#                 [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
+#             ],
+#             results_list=[
+#                 VSM_base.solve(wing_aero_breukels),
+#                 VSM_with_stall_correction.solve(wing_aero_breukels),
+#                 VSM_base.solve(wing_aero_polar),
+#                 VSM_with_stall_correction.solve(wing_aero_polar),
+#             ],
+#             label_list=[
+#                 "VSM Breukels",
+#                 "VSM Breukels stall",
+#                 "VSM Corrected",
+#                 "VSM Corrected stall",
+#             ],
+#             title=f"spanwise_distribution_effects_alpha_{angle_of_attack:.1f}_beta_{side_slip:.1f}_smoothing",
+#             data_type=".pdf",
+#             save_path=Path(save_folder) / "spanwise_distributions",
+#             is_save=True,
+#             is_show=False,
+#         )
 
-# ## plotting alpha-polar
-# path_cfd_lebesque = (
-#     Path(PROJECT_DIR)
-#     / "data"
-#     / "TUDELFT_V3_LEI_KITE"
-#     / "literature_results"
-#     / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
-# )
-# plot_polars(
-#     solver_list=[
-#         # VSM_base,
-#         # VSM_base,
-#         VSM_with_stall_correction,
-#         VSM_with_stall_correction,
-#         VSM_with_stall_correction,
-#         VSM_with_stall_correction,
-#     ],
-#     wing_aero_list=[
-#         # wing_aero_breukels,
-#         # wing_aero_polar,
-#         # wing_aero_breukels,
-#         wing_aero_polar_35,
-#         wing_aero_polar_70,
-#         wing_aero_polar_105,
-#         wing_aero_polar_140,
-#     ],
-#     label_list=[
-#         # "VSM Breukels",
-#         # "VSM Corrected",
-#         # "VSM Breukels (+stall)",
-#         "35 VSM Corrected (+stall)",
-#         "70 VSM Corrected (+stall)",
-#         "105 VSM Corrected (+stall)",
-#         "140 VSM Corrected (+stall)",
-#         "CFD_Lebesque Rey 30e5",
-#     ],
-#     literature_path_list=[path_cfd_lebesque],
-#     angle_range=np.linspace(-10, 25, 20),
-#     angle_type="angle_of_attack",
-#     angle_of_attack=0,
-#     side_slip=0,
-#     yaw_rate=0,
-#     Umag=Umag,
-#     title=f"alphasweep_n_panels",
-#     data_type=".pdf",
-#     save_path=Path(save_folder) / "polars",
-#     is_save=True,
-#     is_show=True,
-# )
+## plotting alpha-polar
+path_cfd_lebesque = (
+    Path(PROJECT_DIR)
+    / "data"
+    / "TUDELFT_V3_LEI_KITE"
+    / "literature_results"
+    / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
+)
+plot_polars(
+    solver_list=[
+        # VSM_base,
+        # VSM_base,
+        # VSM_with_stall_correction,
+        # VSM_with_stall_correction,
+        # VSM_with_stall_correction,
+        VSM_with_stall_correction,
+    ],
+    wing_aero_list=[
+        # wing_aero_breukels,
+        # wing_aero_polar,
+        # wing_aero_breukels,
+        # wing_aero_polar_35,
+        # wing_aero_polar_70,
+        # wing_aero_polar_105,
+        wing_aero_polar_140,
+    ],
+    label_list=[
+        # "VSM Breukels",
+        # "VSM Corrected",
+        # "VSM Breukels (+stall)",
+        # "35 VSM Corrected (+stall)",
+        # "70 VSM Corrected (+stall)",
+        # "105 VSM Corrected (+stall)",
+        "140 VSM Corrected (+stall)",
+        "CFD_Lebesque Rey 30e5",
+    ],
+    literature_path_list=[path_cfd_lebesque],
+    angle_range=np.linspace(-10, 25, 20),
+    angle_type="angle_of_attack",
+    angle_of_attack=0,
+    side_slip=0,
+    yaw_rate=0,
+    Umag=Umag,
+    title=f"alphasweep_n_panels",
+    data_type=".pdf",
+    save_path=Path(save_folder) / "polars",
+    is_save=True,
+    is_show=True,
+)
 # ### plot beta sweep
 # plot_polars(
 #     solver_list=[
@@ -344,71 +311,71 @@ for angle_of_attack in [6.8]:
 # ),
 
 
-solver_list = (
-    [
-        # VSM_base,
-        VSM_base,
-        VSM_with_stall_correction,
-        VSM_base,
-        VSM_with_stall_correction,
-        # VSM_with_stall_correction,
-        # VSM_with_stall_correction,
-    ],
-)
-wing_aero_list = (
-    [
-        wing_aero_breukels,
-        wing_aero_breukels,
-        wing_aero_polar,
-        wing_aero_polar,
-    ],
-)
-#         wing_aero_polar_35,
-#         wing_aero_polar_70,
-#         wing_aero_polar_105,
-#         wing_aero_polar_140,
+# solver_list = (
+#     [
+#         # VSM_base,
+#         VSM_base,
+#         VSM_with_stall_correction,
+#         VSM_base,
+#         VSM_with_stall_correction,
+#         # VSM_with_stall_correction,
+#         # VSM_with_stall_correction,
 #     ],
-label_list = (
-    [
-        "VSM_Breukels",
-        "VSM_Breukels_stall",
-        "VSM_Corrected",
-        "VSM_Corrected_stall",
-        # "35 VSM Corrected (+stall)",
-        # "70 VSM Corrected (+stall)",
-        # "105 VSM Corrected (+stall)",
-        # "140 VSM Corrected (+stall)",
-        # "CFD_Lebesque Rey 30e5",
-    ],
-)
-angle_range = np.linspace(-10, 25, 20)
-angle_type = "angle_of_attack"
-angle_of_attack = 0
-side_slip = 0
-yaw_rate = 0
-Umag = Umag
+# )
+# wing_aero_list = (
+#     [
+#         wing_aero_breukels,
+#         wing_aero_breukels,
+#         wing_aero_polar,
+#         wing_aero_polar,
+#     ],
+# )
+# #         wing_aero_polar_35,
+# #         wing_aero_polar_70,
+# #         wing_aero_polar_105,
+# #         wing_aero_polar_140,
+# #     ],
+# label_list = (
+#     [
+#         "VSM_Breukels",
+#         "VSM_Breukels_stall",
+#         "VSM_Corrected",
+#         "VSM_Corrected_stall",
+#         # "35 VSM Corrected (+stall)",
+#         # "70 VSM Corrected (+stall)",
+#         # "105 VSM Corrected (+stall)",
+#         # "140 VSM Corrected (+stall)",
+#         # "CFD_Lebesque Rey 30e5",
+#     ],
+# )
+# angle_range = np.linspace(-10, 25, 20)
+# angle_type = "angle_of_attack"
+# angle_of_attack = 0
+# side_slip = 0
+# yaw_rate = 0
+# Umag = Umag
 
-from VSM.plotting import generate_polar_data
+# from VSM.plotting import generate_polar_data
 
-save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
+# save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
 
-polar_data_list = []
-for i, (solver, wing_aero, label) in enumerate(
-    zip(solver_list, wing_aero_list, label_list)
-):
-    polar_data, reynolds_number = generate_polar_data(
-        solver=solver,
-        wing_aero=wing_aero,
-        angle_range=angle_range,
-        angle_type=angle_type,
-        angle_of_attack=angle_of_attack,
-        side_slip=side_slip,
-        yaw_rate=yaw_rate,
-        Umag=Umag,
-    )
-    df = pd.DataFrame(polar_data, columns=["alpha", "cl", "cd", "cm"])
-    df.to_csv(Path(save_folder) / f"_{label}.csv")
+# polar_data_list = []
+# for i, (solver, wing_aero, label) in enumerate(
+#     zip(solver_list, wing_aero_list, label_list)
+# ):
+#     polar_data, reynolds_number = generate_polar_data(
+#         solver=solver,
+#         wing_aero=wing_aero,
+#         angle_range=angle_range,
+#         angle_type=angle_type,
+#         angle_of_attack=angle_of_attack,
+#         side_slip=side_slip,
+#         yaw_rate=yaw_rate,
+#         Umag=Umag,
+#     )
+#     df = pd.DataFrame(polar_data, columns=["alpha", "cl", "cd", "cm"])
+#     df.to_csv(Path(save_folder) / f"_{label}.csv")
 
-    polar_data_list.append(polar_data)
-    # Appending Reynolds numbers to the labels of the solvers
-    label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
+#     polar_data_list.append(polar_data)
+#     # Appending Reynolds numbers to the labels of the solvers
+#     label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
