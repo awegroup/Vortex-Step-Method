@@ -6,18 +6,33 @@ from . import jit_cross, jit_norm, jit_dot
 
 
 # TODO: should change name to deal with multiple wings
-class WingAerodynamics:
-    """WingAerodynamics class
+
+
+# KiteAerodynamics class
+# will have wings: list of wings
+# will have bridle_system, object, can calculate its own drag given a V_a
+# bridle line1 = [p1,p2,diameter], p1 = [x,y,z]
+# bridle_lines = [line1, line2, ...]
+
+
+#TODO: Changes
+# 1. WingAerodynamics --> BodyAerodynamics
+# 2. Adding bridle_line_system, to the possible input
+
+
+
+class BodyAerodynamics:
+    """BodyAerodynamics class
 
     This class is used to calculate the aerodynamic properties of a wing.
 
     Args:
-        - wings (list): List of Wing object instances
+        - wings (list): List of objects
         - aerodynamic_center_location (float): The location of the aerodynamic center (default is 0.25)
         - control_point_location (float): The location of the control point (default is 0.75)
 
     Returns:
-        - WingAerodynamics object
+        - BodyAerodynamics object
 
     Properties:
         - panels: The list of Panel object instances
@@ -40,6 +55,7 @@ class WingAerodynamics:
     def __init__(
         self,
         wings: list,  # List of Wing object instances
+        bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
     ):
@@ -84,6 +100,9 @@ class WingAerodynamics:
         self._alpha_uncorrected = None
         self._alpha_corrected = None
         # self._stall_angle_list = self.calculate_stall_angle_list()
+
+        ##TODO:
+        self._bridle_line_system = bridle_line_system
 
     ###########################
     ## GETTER FUNCTIONS
@@ -416,6 +435,9 @@ class WingAerodynamics:
     #         stall_angle_list.append(panel_aoa_stall)
     #     return np.array(stall_angle_list)
 
+    ##TODO: add thissss
+    # def calculate_kcu(model_type: cylinder, area, location, va)
+
     def calculate_results(
         self,
         gamma_new,
@@ -713,6 +735,18 @@ class WingAerodynamics:
         # Calculating Reynolds Number
         max_chord = max(np.array([panel.chord for panel in self.panels]))
         reynolds_number = density * va_mag * max_chord / mu
+
+        ##TODO: if bridle not none add lift, drag...
+        if self._bridle_line_system is not None:
+            for bridle in system:
+                va, 
+                lift_i,drag_i= ..
+            # sum up
+        
+            # add to the total lift, drag, not the distributions of the wing
+            
+
+        ##TODO: if KCU, use Va, find a force.
 
         ### Storing results in a dictionary
         results_dict = {}
