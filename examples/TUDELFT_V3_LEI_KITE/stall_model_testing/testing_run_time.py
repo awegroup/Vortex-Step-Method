@@ -6,7 +6,7 @@ import os
 import pandas as pd
 from pathlib import Path
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import (
     plot_polars,

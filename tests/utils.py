@@ -13,7 +13,7 @@ sys.path.insert(0, root_path)
 import tests.thesis_functions_oriol_cayon as thesis_functions
 
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
 
 

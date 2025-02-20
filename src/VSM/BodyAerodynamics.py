@@ -15,10 +15,9 @@ from . import jit_cross, jit_norm, jit_dot
 # bridle_lines = [line1, line2, ...]
 
 
-#TODO: Changes
+# TODO: Changes
 # 1. WingAerodynamics --> BodyAerodynamics
 # 2. Adding bridle_line_system, to the possible input
-
 
 
 class BodyAerodynamics:
@@ -586,17 +585,17 @@ class BodyAerodynamics:
             drag_prescribed_va = jit_dot(lift_induced_va, va_unit) + jit_dot(
                 drag_induced_va, va_unit
             )
-            if is_new_vector_definition:
-                dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
-                side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
-                    drag_induced_va, dir_side
-                )
-            else:
-                side_prescribed_va = jit_dot(
-                    lift_induced_va, spanwise_direction
-                ) + jit_dot(drag_induced_va, spanwise_direction)
 
-            ##TODO: adding negative sign to side force, because y should be defined positive to the left.
+            # if is_new_vector_definition:
+            dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
+            side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
+                drag_induced_va, dir_side
+            )
+            # else:
+            #     side_prescribed_va = jit_dot(
+            #         lift_induced_va, spanwise_direction
+            #     ) + jit_dot(drag_induced_va, spanwise_direction)
+
             side_prescribed_va = side_prescribed_va
 
             ### Converting forces to the global reference frame
@@ -743,8 +742,8 @@ class BodyAerodynamics:
             fa_bridle = 0
             # TODO: Calculate induced va at each point of the bridle
             # TODO: Calculate moments at each point of the bridle
-            for bridle in self._bridle_line_system:
-                fa_bridle += self.calculate_line_aerodynamic_force(va, bridle)
+            for bridle_line in self._bridle_line_system:
+                fa_bridle += self.calculate_line_aerodynamic_force(va, bridle_line)
 
             fx_global_3D_sum += fa_bridle[0]
             fy_global_3D_sum += fa_bridle[1]
@@ -753,11 +752,9 @@ class BodyAerodynamics:
             drag_wing_3D_sum += jit_dot(fa_bridle, va_unit)
             side_wing_3D_sum += jit_dot(fa_bridle, dir_side)
 
-                
             # sum up
-        
+
             # add to the total lift, drag, not the distributions of the wing
-            
 
         ##TODO: if KCU, use Va, find a force.
 
@@ -947,8 +944,10 @@ class BodyAerodynamics:
 
         return alpha_array[:, np.newaxis]
 
-    def calculate_line_aerodynamic_force(va, line, cd_cable= 1.1, cf_cable= 0.01, density = 1.225):
-        #TODO: test this function
+    def calculate_line_aerodynamic_force(
+        self, va, line, cd_cable=1.1, cf_cable=0.01, density=1.225
+    ):
+        # TODO: test this function
         p1 = line[0]
         p2 = line[1]
         d = line[2]
@@ -957,13 +956,16 @@ class BodyAerodynamics:
             p1, p2 = p2, p1
 
         length = np.linalg.norm(p2 - p1)
-        ej = (p2 - p1)/length
+        ej = (p2 - p1) / length
         theta = np.arccos(np.dot(va, ej) / (np.linalg.norm(va) * np.linalg.norm(ej)))
 
-        cd_t = cd_cable * np.sin(theta) ** 3 + np.pi*cf_cable*np.cos(theta)**3
-        cl_t = cd_cable * np.sin(theta) ** 2 * np.cos(theta)-np.pi*cf_cable*np.sin(theta)*np.cos(theta)**2
-        dir_D = va / np.linalg.norm(va) # Drag direction
-        dir_L = -(ej - np.dot(ej, dir_D) * dir_D) # Lift direction
+        cd_t = cd_cable * np.sin(theta) ** 3 + np.pi * cf_cable * np.cos(theta) ** 3
+        cl_t = (
+            cd_cable * np.sin(theta) ** 2 * np.cos(theta)
+            - np.pi * cf_cable * np.sin(theta) * np.cos(theta) ** 2
+        )
+        dir_D = va / np.linalg.norm(va)  # Drag direction
+        dir_L = -(ej - np.dot(ej, dir_D) * dir_D)  # Lift direction
         dynamic_pressure_area = 0.5 * density * np.linalg.norm(va) ** 2 * length * d
 
         # Calculate lift and drag using the common factor
@@ -971,4 +973,3 @@ class BodyAerodynamics:
         drag_j = dynamic_pressure_area * cd_t * dir_D
 
         return lift_j + drag_j
-        

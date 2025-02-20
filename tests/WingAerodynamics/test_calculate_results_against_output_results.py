@@ -4,7 +4,7 @@ import logging
 from copy import deepcopy
 from VSM.Solver import Solver
 from VSM.Panel import Panel
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 from VSM.WingGeometry import Wing
 
 

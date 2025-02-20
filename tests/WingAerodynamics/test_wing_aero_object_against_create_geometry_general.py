@@ -3,7 +3,7 @@ import logging
 from copy import deepcopy
 from VSM.Filament import BoundFilament, SemiInfiniteFilament
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 
 import os
 import sys

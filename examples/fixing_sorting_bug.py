@@ -5,7 +5,7 @@ import pickle
 import os
 from pathlib import Path
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution, plot_geometry
 from VSM.interactive import interactive_plot
