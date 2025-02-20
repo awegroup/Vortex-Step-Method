@@ -103,6 +103,8 @@ class BodyAerodynamics:
 
         ##TODO:
         self._bridle_line_system = bridle_line_system
+        self.cd_cable = 1.1
+        self.cf_cable = 0.01
 
     ###########################
     ## GETTER FUNCTIONS
@@ -738,9 +740,20 @@ class BodyAerodynamics:
 
         ##TODO: if bridle not none add lift, drag...
         if self._bridle_line_system is not None:
-            for bridle in system:
-                va, 
-                lift_i,drag_i= ..
+            fa_bridle = 0
+            # TODO: Calculate induced va at each point of the bridle
+            # TODO: Calculate moments at each point of the bridle
+            for bridle in self._bridle_line_system:
+                fa_bridle += self.calculate_line_aerodynamic_force(va, bridle)
+
+            fx_global_3D_sum += fa_bridle[0]
+            fy_global_3D_sum += fa_bridle[1]
+            fz_global_3D_sum += fa_bridle[2]
+            lift_wing_3D_sum += jit_dot(fa_bridle, dir_lift_prescribed_va)
+            drag_wing_3D_sum += jit_dot(fa_bridle, va_unit)
+            side_wing_3D_sum += jit_dot(fa_bridle, dir_side)
+
+                
             # sum up
         
             # add to the total lift, drag, not the distributions of the wing
@@ -933,3 +946,29 @@ class BodyAerodynamics:
         alpha_array = np.arctan(v_normal_array / v_tangential_array)
 
         return alpha_array[:, np.newaxis]
+
+    def calculate_line_aerodynamic_force(va, line, cd_cable= 1.1, cf_cable= 0.01, density = 1.225):
+        #TODO: test this function
+        p1 = line[0]
+        p2 = line[1]
+        d = line[2]
+
+        if p1[2] > p2[2]:
+            p1, p2 = p2, p1
+
+        length = np.linalg.norm(p2 - p1)
+        ej = (p2 - p1)/length
+        theta = np.arccos(np.dot(va, ej) / (np.linalg.norm(va) * np.linalg.norm(ej)))
+
+        cd_t = cd_cable * np.sin(theta) ** 3 + np.pi*cf_cable*np.cos(theta)**3
+        cl_t = cd_cable * np.sin(theta) ** 2 * np.cos(theta)-np.pi*cf_cable*np.sin(theta)*np.cos(theta)**2
+        dir_D = va / np.linalg.norm(va) # Drag direction
+        dir_L = -(ej - np.dot(ej, dir_D) * dir_D) # Lift direction
+        dynamic_pressure_area = 0.5 * density * np.linalg.norm(va) ** 2 * length * d
+
+        # Calculate lift and drag using the common factor
+        lift_j = dynamic_pressure_area * cl_t * dir_L
+        drag_j = dynamic_pressure_area * cd_t * dir_D
+
+        return lift_j + drag_j
+        
