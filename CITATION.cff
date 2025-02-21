@@ -1,33 +1,49 @@
-cff-version: 1.0.1
+cff-version: 1.2.0
 message: "If you are using this software, please cite it as shown below."
 authors:
-  - family-names: "Cayon"
-    given-names: "Oriol"
+  - given-names: "Oriol"
+    family-names: "Cayon"
     orcid: "https://orcid.org/0000-0002-2065-8673"
-  - family-names: "Poland"
-    given-names: "Jelle Agatho Wilhelm"
+  - given-names: "Jelle Agatho Wilhelm"
+    family-names: "Poland"
     orcid: "https://orcid.org/0000-0003-3164-5648"
 title: "VortexStepMethod"
 keywords:
   - "Airborne Wind Energy"
-version: 0.1.0
-# doi: "11.1111/11111"
-# date-released: YYYY-MM-DD
-license: MIT
+version: "0.1.0"
+doi: "10.1111/11111"
+date-released: "2023-01-01"
+license: "MIT"
 url: "https://github.com/ocayon/Vortex-Step-Method"
+references:
+  - type: article
+    authors:
+      - given-names: "Oriol"
+        family-names: "Cayon"
+        orcid: "https://orcid.org/0000-0002-2065-8673"
+      - given-names: "Mac"
+        family-names: "Gaunaa"
+      - given-names: "Roland"
+        family-names: "Schmehl"
+    title: "Fast Aero-Structural Model of a Leading-Edge Inflatable Kite"
+    doi: "10.3390/en16073061"
+    journal: "Energies"
+    volume: "16"
+    issue: "7"
+    year: "2023"
 preferred-citation:
   type: article
   authors:
-    - family-names: "Cayon"
-      given-names: "Oriol"
-    - family-names: "Gaunaa"
-      given-names: "Mac"
-    - family-names: "Schmehl"
-      given-names: "Roland"
+    - given-names: "Oriol"
+      family-names: "Cayon"
+      orcid: "https://orcid.org/0000-0002-2065-8673"
+    - given-names: "Mac"
+      family-names: "Gaunaa"
+    - given-names: "Roland"
+      family-names: "Schmehl"
+  title: "Fast Aero-Structural Model of a Leading-Edge Inflatable Kite"
   doi: "10.3390/en16073061"
   journal: "Energies"
-  title: "Fast Aero-Structural Model of a Leading-Edge Inflatable Kite"
-  issue: 7
-  volume: 16
-  year: 2023
-  article-number: 3061
+  volume: "16"
+  issue: "7"
+  year: "2023"
