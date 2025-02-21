@@ -72,13 +72,15 @@ The software presented here includes a couple of examples: a rectangular wing an
 
 ## Usages
 Please look at the tutorial on a rectangular wing, where the code usage and settings are fully detailed.
-You can find it in `examples/rectangular_wing/tutorial_rectangular_wing.ipynb`
+You can find it in `examples/rectangular_wing/tutorial_rectangular_wing.py`
 
 Another tutorial is present under `examples/TUDELFT_V3_LEI_KITE/tutorial_testing_stall_model.py` where a geometry is loaded from .csv, plotted, distributions are plotted and polars are created to demonstrate the effect of the stall model.
 
 For more detailed information one is referred to:
 - [Aerodynamic model](docs/Aerodynamic_model.pdf)
 - [Paper: Fast Aero-Structural Model of a Leading-Edge Inflatable Kite](https://doi.org/10.3390/en16073061) 
+
+A Julia version of this project is available at [VortexStepMethod.jl](https://github.com/Albatross-Kite-Transport/VortexStepMethod.jl)
 
 ## Contributing Guide
 We welcome contributions to this project! Whether you're reporting a bug, suggesting a feature, or writing code, here’s how you can contribute:
