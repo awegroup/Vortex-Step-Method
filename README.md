@@ -83,6 +83,16 @@ For more detailed information one is referred to:
 A Julia version of this project is available at [VortexStepMethod.jl](https://github.com/Albatross-Kite-Transport/VortexStepMethod.jl)
 
 ## Contributing Guide
+Please report issues and create pull requests using the URL:
+```
+https://github.com/ocayon/Vortex-Step-Method/
+```
+
+This is required because you cannot/should not do it using the URL
+```
+https://github.com/awegroup/Vortex-Step-Method
+```
+
 We welcome contributions to this project! Whether you're reporting a bug, suggesting a feature, or writing code, here’s how you can contribute:
 
 1. **Create an issue** on GitHub
