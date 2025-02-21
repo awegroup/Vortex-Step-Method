@@ -49,6 +49,13 @@ The software presented here includes a couple of examples: a rectangular wing an
     ```bash
     pip install -e .[dev]
     ```
+    
+    For ubuntu add:
+    ```
+    pip instal pyqt5
+    sudo apt install cm-super
+    sudo apt install dvipng
+   ```
 
 7. To deactivate the virtual environment:
     ```bash
