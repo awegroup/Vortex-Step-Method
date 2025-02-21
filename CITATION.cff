@@ -1,16 +1,15 @@
-cff-version: 0.1.0
+cff-version: 1.0.1
 message: "If you are using this software, please cite it as shown below."
 authors:
-  -
-    family-names: "Cayon"
+  - family-names: "Cayon"
     given-names: "Oriol"
     orcid: "https://orcid.org/0000-0002-2065-8673"
-    family-names: "Poland"
+  - family-names: "Poland"
     given-names: "Jelle Agatho Wilhelm"
     orcid: "https://orcid.org/0000-0003-3164-5648"
 title: "VortexStepMethod"
 keywords:
-  - Airborne Wind Energy
+  - "Airborne Wind Energy"
 version: 0.1.0
 # doi: "11.1111/11111"
 # date-released: YYYY-MM-DD
