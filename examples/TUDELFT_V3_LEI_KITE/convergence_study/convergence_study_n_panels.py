@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import math
 import json
 from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import (
     plot_polars,
@@ -69,7 +69,7 @@ def create_wing_aero(
             ### using breukels
             CAD_wing.add_section(CAD_rib_i_0, CAD_rib_i_1, CAD_rib_i[2])
 
-    wing_aero = WingAerodynamics([CAD_wing])
+    wing_aero = BodyAerodynamics([CAD_wing])
 
     return wing_aero
 
@@ -525,7 +525,7 @@ if __name__ == "__main__":
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
         / "results"
-        / "convergence_n_panels_new.pdf"
+        / "convergence_n_panels_2025_02_22.pdf"
     )
 
     ##TODO: left off trying to understand the data flow exactly.

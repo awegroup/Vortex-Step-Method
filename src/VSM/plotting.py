@@ -169,7 +169,7 @@ def set_axes_equal(ax):
 
 
 def creating_geometry_plot(
-    wing_aero,
+    body_aero,
     title,
     view_elevation,
     view_azimuth,
@@ -178,7 +178,7 @@ def creating_geometry_plot(
     Plots the wing panels and filaments in 3D.
 
     Args:
-        wing_aero: WingAerodynamics object
+        body_aero: WingAerodynamics object
         title: title of the plot
         data_type: type of the data to be saved | default: ".pdf"
         save_path: path to save the plot | default: None
@@ -195,8 +195,8 @@ def creating_geometry_plot(
     set_plot_style()
 
     # defining variables
-    panels = wing_aero.panels
-    va = wing_aero.va
+    panels = body_aero.panels
+    va = body_aero.va
 
     # Extract corner points, control points, and aerodynamic centers from panels
     corner_points = np.array([panel.corner_points for panel in panels])
@@ -289,7 +289,7 @@ def creating_geometry_plot(
 
 
 def plot_geometry(
-    wing_aero,
+    body_aero,
     title,
     data_type,
     save_path,
@@ -303,7 +303,7 @@ def plot_geometry(
     Plots the wing panels and filaments in 3D.
 
     Args:
-        wing_aero: WingAerodynamics object
+        body_aero: WingAerodynamics object
         title: title of the plot
         data_type: type of the data to be saved | default: ".pdf"
         save_path: path to save the plot | default: None
@@ -319,7 +319,7 @@ def plot_geometry(
     if is_save:
         # plot angled view
         fig = creating_geometry_plot(
-            wing_aero,
+            body_aero,
             title=title + "_angled_view",
             view_elevation=15,
             view_azimuth=-120,
@@ -328,7 +328,7 @@ def plot_geometry(
         plt.close()
         # plot top view
         fig = creating_geometry_plot(
-            wing_aero,
+            body_aero,
             title=title + "_top_view",
             view_elevation=90,
             view_azimuth=0,
@@ -338,7 +338,7 @@ def plot_geometry(
         plt.close()
         # plot front view
         fig = creating_geometry_plot(
-            wing_aero,
+            body_aero,
             title=title + "_front_view",
             view_elevation=0,
             view_azimuth=0,
@@ -347,7 +347,7 @@ def plot_geometry(
         plt.close()
         # save side view
         fig = creating_geometry_plot(
-            wing_aero,
+            body_aero,
             title=title + "_side_view",
             view_elevation=0,
             view_azimuth=-90,
@@ -358,7 +358,7 @@ def plot_geometry(
     # showing plot
     if is_show:
         fig = creating_geometry_plot(
-            wing_aero,
+            body_aero,
             title=title,
             view_elevation=15,
             view_azimuth=-120,
@@ -819,7 +819,7 @@ def plot_distribution(
 
 def generate_polar_data(
     solver,
-    wing_aero,
+    body_aero,
     angle_range,
     angle_type="angle_of_attack",
     angle_of_attack=0,
@@ -828,11 +828,11 @@ def generate_polar_data(
     Umag=10,
 ):
     """
-    Generates the polar data for the given solver and wing_aero.
+    Generates the polar data for the given solver and body_aero.
 
     Args:
         solver: solver object
-        wing_aero: wing_aero object
+        body_aero: body_aero object
         angle_range: range of angles to be considered
         angle_type: type of the angle | default: "angle_of_attack"
         angle_of_attack: angle of attack | default: 0
@@ -851,18 +851,18 @@ def generate_polar_data(
     cmx = np.zeros(len(angle_range))
     cmy = np.zeros(len(angle_range))
     cmz = np.zeros(len(angle_range))
-    gamma_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
-    cl_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
-    cd_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
-    cs_distribution = np.zeros((len(angle_range), len(wing_aero.panels)))
+    gamma_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
+    cl_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
+    cd_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
+    cs_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
     reynolds_number = np.zeros(len(angle_range))
     # initialize the gamma with None
     gamma = None
     for i, angle_i in enumerate(angle_range):
         if angle_type == "angle_of_attack":
-            wing_aero.va_initialize(Umag, angle_i, side_slip, yaw_rate)
+            body_aero.va_initialize(Umag, angle_i, side_slip, yaw_rate)
         elif angle_type == "side_slip":
-            wing_aero.va_initialize(Umag, angle_of_attack, angle_i, yaw_rate)
+            body_aero.va_initialize(Umag, angle_of_attack, angle_i, yaw_rate)
         else:
             raise ValueError(
                 "angle_type should be either 'angle_of_attack' or 'side_slip'"
@@ -870,7 +870,7 @@ def generate_polar_data(
 
         # Set the inflow conditions
 
-        results = solver.solve(wing_aero)
+        results = solver.solve(body_aero)
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
@@ -905,7 +905,7 @@ def generate_polar_data(
 
 def plot_polars(
     solver_list,
-    wing_aero_list,
+    body_aero_list,
     label_list,
     literature_path_list=None,
     angle_range=np.linspace(0, 20, 2),
@@ -921,11 +921,11 @@ def plot_polars(
     is_show=True,
 ):
     """
-    Plot polar data CL, CD, CS, and CL-CD over a specified angle for the given solvers and wing_aeros.
+    Plot polar data CL, CD, CS, and CL-CD over a specified angle for the given solvers and body_aeros.
 
     Args:
         solver_list: list of solver objects
-        wing_aero_list: list of wing_aero objects
+        body_aero_list: list of body_aero objects
         label_list: list of labels for the results
         literature_path_list: list of paths to literature data | default: None
         angle_range: range of angles to be considered | default: np.linspace(0, 20, 2)
@@ -956,23 +956,23 @@ def plot_polars(
     else:
         raise ValueError("angle_type should be either 'angle_of_attack' or 'side_slip'")
 
-    if (len(wing_aero_list) + len(literature_path_list)) != len(label_list) or len(
+    if (len(body_aero_list) + len(literature_path_list)) != len(label_list) or len(
         solver_list
-    ) != len(wing_aero_list):
+    ) != len(body_aero_list):
         raise ValueError(
             "The number of solvers, results and labels should be the same. Got {} solvers and {} results and {} labels".format(
                 (len(solver_list) + len(literature_path_list)),
-                (len(wing_aero_list) + len(literature_path_list)),
+                (len(body_aero_list) + len(literature_path_list)),
                 len(label_list),
             )
         )
 
     # generating polar data
     polar_data_list = []
-    for i, (solver, wing_aero) in enumerate(zip(solver_list, wing_aero_list)):
+    for i, (solver, body_aero) in enumerate(zip(solver_list, body_aero_list)):
         polar_data, reynolds_number = generate_polar_data(
             solver=solver,
-            wing_aero=wing_aero,
+            body_aero=body_aero,
             angle_range=angle_range,
             angle_type=angle_type,
             angle_of_attack=angle_of_attack,
@@ -1090,7 +1090,7 @@ def plot_polars(
 
     # cmx, cmy,cmz plots
     for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-        if i >= len(wing_aero_list):
+        if i >= len(body_aero_list):
             continue
         else:
             linestyle = "-"
@@ -1167,7 +1167,7 @@ def plot_polars(
 
 
 def plot_panel_coefficients(
-    wing_aero,
+    body_aero,
     panel_index,
     alpha_range=[-20, 30],
     title=None,
@@ -1180,7 +1180,7 @@ def plot_panel_coefficients(
     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
 
     Args:
-        wing_aero (object): Wing aerodynamic object containing panels
+        body_aero (object): Wing aerodynamic object containing panels
         panel_index (int): Index of the panel to plot
         alpha_range (tuple, optional): Range of angles of attack in radians.
                                        Defaults to (-0.5, 0.5) radians.
@@ -1190,7 +1190,7 @@ def plot_panel_coefficients(
         title = f"2D_polar_of_panel_{panel_index}"
 
     # Select the specified panel
-    panel = wing_aero.panels[panel_index]
+    panel = body_aero.panels[panel_index]
 
     # Create an array of angles of attack
     alpha_array = np.deg2rad(np.linspace(alpha_range[0], alpha_range[1], 50))
@@ -1249,19 +1249,19 @@ def plot_panel_coefficients(
 
 
 # def process_panel_coefficients_panel_i(
-#     wing_aero, panel_index, PROJECT_DIR, n_panels, alpha_range=[-40, 40]
+#     body_aero, panel_index, PROJECT_DIR, n_panels, alpha_range=[-40, 40]
 # ):
 #     """
 #     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
 
 #     Args:
-#         wing_aero (object): Wing aerodynamic object containing panels
+#         body_aero (object): Wing aerodynamic object containing panels
 #         panel_index (int): Index of the panel to plot
 #         alpha_range (tuple, optional): Range of angles of attack in radians.
 #                                        Defaults to (-0.5, 0.5) radians.
 #     """
 #     # Select the specified panel
-#     panel = wing_aero.panels[panel_index]
+#     panel = body_aero.panels[panel_index]
 
 #     # Create an array of angles of attack
 #     alpha_array_deg = np.linspace(-40, 40, 81)
@@ -1565,12 +1565,12 @@ def plot_panel_coefficients(
 #         )
 
 
-def process_panel_coefficients_panel_i(wing_aero, panel_index, PROJECT_DIR, n_panels):
+def process_panel_coefficients_panel_i(body_aero, panel_index, PROJECT_DIR, n_panels):
     """
     Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
 
     Args:
-        wing_aero (object): Wing aerodynamic object containing panels
+        body_aero (object): Wing aerodynamic object containing panels
         panel_index (int): Index of the panel to plot
         alpha_range (tuple, optional): Range of angles of attack in radians.
                                        Defaults to (-0.5, 0.5) radians.
@@ -1689,7 +1689,7 @@ def process_panel_coefficients_panel_i(wing_aero, panel_index, PROJECT_DIR, n_pa
         return df_neuralfoil
 
     # Select the specified panel
-    panel = wing_aero.panels[panel_index]
+    panel = body_aero.panels[panel_index]
 
     # Create an array of angles of attack
     alpha_array_deg = np.linspace(-60, 60, 121)
@@ -2062,7 +2062,7 @@ def process_panel_coefficients_panel_i(wing_aero, panel_index, PROJECT_DIR, n_pa
 
 
 def process_panel_coefficients(
-    wing_aero,
+    body_aero,
     PROJECT_DIR,
     n_panels,
     polar_folder_path,
@@ -2070,7 +2070,7 @@ def process_panel_coefficients(
 
     for i in range(n_panels):
         process_panel_coefficients_panel_i(
-            wing_aero=wing_aero,
+            body_aero=body_aero,
             panel_index=i,
             PROJECT_DIR=PROJECT_DIR,
             n_panels=n_panels,

@@ -51,7 +51,7 @@ class Solver:
         allowed_error: float = 1e-12,  # 1e-5,
         tol_reference_error: float = 0.001,
         relaxation_factor: float = 0.01,
-        is_with_artificial_damping: bool = True,
+        is_with_artificial_damping: bool = False,
         artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
         type_initial_gamma_distribution: str = "elliptic",
         is_with_gamma_feedback: bool = True,

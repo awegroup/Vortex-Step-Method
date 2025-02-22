@@ -356,8 +356,8 @@ class Panel:
         elif self._panel_aero_model == "polar_data":
             return np.interp(
                 alpha,
-                self._panel_polar_data[:, 0],
-                self._panel_polar_data[:, 1],
+                self._panel_polar_data[0],
+                self._panel_polar_data[1],
             )
         else:
             raise NotImplementedError
@@ -385,12 +385,8 @@ class Panel:
             cm = 0.0
             return cd, cm
         elif self._panel_aero_model == "polar_data":
-            cd = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
-            )
-            cm = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
-            )
+            cd = np.interp(alpha, self._panel_polar_data[0], self._panel_polar_data[2])
+            cm = np.interp(alpha, self._panel_polar_data[0], self._panel_polar_data[3])
             return cd, cm
         else:
             raise NotImplementedError

@@ -155,7 +155,7 @@ VSM_base = Solver(
 )
 results_with = VSM_base.solve(wing_aero_breukels)
 print(f'WITH: lift: {results_with["lift"]}, drag: {results_with["drag"]}')
-breakpoint()
+# breakpoint()
 ####
 wing_aero_polar = create_wing_aero(
     file_path,
@@ -231,7 +231,7 @@ VSM_base.solve(wing_aero_breukels)
 #     yaw_rate=yaw_rate,
 #     is_with_aerodynamic_details=True,
 # )
-breakpoint()
+# breakpoint()
 # # interactive_plot(
 # #     wing_aero_CAD_19ribs,
 # #     vel=Umag,
@@ -313,7 +313,7 @@ plot_polars(
         "CFD_Lebesque Rey 30e5",
     ],
     literature_path_list=[path_cfd_lebesque],
-    angle_range=np.linspace(-10, 25, 20),
+    angle_range=[3, 6],  # np.linspace(-10, 25, 10),
     angle_type="angle_of_attack",
     angle_of_attack=0,
     side_slip=0,
