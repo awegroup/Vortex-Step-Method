@@ -13,7 +13,7 @@ sys.path.insert(0, root_path)
 import tests.thesis_functions_oriol_cayon as thesis_functions
 
 from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 
 
@@ -501,10 +501,10 @@ def calculate_new_for_alpha_range(
             airfoil_input,
         )
 
-    wing_aero = WingAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing])
 
     # initializing zero lists
-    wing_aero = WingAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing])
     CL_LLT_new = np.zeros(len(aoas))
     CD_LLT_new = np.zeros(len(aoas))
     gamma_LLT_new = np.zeros((len(aoas), N - 1))

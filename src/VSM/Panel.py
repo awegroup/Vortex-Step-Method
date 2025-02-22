@@ -106,7 +106,9 @@ class Panel:
                 raise ValueError(
                     "The polar data of the two sections should have the same shape & length"
                 )
-            self._panel_polar_data = [0.5 * (a1 + a2) for a1, a2 in zip(aero_1, aero_2)]
+            self._panel_polar_data = np.array(
+                [0.5 * (a1 + a2) for a1, a2 in zip(aero_1, aero_2)]
+            )
         else:
             raise NotImplementedError
 
@@ -354,8 +356,8 @@ class Panel:
         elif self._panel_aero_model == "polar_data":
             return np.interp(
                 alpha,
-                self._panel_polar_data[0],
-                self._panel_polar_data[1],
+                self._panel_polar_data[:, 0],
+                self._panel_polar_data[:, 1],
             )
         else:
             raise NotImplementedError
@@ -383,8 +385,12 @@ class Panel:
             cm = 0.0
             return cd, cm
         elif self._panel_aero_model == "polar_data":
-            cd = np.interp(alpha, self._panel_polar_data[0], self._panel_polar_data[2])
-            cm = np.interp(alpha, self._panel_polar_data[0], self._panel_polar_data[3])
+            cd = np.interp(
+                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
+            )
+            cm = np.interp(
+                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
+            )
             return cd, cm
         else:
             raise NotImplementedError

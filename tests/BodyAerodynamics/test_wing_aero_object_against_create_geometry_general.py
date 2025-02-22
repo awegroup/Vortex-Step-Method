@@ -3,7 +3,7 @@ import logging
 from copy import deepcopy
 from VSM.Filament import BoundFilament, SemiInfiniteFilament
 from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import BodyAerodynamics
 
 import os
 import sys
@@ -183,7 +183,7 @@ def create_geometry(model="VSM", wing_type="rectangular", plotting=False, N=40):
         wing.add_section(
             coord_left_to_right[2 * i], coord_left_to_right[2 * i + 1], ["inviscid"]
         )
-    wing_aero = WingAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing])
     wing_aero.va = Uinf
     if plotting:
         wing_aero.plot()

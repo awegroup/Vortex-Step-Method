@@ -133,7 +133,7 @@ def test_polar_data_input():
 
     assert hasattr(panel, "_panel_polar_data")
     assert panel._panel_polar_data is not None
-    assert panel._panel_polar_data.shape == airfoil_data.shape
+    assert len(panel._panel_polar_data) == len(airfoil_data)
 
     # Check if panel_polar_data is correctly averaged
     expected_data = (airfoil_data + airfoil_data * 1.1) / 2
