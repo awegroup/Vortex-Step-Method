@@ -6,18 +6,32 @@ from . import jit_cross, jit_norm, jit_dot
 
 
 # TODO: should change name to deal with multiple wings
-class WingAerodynamics:
-    """WingAerodynamics class
+
+
+# KiteAerodynamics class
+# will have wings: list of wings
+# will have bridle_system, object, can calculate its own drag given a V_a
+# bridle line1 = [p1,p2,diameter], p1 = [x,y,z]
+# bridle_lines = [line1, line2, ...]
+
+
+# TODO: Changes
+# 1. WingAerodynamics --> BodyAerodynamics
+# 2. Adding bridle_line_system, to the possible input
+
+
+class BodyAerodynamics:
+    """BodyAerodynamics class
 
     This class is used to calculate the aerodynamic properties of a wing.
 
     Args:
-        - wings (list): List of Wing object instances
+        - wings (list): List of objects
         - aerodynamic_center_location (float): The location of the aerodynamic center (default is 0.25)
         - control_point_location (float): The location of the control point (default is 0.75)
 
     Returns:
-        - WingAerodynamics object
+        - BodyAerodynamics object
 
     Properties:
         - panels: The list of Panel object instances
@@ -40,6 +54,7 @@ class WingAerodynamics:
     def __init__(
         self,
         wings: list,  # List of Wing object instances
+        bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
     ):
@@ -84,6 +99,11 @@ class WingAerodynamics:
         self._alpha_uncorrected = None
         self._alpha_corrected = None
         # self._stall_angle_list = self.calculate_stall_angle_list()
+
+        ##TODO:
+        self._bridle_line_system = bridle_line_system
+        self.cd_cable = 1.1
+        self.cf_cable = 0.01
 
     ###########################
     ## GETTER FUNCTIONS
@@ -416,6 +436,9 @@ class WingAerodynamics:
     #         stall_angle_list.append(panel_aoa_stall)
     #     return np.array(stall_angle_list)
 
+    ##TODO: add thissss
+    # def calculate_kcu(model_type: cylinder, area, location, va)
+
     def calculate_results(
         self,
         gamma_new,
@@ -562,17 +585,17 @@ class WingAerodynamics:
             drag_prescribed_va = jit_dot(lift_induced_va, va_unit) + jit_dot(
                 drag_induced_va, va_unit
             )
-            if is_new_vector_definition:
-                dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
-                side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
-                    drag_induced_va, dir_side
-                )
-            else:
-                side_prescribed_va = jit_dot(
-                    lift_induced_va, spanwise_direction
-                ) + jit_dot(drag_induced_va, spanwise_direction)
 
-            ##TODO: adding negative sign to side force, because y should be defined positive to the left.
+            # if is_new_vector_definition:
+            dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
+            side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
+                drag_induced_va, dir_side
+            )
+            # else:
+            #     side_prescribed_va = jit_dot(
+            #         lift_induced_va, spanwise_direction
+            #     ) + jit_dot(drag_induced_va, spanwise_direction)
+
             side_prescribed_va = side_prescribed_va
 
             ### Converting forces to the global reference frame
@@ -713,6 +736,27 @@ class WingAerodynamics:
         # Calculating Reynolds Number
         max_chord = max(np.array([panel.chord for panel in self.panels]))
         reynolds_number = density * va_mag * max_chord / mu
+
+        ##TODO: if bridle not none add lift, drag...
+        if self._bridle_line_system is not None:
+            fa_bridle = 0
+            # TODO: Calculate induced va at each point of the bridle
+            # TODO: Calculate moments at each point of the bridle
+            for bridle_line in self._bridle_line_system:
+                fa_bridle += self.calculate_line_aerodynamic_force(va, bridle_line)
+
+            fx_global_3D_sum += fa_bridle[0]
+            fy_global_3D_sum += fa_bridle[1]
+            fz_global_3D_sum += fa_bridle[2]
+            lift_wing_3D_sum += jit_dot(fa_bridle, dir_lift_prescribed_va)
+            drag_wing_3D_sum += jit_dot(fa_bridle, va_unit)
+            side_wing_3D_sum += jit_dot(fa_bridle, dir_side)
+
+            # sum up
+
+            # add to the total lift, drag, not the distributions of the wing
+
+        ##TODO: if KCU, use Va, find a force.
 
         ### Storing results in a dictionary
         results_dict = {}
@@ -899,3 +943,33 @@ class WingAerodynamics:
         alpha_array = np.arctan(v_normal_array / v_tangential_array)
 
         return alpha_array[:, np.newaxis]
+
+    def calculate_line_aerodynamic_force(
+        self, va, line, cd_cable=1.1, cf_cable=0.01, density=1.225
+    ):
+        # TODO: test this function
+        p1 = line[0]
+        p2 = line[1]
+        d = line[2]
+
+        if p1[2] > p2[2]:
+            p1, p2 = p2, p1
+
+        length = np.linalg.norm(p2 - p1)
+        ej = (p2 - p1) / length
+        theta = np.arccos(np.dot(va, ej) / (np.linalg.norm(va) * np.linalg.norm(ej)))
+
+        cd_t = cd_cable * np.sin(theta) ** 3 + np.pi * cf_cable * np.cos(theta) ** 3
+        cl_t = (
+            cd_cable * np.sin(theta) ** 2 * np.cos(theta)
+            - np.pi * cf_cable * np.sin(theta) * np.cos(theta) ** 2
+        )
+        dir_D = va / np.linalg.norm(va)  # Drag direction
+        dir_L = -(ej - np.dot(ej, dir_D) * dir_D)  # Lift direction
+        dynamic_pressure_area = 0.5 * density * np.linalg.norm(va) ** 2 * length * d
+
+        # Calculate lift and drag using the common factor
+        lift_j = dynamic_pressure_area * cl_t * dir_L
+        drag_j = dynamic_pressure_area * cd_t * dir_D
+
+        return lift_j + drag_j

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import math
 import json
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import (
     plot_polars,
@@ -97,7 +97,7 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
 
     n_rows = 3
     n_cols = 3
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, 10), sharex=True)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(13, 7), sharex=True)
 
     def get_coeff_and_label(row_idx, col_idx, n_rows=3, n_cols=3):
         """
@@ -216,9 +216,9 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
                         )
                     else:
                         label = coeff_label
-                    ax.set_ylabel(label, fontsize=11)
+                    ax.set_ylabel(label)  # , fontsize=11)
                 if is_with_x_label:
-                    ax.set_xlabel(r"$N_{\mathrm{p}}$", fontsize=11)
+                    ax.set_xlabel(r"$N_{\mathrm{p}}$")  # , fontsize=11)
                     ax.tick_params(labelbottom=True)
 
                 # Extract y-values for the chosen coefficient
@@ -237,7 +237,7 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
                     color = "red"
                     if is_stall:
                         linestyle = "solid"
-                        lbl = "Corrected + Stall"
+                        lbl = "Corrected + Smoothening"
                     else:
                         linestyle = "dashed"
                         lbl = "Corrected"
@@ -245,7 +245,7 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
                     color = "blue"
                     if is_stall:
                         linestyle = "dashdot"
-                        lbl = "Breukels + Stall"
+                        lbl = "Breukels + Smoothening"
                     else:
                         linestyle = "dotted"
                         lbl = "Breukels"
@@ -296,30 +296,38 @@ def plot_3x3_special_new(csv_file_dir, alpha_list, beta_list):
     # 3) Create a figure-level legend below the plots
     # Adjust ncol to fit your needs
     # adjusting the ordering of the legend
-    # swap 4 and 7
-    final_handles[4], final_handles[7] = final_handles[7], final_handles[4]
-    final_labels[4], final_labels[7] = final_labels[7], final_labels[4]
+    # # swap 4 and 7
+    # final_handles[4], final_handles[7] = final_handles[7], final_handles[4]
+    # final_labels[4], final_labels[7] = final_labels[7], final_labels[4]
 
-    # swap 4 and 5
-    final_handles[4], final_handles[5] = final_handles[5], final_handles[4]
-    final_labels[4], final_labels[5] = final_labels[5], final_labels[4]
+    # # swap 4 and 5
+    # final_handles[4], final_handles[5] = final_handles[5], final_handles[4]
+    # final_labels[4], final_labels[5] = final_labels[5], final_labels[4]
 
-    # swap 6 and 7
-    final_handles[6], final_handles[7] = final_handles[7], final_handles[6]
-    final_labels[6], final_labels[7] = final_labels[7], final_labels[6]
+    # # swap 6 and 7
+    # final_handles[6], final_handles[7] = final_handles[7], final_handles[6]
+    # final_labels[6], final_labels[7] = final_labels[7], final_labels[6]
+
+    # swap 2 and 4
+    final_handles[2], final_handles[4] = final_handles[4], final_handles[2]
+    final_labels[2], final_labels[4] = final_labels[4], final_labels[2]
+
+    # swap 3 and 5
+    final_handles[3], final_handles[5] = final_handles[5], final_handles[3]
+    final_labels[3], final_labels[5] = final_labels[5], final_labels[3]
 
     fig.legend(
         handles=final_handles,
         labels=final_labels,
         loc="lower center",
-        bbox_to_anchor=(0.5, 0.01),
-        ncol=4,
+        bbox_to_anchor=(0.5, -0.01),
+        ncol=3,
         frameon=True,
         # title="Legends",
     )
 
     plt.tight_layout()
-    plt.subplots_adjust(bottom=0.15)  # Make space for legend below
+    plt.subplots_adjust(bottom=0.17)  # Make space for legend below
     return fig, axes
 
 
@@ -374,7 +382,7 @@ def run_batch_new(
             225,
             250,
         ]
-        # n_panels_list = [10, 20]
+        # n_panels_list = [10, 50]
     elif distribution == "cosine":
         n_panels_list = [20, 25, 30, 35, 40, 45, 50, 75, 100]
         # n_panels_list = [30, 100]
@@ -383,6 +391,8 @@ def run_batch_new(
     else:
         raise ValueError(f"Unknown distribution: {distribution}")
 
+    ##TODO: remove
+    # n_panels_list = [35, 70, 105]
     for n_panels in n_panels_list:
         print(f"n_panels:{n_panels}")
         if distribution == "splitprovided":
@@ -424,16 +434,19 @@ def save_results(
     path_polar_data_dir,
 ):
     for i, (alpha, beta) in enumerate(zip(alpha_list, beta_list)):
-        if i == 0:
-            distribution_list = ["splitprovided", "linear"]
-            is_stall_list = [False]
-        else:
-            distribution_list = ["splitprovided", "linear"]
-            is_stall_list = [False, True]
-
+        # if i in [0, 1, 2]:
+        #     distribution_list = ["splitprovided", "linear"]
+        #     is_stall_list = [False]
+        # else:
+        #     distribution_list = ["splitprovided", "linear"]
+        is_stall_list = [False, True]
         is_polar_list = [False, True]
 
         for is_polar in is_polar_list:
+            if is_polar:
+                distribution_list = ["splitprovided", "linear"]
+            else:
+                distribution_list = ["linear"]
             for distribution in distribution_list:
                 for is_stall in is_stall_list:
                     results = run_batch_new(
@@ -496,23 +509,29 @@ if __name__ == "__main__":
     alpha_list = [6.8, 20, 20]
     beta_list = [10, 10, 20]
 
-    # save_results(
-    #     alpha_list,
-    #     beta_list,
-    #     file_path,
-    #     convergence_data_dir,
-    #     n_ribs,
-    #     Umag,
-    #     path_polar_data_dir,
-    # )
+    save_results(
+        alpha_list,
+        beta_list,
+        file_path,
+        convergence_data_dir,
+        n_ribs,
+        Umag,
+        path_polar_data_dir,
+    )
     fig, axes = plot_3x3_special_new(convergence_data_dir, alpha_list, beta_list)
     fig.savefig(
         Path(PROJECT_DIR)
         / "examples"
         / "TUDELFT_V3_LEI_KITE"
         / "convergence_study"
+        / "results"
         / "convergence_n_panels_new.pdf"
     )
+
+    ##TODO: left off trying to understand the data flow exactly.
+    # wnat to make the point that different distributions dont matter.
+    # and that smoothening slows convergence
+    # and that breukels < corrected
 
     #################################
     # ## trying a no billow version

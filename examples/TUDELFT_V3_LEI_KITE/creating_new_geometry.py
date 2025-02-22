@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import WingAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import (
     plot_polars,

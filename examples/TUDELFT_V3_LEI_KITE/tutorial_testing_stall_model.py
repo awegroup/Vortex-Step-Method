@@ -6,7 +6,7 @@ import os
 import pandas as pd
 from pathlib import Path
 from VSM.WingGeometry import Wing
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import (
     plot_polars,
@@ -26,6 +26,8 @@ def create_wing_aero(
     spanwise_panel_distribution,
     is_with_corrected_polar=False,
     path_polar_data_dir="",
+    is_with_bridles=False,
+    path_bridle_data=None,
 ):
     df = pd.read_csv(file_path, delimiter=",")  # , skiprows=1)
     LE_x_array = df["LE_x"].values
@@ -69,9 +71,34 @@ def create_wing_aero(
             ### using breukels
             CAD_wing.add_section(CAD_rib_i_0, CAD_rib_i_1, CAD_rib_i[2])
 
-    wing_aero = WingAerodynamics([CAD_wing])
-
-    return wing_aero
+    if is_with_bridles:
+        pd_bridle_lines = pd.read_csv(path_bridle_data, delimiter=",")
+        bridle_lines = []
+        for i in range(len(pd_bridle_lines)):
+            bridle_lines.append(
+                [
+                    np.array(
+                        [
+                            pd_bridle_lines["p1_x"].values[i],
+                            pd_bridle_lines["p1_y"].values[i],
+                            pd_bridle_lines["p1_z"].values[i],
+                        ]
+                    ),
+                    np.array(
+                        [
+                            pd_bridle_lines["p2_x"].values[i],
+                            pd_bridle_lines["p2_y"].values[i],
+                            pd_bridle_lines["p2_x"].values[i],
+                        ]
+                    ),
+                    pd_bridle_lines["diameter"].values[i],
+                ]
+            )
+        wing_aero = BodyAerodynamics([CAD_wing], bridle_lines)
+        return wing_aero
+    else:
+        wing_aero = BodyAerodynamics([CAD_wing])
+        return wing_aero
 
 
 file_path = (
@@ -85,7 +112,7 @@ path_polar_data_dir = (
     / "polar_engineering"
     / "csv_files"
 )
-n_panels = 150
+n_panels = 20
 angle_of_attack = 10
 side_slip = 0
 yaw_rate = 0
@@ -98,6 +125,38 @@ wing_aero_breukels = create_wing_aero(
     is_with_corrected_polar=False,
     path_polar_data_dir=path_polar_data_dir,
 )
+wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+VSM_base = Solver(
+    aerodynamic_model_type="VSM",
+    is_with_artificial_damping=False,
+    is_new_vector_definition=False,
+)
+results_without = VSM_base.solve(wing_aero_breukels)
+print(f'lift: {results_without["lift"]}, drag: {results_without["drag"]}')
+
+### testing with bridles
+wing_aero_breukels = create_wing_aero(
+    file_path,
+    n_panels,
+    spanwise_panel_distribution,
+    is_with_corrected_polar=False,
+    path_polar_data_dir=path_polar_data_dir,
+    is_with_bridles=True,
+    path_bridle_data=Path(PROJECT_DIR)
+    / "data"
+    / "TUDELFT_V3_LEI_KITE"
+    / "bridle_lines.csv",
+)
+wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+VSM_base = Solver(
+    aerodynamic_model_type="VSM",
+    is_with_artificial_damping=False,
+    is_new_vector_definition=False,
+)
+results_with = VSM_base.solve(wing_aero_breukels)
+print(f'WITH: lift: {results_with["lift"]}, drag: {results_with["drag"]}')
+breakpoint()
+####
 wing_aero_polar = create_wing_aero(
     file_path,
     n_panels,
@@ -105,7 +164,6 @@ wing_aero_polar = create_wing_aero(
     is_with_corrected_polar=True,
     path_polar_data_dir=path_polar_data_dir,
 )
-# breakpoint()
 wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
@@ -150,18 +208,19 @@ VSM_with_stall_correction = Solver(
     is_new_vector_definition=False,
 )
 
-# # ## Plotting GEOMETRY
-# # plot_geometry(
-# #     wing_aero_CAD_19ribs,
-# #     title=" ",
-# #     data_type=".svg",
-# #     save_path=" ",
-# #     is_save=False,
-# #     is_show=True,
-# #     view_elevation=15,
-# #     view_azimuth=-120,
-# # )
+# ## Plotting GEOMETRY
+# plot_geometry(
+#     wing_aero_breukels,
+#     title=" ",
+#     data_type=".svg",
+#     save_path=" ",
+#     is_save=False,
+#     is_show=True,
+#     view_elevation=15,
+#     view_azimuth=-120,
+# )
 
+VSM_base.solve(wing_aero_breukels)
 
 # #### INTERACTIVE PLOT
 # interactive_plot(
@@ -172,7 +231,7 @@ VSM_with_stall_correction = Solver(
 #     yaw_rate=yaw_rate,
 #     is_with_aerodynamic_details=True,
 # )
-# breakpoint()
+breakpoint()
 # # interactive_plot(
 # #     wing_aero_CAD_19ribs,
 # #     vel=Umag,
@@ -379,3 +438,10 @@ plot_polars(
 #     polar_data_list.append(polar_data)
 #     # Appending Reynolds numbers to the labels of the solvers
 #     label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
+
+
+##TODO: user experience would be something like below
+# model kcu as thick cylinder, use emperical relations to get drag.
+# kcu_parameters = [model_type, length, diameter]
+# kite_aero = KiteAerodynamics([CAD_wing], bridle_lines, kcu)
+# VSM_base.solve(kite_aero)

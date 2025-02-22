@@ -5,7 +5,7 @@ import pprint
 from copy import deepcopy
 from VSM.Solver import Solver
 from VSM.Panel import Panel
-from VSM.WingAerodynamics import WingAerodynamics
+from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.WingGeometry import Wing
 
 
@@ -186,7 +186,7 @@ def test_induction_matrix_creation():
         wing.add_section(
             coord_left_to_right[2 * idx], coord_left_to_right[2 * idx + 1], ["inviscid"]
         )
-    wing_aero = WingAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing])
     wing_aero.va = Uinf
 
     ###########
