@@ -23,7 +23,6 @@ class Solver:
         density (float): Air density (default: 1.225)
         max_iterations (int): Maximum number of iterations (default: 1500)
         allowed_error (float): Allowed error for convergence (default: 1e-5)
-        tol_reference_error (float): Tolerance for reference error (default: 0.001)
         relaxation_factor (float): Relaxation factor for convergence (default: 0.01)
         is_with_artificial_damping (bool): Whether to apply artificial damping (default: False)
         artificial_damping (dict): Artificial damping parameters (default: {"k2": 0.1, "k4": 0.0})
@@ -49,7 +48,6 @@ class Solver:
         density: float = 1.225,
         max_iterations: int = 5000,
         allowed_error: float = 1e-12,  # 1e-5,
-        tol_reference_error: float = 0.001,
         relaxation_factor: float = 0.01,
         is_with_artificial_damping: bool = False,
         artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
@@ -72,7 +70,6 @@ class Solver:
         self.density = density
         self.max_iterations = max_iterations
         self.allowed_error = allowed_error
-        self.tol_reference_error = tol_reference_error
         self.relaxation_factor = relaxation_factor
         self.is_with_artificial_damping = is_with_artificial_damping
         self.artificial_damping = artificial_damping
@@ -320,7 +317,8 @@ class Solver:
 
             # Checking Convergence
             reference_error = np.amax(np.abs(gamma_new))
-            reference_error = max(reference_error, self.tol_reference_error)
+            if reference_error == 0:
+                reference_error = 1e-4
             error = np.amax(np.abs(gamma_new - gamma))
             normalized_error = error / reference_error
 
