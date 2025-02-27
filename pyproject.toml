@@ -88,8 +88,9 @@ dependencies = [
   "seaborn",
   "scipy",
   "numba",
-  "ipykernel",
   "screeninfo",
+  "plotly",
+  "nbformat",
 ]
 
 

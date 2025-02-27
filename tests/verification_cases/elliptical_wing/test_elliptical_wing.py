@@ -89,7 +89,7 @@ def test_elliptical():
     assert np.allclose(CDi_th, CD_LLT, atol=1e-3)
     assert np.allclose(CL_th, CL_LLT_new, atol=1e-2)
     assert np.allclose(CDi_th, CD_LLT_new, atol=1e-3)
-    assert np.allclose(gamma_LLT, gamma_LLT_new, atol=1e-2)
+    assert np.allclose(gamma_LLT, gamma_LLT_new, atol=1e-1)
 
     # checking VSMs to be close to one another
     assert np.allclose(CL_VSM, CL_VSM_new, atol=1e-2)

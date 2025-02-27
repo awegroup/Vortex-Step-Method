@@ -99,11 +99,16 @@ class Panel:
             # Average the polar_data of the two sections
             aero_1 = section_1.aero_input[1]
             aero_2 = section_2.aero_input[1]
-            if len(aero_1) != len(aero_2) or aero_1.shape != aero_2.shape:
+            if (
+                len(aero_1) != len(aero_2)
+                or np.array(aero_1).shape != np.array(aero_2).shape
+            ):
                 raise ValueError(
                     "The polar data of the two sections should have the same shape & length"
                 )
-            self._panel_polar_data = (aero_1 + aero_2) / 2
+            self._panel_polar_data = np.array(
+                [0.5 * (a1 + a2) for a1, a2 in zip(aero_1, aero_2)]
+            )
         else:
             raise NotImplementedError
 
@@ -339,14 +344,20 @@ class Panel:
             # if outside of 20 degrees which in rad = np.pi/9
             if alpha > (np.pi / 9) or alpha < -(np.pi / 9):
                 cl = 2 * np.cos(alpha) * np.sin(alpha) ** 2
+            #### alternative approach, of ensuring that for negative alpha, cl is very small 0
+            # if alpha < 0 and alpha > -(np.pi / 9):
+            #     cl = -0.01
+            # elif alpha > (np.pi / 9) or alpha < -(np.pi / 9):
+            #     cl = 2 * np.cos(alpha) * np.sin(alpha) ** 2
+            ####
             return cl
         elif self._panel_aero_model == "inviscid":
             return 2 * np.pi * alpha
         elif self._panel_aero_model == "polar_data":
             return np.interp(
                 alpha,
-                self._panel_polar_data[:, 0],
-                self._panel_polar_data[:, 1],
+                self._panel_polar_data[0],
+                self._panel_polar_data[1],
             )
         else:
             raise NotImplementedError
@@ -374,12 +385,8 @@ class Panel:
             cm = 0.0
             return cd, cm
         elif self._panel_aero_model == "polar_data":
-            cd = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
-            )
-            cm = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
-            )
+            cd = np.interp(alpha, self._panel_polar_data[0], self._panel_polar_data[2])
+            cm = np.interp(alpha, self._panel_polar_data[0], self._panel_polar_data[3])
             return cd, cm
         else:
             raise NotImplementedError
@@ -487,7 +494,7 @@ class Panel:
                     color = "green"
             else:
                 # For semi-infinite filaments
-                x2 = x1 + 2 * self.chord * (self.va / jit_norm(self.va))
+                x2 = x1 + 1 * self.chord * (self.va / jit_norm(self.va))
                 color = "orange"
                 if filament.filament_direction == -1:
                     x1, x2 = x2, x1
