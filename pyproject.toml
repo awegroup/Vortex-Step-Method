@@ -92,6 +92,7 @@ dependencies = [
   "plotly",
   "nbformat",
   "pandas",
+  "neuralfoil"
 ]
 
 

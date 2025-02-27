@@ -9,21 +9,6 @@ import VSM.Wake as Wake
 from . import jit_cross, jit_norm, jit_dot
 
 
-# TODO: should change name to deal with multiple wings
-
-
-# KiteAerodynamics class
-# will have wings: list of wings
-# will have bridle_system, object, can calculate its own drag given a V_a
-# bridle line1 = [p1,p2,diameter], p1 = [x,y,z]
-# bridle_lines = [line1, line2, ...]
-
-
-# TODO: Changes
-# 1. WingAerodynamics --> BodyAerodynamics
-# 2. Adding bridle_line_system, to the possible input
-
-
 class BodyAerodynamics:
     """BodyAerodynamics class
 
