@@ -111,15 +111,20 @@ def test_polar_data_input():
     # Generate mock polar data, using inviscid standards
     aoa = np.arange(-180, 180, 1)
     airfoil_data = np.empty((len(aoa), 4))
+    airfoil_data_2 = np.empty((len(aoa), 4))
     for j, alpha in enumerate(aoa):
         cl, cd, cm = 2 * np.pi * np.deg2rad(alpha), 0.05, 0.01
         airfoil_data[j, 0] = np.deg2rad(alpha)
         airfoil_data[j, 1] = cl
         airfoil_data[j, 2] = cd
         airfoil_data[j, 3] = cm
+        airfoil_data_2[j, 0] = np.deg2rad(alpha)
+        airfoil_data_2[j, 1] = 2 * cl
+        airfoil_data_2[j, 2] = 2 * cd
+        airfoil_data_2[j, 3] = 2 * cm
 
     polar_data_test1 = ["polar_data", airfoil_data]
-    polar_data_test2 = ["polar_data", airfoil_data * 1.1]  # Slightly different data
+    polar_data_test2 = ["polar_data", airfoil_data_2]  # Slightly different data
 
     # Create two sections with slightly different polar data
     section1 = MockSection([0, 0, 0], [1, 0, 0], polar_data_test1)
@@ -136,7 +141,15 @@ def test_polar_data_input():
     assert len(panel._panel_polar_data) == len(airfoil_data)
 
     # Check if panel_polar_data is correctly averaged
-    expected_data = (airfoil_data + airfoil_data * 1.1) / 2
+    expected_data = np.empty((len(aoa), 4))
+    expected_data[:, 0] = airfoil_data[:, 0]
+    expected_data[:, 1] = (airfoil_data[:, 1] + airfoil_data_2[:, 1]) / 2
+    expected_data[:, 2] = (airfoil_data[:, 2] + airfoil_data_2[:, 2]) / 2
+    expected_data[:, 3] = (airfoil_data[:, 3] + airfoil_data_2[:, 3]) / 2
+
+    logging.info(f"expected_data: {expected_data}")
+    logging.info(f"panel._panel_polar_data: {panel._panel_polar_data}")
+
     assert np.allclose(panel._panel_polar_data, expected_data, atol=1e-6)
 
 
