@@ -68,6 +68,52 @@ class Wing:
         """
         self.sections.append(Section(LE_point, TE_point, aero_input))
 
+    def find_farthest_point_and_sort(self, sections):
+
+        # Helper function to calculate radial distance
+        def radial_distance(point1, point2):
+            return np.linalg.norm(np.array(point1) - np.array(point2))
+
+        # Find the point with positive y that is furthest from all others
+        farthest_point = None
+        max_distance = -1
+        for section in sections:
+            if section.LE_point[1] > 0:  # Ensure the y-coordinate is positive
+                total_distance = sum(
+                    radial_distance(section.LE_point, other.LE_point)
+                    for other in sections
+                )
+                if total_distance > max_distance:
+                    max_distance = total_distance
+                    farthest_point = section
+
+        if not farthest_point:
+            raise ValueError("No section has a positive y-coordinate.")
+
+        # Remove the farthest point from the list and use it as the starting point
+        sorted_sections = [farthest_point]
+        remaining_sections = [
+            section
+            for section in sections
+            if not np.allclose(section.LE_point, farthest_point.LE_point)
+        ]
+
+        # Iteratively sort the remaining sections based on proximity
+        while remaining_sections:
+            last_point = sorted_sections[-1].LE_point
+            # Find the closest point to the last sorted point
+            closest_index = min(
+                range(len(remaining_sections)),
+                key=lambda i: radial_distance(
+                    last_point, remaining_sections[i].LE_point
+                ),
+            )
+            # Add the closest section to the sorted list
+            closest_section = remaining_sections.pop(closest_index)
+            sorted_sections.append(closest_section)
+
+        return sorted_sections
+
     def refine_aerodynamic_mesh(self):
         """Refine the aerodynamic mesh of the wing
 
@@ -82,8 +128,14 @@ class Wing:
             new_sections (list): List of Section objects with refined aerodynamic mesh
         """
 
-        # Ensure that the sections are declared from left to right
-        self.sections = sorted(self.sections, key=lambda section: section.LE_point[1], reverse=True)
+        # # Ensure that the sections are declared from left to right
+        # self.sections = sorted(
+        #     self.sections, key=lambda section: section.LE_point[1], reverse=True
+        # )
+
+        # Perform additional sorting on z
+        self.sections = self.find_farthest_point_and_sort(self.sections)
+
         # Ensure we get 1 section more than the desired number of panels
         n_sections = self.n_panels + 1
         logging.debug(f"n_panels: {self.n_panels}")
@@ -237,12 +289,14 @@ class Wing:
 
         return new_sections
 
-    def interpolate_to_common_alpha(alpha_common, alpha_orig, CL_orig, CD_orig, CM_orig):
+    def interpolate_to_common_alpha(
+        self, alpha_common, alpha_orig, CL_orig, CD_orig, CM_orig
+    ):
         CL_common = np.interp(alpha_common, alpha_orig, CL_orig)
         CD_common = np.interp(alpha_common, alpha_orig, CD_orig)
         CM_common = np.interp(alpha_common, alpha_orig, CM_orig)
         return CL_common, CD_common, CM_common
-    
+
     def calculate_new_aero_input(
         self, aero_input, section_index, left_weight, right_weight
     ):
@@ -263,33 +317,46 @@ class Wing:
             )
         if aero_input[section_index][0] == "inviscid":
             return ["inviscid"]
-        # TODO: add test for polar data interpolation
         elif aero_input[section_index][0] == "polar_data":
             polar_left = aero_input[section_index][1]
             polar_right = aero_input[section_index + 1][1]
-            
-            # Unpack polar data
-            alpha_left, CL_left, CD_left, CM_left = polar_left
-            alpha_right, CL_right, CD_right, CM_right = polar_right
-            
-            # Create a common alpha array spanning the range of both alpha arrays
+
+            # Unpack polar data for (N,4) arrays:
+            # Each row is [alpha, cl, cd, cm]
+            alpha_left = polar_left[:, 0]
+            CL_left = polar_left[:, 1]
+            CD_left = polar_left[:, 2]
+            CM_left = polar_left[:, 3]
+
+            alpha_right = polar_right[:, 0]
+            CL_right = polar_right[:, 1]
+            CD_right = polar_right[:, 2]
+            CM_right = polar_right[:, 3]
+
+            # Create a common alpha array spanning the union of both alpha arrays
             alpha_common = np.union1d(alpha_left, alpha_right)
-            
-            # Interpolate both polars to this common alpha array
-            CL_left_common, CD_left_common, CM_left_common = self.interpolate_to_common_alpha(
-                alpha_common, alpha_left, CL_left, CD_left, CM_left
+
+            # Interpolate both sets to the common alpha array.
+            # Assume interpolate_to_common_alpha returns arrays for Cl, Cd, and Cm.
+            CL_left_common, CD_left_common, CM_left_common = (
+                self.interpolate_to_common_alpha(
+                    alpha_common, alpha_left, CL_left, CD_left, CM_left
+                )
             )
-            CL_right_common, CD_right_common, CM_right_common = self.interpolate_to_common_alpha(
-                alpha_common, alpha_right, CL_right, CD_right, CM_right
+            CL_right_common, CD_right_common, CM_right_common = (
+                self.interpolate_to_common_alpha(
+                    alpha_common, alpha_right, CL_right, CD_right, CM_right
+                )
             )
-            
-            # Interpolate using the given weights
+
+            # Interpolate using the given weights.
             CL_interp = CL_left_common * left_weight + CL_right_common * right_weight
             CD_interp = CD_left_common * left_weight + CD_right_common * right_weight
             CM_interp = CM_left_common * left_weight + CM_right_common * right_weight
-            
-            return ["polar_data", [alpha_common, CL_interp, CD_interp, CM_interp]]
-        
+
+            # Return the interpolated polar data in an (N,4) array.
+            new_polar = np.column_stack((alpha_common, CL_interp, CD_interp, CM_interp))
+            return ["polar_data", new_polar]
         elif aero_input[section_index][0] == "lei_airfoil_breukels":
             tube_diameter_left = aero_input[section_index][1][0]
             tube_diameter_right = aero_input[section_index + 1][1][0]
@@ -310,10 +377,11 @@ class Wing:
                 "lei_airfoil_breukels",
                 np.array([tube_diameter_i, chamber_height_i]),
             ]
-        
-        else:
-            raise NotImplementedError(f"Unsupported aero model: {aero_input[section_index][0]}")
 
+        else:
+            raise NotImplementedError(
+                f"Unsupported aero model: {aero_input[section_index][0]}"
+            )
 
     def refine_mesh_by_splitting_provided_sections(self):
         """Refine the aerodynamic mesh of the wing by splitting the provided sections
