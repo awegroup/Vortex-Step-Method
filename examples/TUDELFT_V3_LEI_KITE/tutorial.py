@@ -12,18 +12,18 @@ from VSM.plotting import (
 )
 from VSM.interactive import interactive_plot
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 
-
-file_path = (
-    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
-)
+file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "wing_geometry.csv"
 path_polar_data_dir = (
     Path(PROJECT_DIR)
     / "examples"
     / "TUDELFT_V3_LEI_KITE"
     / "polar_engineering"
     / "csv_files"
+)
+path_bridle_data = (
+    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "bridle_lines.csv"
 )
 n_panels = 40
 spanwise_panel_distribution = "linear"
@@ -40,6 +40,16 @@ body_aero_polar = BodyAerodynamics.from_file(
     is_with_corrected_polar=True,
     path_polar_data_dir=path_polar_data_dir,
 )
+print(f"\nCreating corrected polar input with bridles")
+wing_instance = Wing(n_panels, spanwise_panel_distribution)
+body_aero_polar_with_bridles = BodyAerodynamics.from_file(
+    wing_instance,
+    file_path,
+    is_with_corrected_polar=True,
+    path_polar_data_dir=path_polar_data_dir,
+    is_with_bridles=True,
+    path_bridle_data=path_bridle_data,
+)
 
 Umag = 3.15
 angle_of_attack = 6.8
@@ -48,7 +58,7 @@ yaw_rate = 0
 body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-VSM_base = Solver()
+solver_base_version = Solver()
 
 #### INTERACTIVE PLOT
 interactive_plot(
@@ -60,13 +70,7 @@ interactive_plot(
     is_with_aerodynamic_details=True,
 )
 
-save_folder = (
-    Path(PROJECT_DIR)
-    / "examples"
-    / "TUDELFT_V3_LEI_KITE"
-    / "polar_engineering"
-    / "results_3D"
-)
+save_folder = Path(PROJECT_DIR) / "examples" / "TUDELFT_V3_LEI_KITE"
 
 ## plotting alpha-polar
 path_cfd_lebesque = (
@@ -77,17 +81,16 @@ path_cfd_lebesque = (
     / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
 )
 plot_polars(
-    solver_list=[
-        VSM_base,
-        VSM_base,
-    ],
+    solver_list=[solver_base_version, solver_base_version, solver_base_version],
     body_aero_list=[
         body_aero_breukels,
         body_aero_polar,
+        body_aero_polar_with_bridles,
     ],
     label_list=[
         "VSM Breukels",
         "VSM Polar",
+        "VSM Polar with Bridles",
         "CFD_Lebesque Rey 30e5",
     ],
     literature_path_list=[path_cfd_lebesque],
@@ -106,8 +109,8 @@ plot_polars(
 ### plot beta sweep
 plot_polars(
     solver_list=[
-        VSM_base,
-        VSM_base,
+        solver_base_version,
+        solver_base_version,
     ],
     body_aero_list=[
         body_aero_breukels,
@@ -124,9 +127,9 @@ plot_polars(
     side_slip=0,
     yaw_rate=0,
     Umag=3.15,
-    title=f"betasweep_n_panels_130_linear",
+    title=f"betasweep",
     data_type=".pdf",
-    save_path=Path(save_folder) / "polars",
+    save_path=Path(save_folder),
     is_save=True,
     is_show=True,
 )

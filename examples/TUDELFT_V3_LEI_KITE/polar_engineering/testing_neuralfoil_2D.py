@@ -4,6 +4,7 @@ import numpy as np
 import math
 import itertools
 from pathlib import Path
+import neuralfoil as nf
 from VSM.plot_styling import set_plot_style
 
 
@@ -18,7 +19,6 @@ def run_neuralfoil(alpha_array_deg, panel_index):
     Returns:
         DataFrame: A pandas DataFrame containing alpha, CL, CD, and CM.
     """
-    import neuralfoil as nf
 
     # Validate the panel_index
     if not (0 <= panel_index <= 34):

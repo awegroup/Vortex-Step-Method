@@ -19,88 +19,6 @@ from VSM.interactive import interactive_plot
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 
-
-def create_wing_aero(
-    file_path,
-    n_panels,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=False,
-    path_polar_data_dir="",
-    is_with_bridles=False,
-    path_bridle_data=None,
-):
-    df = pd.read_csv(file_path, delimiter=",")  # , skiprows=1)
-    LE_x_array = df["LE_x"].values
-    LE_y_array = df["LE_y"].values
-    LE_z_array = df["LE_z"].values
-    TE_x_array = df["TE_x"].values
-    TE_y_array = df["TE_y"].values
-    TE_z_array = df["TE_z"].values
-    d_tube_array = df["d_tube"].values
-    camber_array = df["camber"].values
-
-    ## populating this list
-    rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs = []
-
-    for i in range(len(LE_x_array)):
-        LE = np.array([LE_x_array[i], LE_y_array[i], LE_z_array[i]])
-        TE = np.array([TE_x_array[i], TE_y_array[i], TE_z_array[i]])
-        rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs.append(
-            [LE, TE, ["lei_airfoil_breukels", [d_tube_array[i], camber_array[i]]]]
-        )
-    CAD_wing = Wing(n_panels, spanwise_panel_distribution)
-
-    for i, CAD_rib_i in enumerate(
-        rib_list_from_CAD_LE_TE_and_surfplan_d_tube_camber_19ribs
-    ):
-        CAD_rib_i_0 = CAD_rib_i[0]
-        CAD_rib_i_1 = CAD_rib_i[1]
-
-        if is_with_corrected_polar:
-            ### using corrected polar
-            df_polar_data = pd.read_csv(
-                Path(path_polar_data_dir) / f"corrected_polar_{i}.csv"
-            )
-            alpha = df_polar_data["alpha"].values
-            cl = df_polar_data["cl"].values
-            cd = df_polar_data["cd"].values
-            cm = df_polar_data["cm"].values
-            polar_data = ["polar_data", np.array([alpha, cl, cd, cm])]
-            CAD_wing.add_section(CAD_rib_i_0, CAD_rib_i_1, polar_data)
-        else:
-            ### using breukels
-            CAD_wing.add_section(CAD_rib_i_0, CAD_rib_i_1, CAD_rib_i[2])
-
-    if is_with_bridles:
-        pd_bridle_lines = pd.read_csv(path_bridle_data, delimiter=",")
-        bridle_lines = []
-        for i in range(len(pd_bridle_lines)):
-            bridle_lines.append(
-                [
-                    np.array(
-                        [
-                            pd_bridle_lines["p1_x"].values[i],
-                            pd_bridle_lines["p1_y"].values[i],
-                            pd_bridle_lines["p1_z"].values[i],
-                        ]
-                    ),
-                    np.array(
-                        [
-                            pd_bridle_lines["p2_x"].values[i],
-                            pd_bridle_lines["p2_y"].values[i],
-                            pd_bridle_lines["p2_x"].values[i],
-                        ]
-                    ),
-                    pd_bridle_lines["diameter"].values[i],
-                ]
-            )
-        wing_aero = BodyAerodynamics([CAD_wing], bridle_lines)
-        return wing_aero
-    else:
-        wing_aero = BodyAerodynamics([CAD_wing])
-        return wing_aero
-
-
 file_path = (
     Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
 )
@@ -118,24 +36,33 @@ side_slip = 0
 yaw_rate = 0
 Umag = 3.15
 spanwise_panel_distribution = "linear"
-wing_aero_breukels = create_wing_aero(
+# body_aero_breukels = create_wing_aero(
+#     file_path,
+#     n_panels,
+#     spanwise_panel_distribution,
+#     is_with_corrected_polar=False,
+#     path_polar_data_dir=path_polar_data_dir,
+# )
+wing_instance = Wing(n_panels, spanwise_panel_distribution)
+body_aero_breukels = BodyAerodynamics.from_file(
+    wing_instance,
     file_path,
-    n_panels,
-    spanwise_panel_distribution,
     is_with_corrected_polar=False,
     path_polar_data_dir=path_polar_data_dir,
 )
-wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+
+body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 VSM_base = Solver(
     aerodynamic_model_type="VSM",
     is_with_artificial_damping=False,
     is_new_vector_definition=False,
 )
-results_without = VSM_base.solve(wing_aero_breukels)
+results_without = VSM_base.solve(body_aero_breukels)
 print(f'lift: {results_without["lift"]}, drag: {results_without["drag"]}')
 
+breakpoint()
 ### testing with bridles
-wing_aero_breukels = create_wing_aero(
+body_aero_breukels = create_wing_aero(
     file_path,
     n_panels,
     spanwise_panel_distribution,
@@ -147,13 +74,13 @@ wing_aero_breukels = create_wing_aero(
     / "TUDELFT_V3_LEI_KITE"
     / "bridle_lines.csv",
 )
-wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 VSM_base = Solver(
     aerodynamic_model_type="VSM",
     is_with_artificial_damping=False,
     is_new_vector_definition=False,
 )
-results_with = VSM_base.solve(wing_aero_breukels)
+results_with = VSM_base.solve(body_aero_breukels)
 print(f'WITH: lift: {results_with["lift"]}, drag: {results_with["drag"]}')
 # breakpoint()
 ####
@@ -164,7 +91,7 @@ wing_aero_polar = create_wing_aero(
     is_with_corrected_polar=True,
     path_polar_data_dir=path_polar_data_dir,
 )
-wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
 wing_aero_polar_35 = create_wing_aero(
@@ -210,7 +137,7 @@ VSM_with_stall_correction = Solver(
 
 # ## Plotting GEOMETRY
 # plot_geometry(
-#     wing_aero_breukels,
+#     body_aero_breukels,
 #     title=" ",
 #     data_type=".svg",
 #     save_path=" ",
@@ -220,11 +147,11 @@ VSM_with_stall_correction = Solver(
 #     view_azimuth=-120,
 # )
 
-VSM_base.solve(wing_aero_breukels)
+VSM_base.solve(body_aero_breukels)
 
 # #### INTERACTIVE PLOT
 # interactive_plot(
-#     wing_aero_breukels,
+#     body_aero_breukels,
 #     vel=Umag,
 #     angle_of_attack=angle_of_attack,
 #     side_slip=side_slip,
@@ -247,19 +174,19 @@ save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
 # for angle_of_attack in [6.8]:
 #     for side_slip in [10, 20]:
 #         print(f"\nangle_of_attack: {angle_of_attack}, side_slip: {side_slip}")
-#         wing_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+#         body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 #         wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
 #         plot_distribution(
 #             y_coordinates_list=[
-#                 [panels.aerodynamic_center[1] for panels in wing_aero_breukels.panels],
-#                 [panels.aerodynamic_center[1] for panels in wing_aero_breukels.panels],
+#                 [panels.aerodynamic_center[1] for panels in body_aero_breukels.panels],
+#                 [panels.aerodynamic_center[1] for panels in body_aero_breukels.panels],
 #                 [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
 #                 [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
 #             ],
 #             results_list=[
-#                 VSM_base.solve(wing_aero_breukels),
-#                 VSM_with_stall_correction.solve(wing_aero_breukels),
+#                 VSM_base.solve(body_aero_breukels),
+#                 VSM_with_stall_correction.solve(body_aero_breukels),
 #                 VSM_base.solve(wing_aero_polar),
 #                 VSM_with_stall_correction.solve(wing_aero_polar),
 #             ],
@@ -294,9 +221,9 @@ plot_polars(
         VSM_with_stall_correction,
     ],
     wing_aero_list=[
-        # wing_aero_breukels,
+        # body_aero_breukels,
         # wing_aero_polar,
-        # wing_aero_breukels,
+        # body_aero_breukels,
         # wing_aero_polar_35,
         # wing_aero_polar_70,
         # wing_aero_polar_105,
@@ -336,9 +263,9 @@ plot_polars(
 #         # VSM_with_stall_correction,
 #     ],
 #     wing_aero_list=[
-#         wing_aero_breukels,
+#         body_aero_breukels,
 #         wing_aero_polar,
-#         wing_aero_breukels,
+#         body_aero_breukels,
 #         wing_aero_polar,
 #         # wing_aero_polar_35,
 #         # wing_aero_polar_70,
@@ -383,8 +310,8 @@ plot_polars(
 # )
 # wing_aero_list = (
 #     [
-#         wing_aero_breukels,
-#         wing_aero_breukels,
+#         body_aero_breukels,
+#         body_aero_breukels,
 #         wing_aero_polar,
 #         wing_aero_polar,
 #     ],

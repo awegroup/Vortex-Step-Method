@@ -317,19 +317,27 @@ class Wing:
             )
         if aero_input[section_index][0] == "inviscid":
             return ["inviscid"]
-        # TODO: add test for polar data interpolation
         elif aero_input[section_index][0] == "polar_data":
             polar_left = aero_input[section_index][1]
             polar_right = aero_input[section_index + 1][1]
 
-            # Unpack polar data
-            alpha_left, CL_left, CD_left, CM_left = polar_left
-            alpha_right, CL_right, CD_right, CM_right = polar_right
+            # Unpack polar data for (N,4) arrays:
+            # Each row is [alpha, cl, cd, cm]
+            alpha_left = polar_left[:, 0]
+            CL_left = polar_left[:, 1]
+            CD_left = polar_left[:, 2]
+            CM_left = polar_left[:, 3]
 
-            # Create a common alpha array spanning the range of both alpha arrays
+            alpha_right = polar_right[:, 0]
+            CL_right = polar_right[:, 1]
+            CD_right = polar_right[:, 2]
+            CM_right = polar_right[:, 3]
+
+            # Create a common alpha array spanning the union of both alpha arrays
             alpha_common = np.union1d(alpha_left, alpha_right)
 
-            # Interpolate both polars to this common alpha array
+            # Interpolate both sets to the common alpha array.
+            # Assume interpolate_to_common_alpha returns arrays for Cl, Cd, and Cm.
             CL_left_common, CD_left_common, CM_left_common = (
                 self.interpolate_to_common_alpha(
                     alpha_common, alpha_left, CL_left, CD_left, CM_left
@@ -341,13 +349,14 @@ class Wing:
                 )
             )
 
-            # Interpolate using the given weights
+            # Interpolate using the given weights.
             CL_interp = CL_left_common * left_weight + CL_right_common * right_weight
             CD_interp = CD_left_common * left_weight + CD_right_common * right_weight
             CM_interp = CM_left_common * left_weight + CM_right_common * right_weight
 
-            return ["polar_data", [alpha_common, CL_interp, CD_interp, CM_interp]]
-
+            # Return the interpolated polar data in an (N,4) array.
+            new_polar = np.column_stack((alpha_common, CL_interp, CD_interp, CM_interp))
+            return ["polar_data", new_polar]
         elif aero_input[section_index][0] == "lei_airfoil_breukels":
             tube_diameter_left = aero_input[section_index][1][0]
             tube_diameter_right = aero_input[section_index + 1][1][0]

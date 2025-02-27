@@ -91,6 +91,8 @@ dependencies = [
   "screeninfo",
   "plotly",
   "nbformat",
+  "pandas",
+  "neuralfoil"
 ]
 
 
