@@ -110,6 +110,91 @@ class BodyAerodynamics:
         self.cf_cable = 0.01
 
     ###########################
+    ## CLASS METHODS ###
+    ########################
+    @classmethod
+    def from_file(
+        cls,
+        wing_instance,
+        file_path,
+        is_with_corrected_polar=False,
+        path_polar_data_dir="",
+        is_with_bridles=False,
+        path_bridle_data=None,
+    ):
+        """Instantiate a BodyAerodynamics object with or without bridles
+
+        Args:
+            wing_instance (Wing): Wing instance
+            file_path (str): Path to the wing geometry file
+                a .csv structured with columns: LE_x,LE_y,LE_z,TE_x,TE_y,TE_z,d_tube,camber
+            is_with_corrected_polar (bool, optional): Whether to use corrected polar data. Defaults to False.
+            path_polar_data_dir (str, optional): Path to the corrected polar data directory. Defaults to "".
+                a .csv structured with columsn: alpha,cl,cd,cm
+            is_with_bridles (bool, optional): Whether to include bridles. Defaults to False.
+            path_bridle_data (str, optional): Path to the bridle data file. Defaults to None.
+                a .csv structured with columsn: p1_x,p1_y,p1_z,p2_x,p2_y,p2_z,diameter
+
+        Returns:
+            BodyAerodynamics: BodyAerodynamics instance
+        """
+        # Read wing geometry and airfoil parameters from file
+        df = pd.read_csv(file_path)
+
+        # Build rib list: each rib is [LE, TE, airfoil data]
+        ribs = [
+            [LE, TE, ["lei_airfoil_breukels", [d, c]]]
+            for LE, TE, d, c in zip(
+                np.stack(
+                    (df["LE_x"].values, df["LE_y"].values, df["LE_z"].values), axis=-1
+                ),
+                np.stack(
+                    (df["TE_x"].values, df["TE_y"].values, df["TE_z"].values), axis=-1
+                ),
+                df["d_tube"].values,
+                df["camber"].values,
+            )
+        ]
+
+        # Add sections to the wing instance using either corrected polar data or default airfoil data
+        for i, rib in enumerate(ribs):
+            LE, TE, airfoil_data = rib
+            if is_with_corrected_polar:
+                df_polar = pd.read_csv(
+                    Path(path_polar_data_dir) / f"corrected_polar_{i}.csv"
+                )
+                # Create polar data with (N, 4) format: each row is [alpha, cl, cd, cm]
+                polar_data = [
+                    "polar_data",
+                    np.column_stack(
+                        (
+                            df_polar["alpha"].values,
+                            df_polar["cl"].values,
+                            df_polar["cd"].values,
+                            df_polar["cm"].values,
+                        )
+                    ),
+                ]
+                wing_instance.add_section(LE, TE, polar_data)
+            else:
+                wing_instance.add_section(LE, TE, airfoil_data)
+
+        # Instantiate BodyAerodynamics with or without bridles
+        if is_with_bridles:
+            df_bridle = pd.read_csv(path_bridle_data)
+            bridle_lines = [
+                [
+                    np.array([row["p1_x"], row["p1_y"], row["p1_z"]]),
+                    np.array([row["p2_x"], row["p2_y"], row["p2_z"]]),
+                    row["diameter"],
+                ]
+                for _, row in df_bridle.iterrows()
+            ]
+            return cls([wing_instance], bridle_lines)
+        else:
+            return cls([wing_instance])
+
+    ###########################
     ## GETTER FUNCTIONS
     ###########################
 
@@ -977,84 +1062,3 @@ class BodyAerodynamics:
         drag_j = dynamic_pressure_area * cd_t * dir_D
 
         return lift_j + drag_j
-
-
-def instantiate_body_aerodynamics(
-    wing_instance,
-    file_path,
-    is_with_corrected_polar=False,
-    path_polar_data_dir="",
-    is_with_bridles=False,
-    path_bridle_data=None,
-):
-    """Instantiate a BodyAerodynamics object with or without bridles
-
-    Args:
-        wing_instance (Wing): Wing instance
-        file_path (str): Path to the wing geometry file
-            a .csv structured with columns: LE_x,LE_y,LE_z,TE_x,TE_y,TE_z,d_tube,camber
-        is_with_corrected_polar (bool, optional): Whether to use corrected polar data. Defaults to False.
-        path_polar_data_dir (str, optional): Path to the corrected polar data directory. Defaults to "".
-            a .csv structured with columsn: alpha,cl,cd,cm
-        is_with_bridles (bool, optional): Whether to include bridles. Defaults to False.
-        path_bridle_data (str, optional): Path to the bridle data file. Defaults to None.
-            a .csv structured with columsn: p1_x,p1_y,p1_z,p2_x,p2_y,p2_z,diameter
-
-    Returns:
-        BodyAerodynamics: BodyAerodynamics instance
-    """
-    # Read wing geometry and airfoil parameters from file
-    df = pd.read_csv(file_path)
-
-    # Build rib list: each rib is [LE, TE, airfoil data]
-    ribs = [
-        [LE, TE, ["lei_airfoil_breukels", [d, c]]]
-        for LE, TE, d, c in zip(
-            np.stack(
-                (df["LE_x"].values, df["LE_y"].values, df["LE_z"].values), axis=-1
-            ),
-            np.stack(
-                (df["TE_x"].values, df["TE_y"].values, df["TE_z"].values), axis=-1
-            ),
-            df["d_tube"].values,
-            df["camber"].values,
-        )
-    ]
-
-    # Add sections to the wing instance using either corrected polar data or default airfoil data
-    for i, rib in enumerate(ribs):
-        LE, TE, airfoil_data = rib
-        if is_with_corrected_polar:
-            df_polar = pd.read_csv(
-                Path(path_polar_data_dir) / f"corrected_polar_{i}.csv"
-            )
-            # Create polar data with (N, 4) format: each row is [alpha, cl, cd, cm]
-            polar_data = [
-                "polar_data",
-                np.column_stack(
-                    (
-                        df_polar["alpha"].values,
-                        df_polar["cl"].values,
-                        df_polar["cd"].values,
-                        df_polar["cm"].values,
-                    )
-                ),
-            ]
-            wing_instance.add_section(LE, TE, polar_data)
-        else:
-            wing_instance.add_section(LE, TE, airfoil_data)
-
-    # Instantiate BodyAerodynamics with or without bridles
-    if is_with_bridles:
-        df_bridle = pd.read_csv(path_bridle_data)
-        bridle_lines = [
-            [
-                np.array([row["p1_x"], row["p1_y"], row["p1_z"]]),
-                np.array([row["p2_x"], row["p2_y"], row["p2_z"]]),
-                row["diameter"],
-            ]
-            for _, row in df_bridle.iterrows()
-        ]
-        return BodyAerodynamics([wing_instance], bridle_lines)
-    else:
-        return BodyAerodynamics([wing_instance])
