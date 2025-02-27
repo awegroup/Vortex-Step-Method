@@ -817,7 +817,7 @@ def plot_distribution(
         show_plot(fig)
 
 
-def generate_polar_data(
+def generate_3D_polar_data(
     solver,
     body_aero,
     angle_range,
@@ -970,7 +970,7 @@ def plot_polars(
     # generating polar data
     polar_data_list = []
     for i, (solver, body_aero) in enumerate(zip(solver_list, body_aero_list)):
-        polar_data, reynolds_number = generate_polar_data(
+        polar_data, reynolds_number = generate_3D_polar_data(
             solver=solver,
             body_aero=body_aero,
             angle_range=angle_range,
