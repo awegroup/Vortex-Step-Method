@@ -434,11 +434,7 @@ def running_VSM(
     wing_aero.va_initialize(vel, angle_of_attack, side_slip, yaw_rate)
 
     # configuring the solver
-    VSM_solver = Solver(
-        aerodynamic_model_type="VSM",
-        is_with_artificial_damping=True,
-        is_new_vector_definition=True,
-    )
+    VSM_solver = Solver()
     # solving
     results = VSM_solver.solve(wing_aero)
     return results

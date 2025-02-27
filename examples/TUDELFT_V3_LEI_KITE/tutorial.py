@@ -9,22 +9,16 @@ from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import (
     plot_polars,
+    plot_distribution,
 )
 from VSM.interactive import interactive_plot
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+path_data_TUDELFT_V3_LEI_KITE = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE"
 
-file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "wing_geometry.csv"
-path_polar_data_dir = (
-    Path(PROJECT_DIR)
-    / "examples"
-    / "TUDELFT_V3_LEI_KITE"
-    / "polar_engineering"
-    / "csv_files"
-)
-path_bridle_data = (
-    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "bridle_lines.csv"
-)
+file_path = Path(path_data_TUDELFT_V3_LEI_KITE) / "wing_geometry.csv"
+path_polar_data_dir = Path(path_data_TUDELFT_V3_LEI_KITE) / "2D_polar_input"
+path_bridle_data = Path(path_data_TUDELFT_V3_LEI_KITE) / "bridle_lines.csv"
 n_panels = 40
 spanwise_panel_distribution = "linear"
 wing_instance = Wing(n_panels, spanwise_panel_distribution)
@@ -133,3 +127,29 @@ plot_polars(
     is_save=True,
     is_show=True,
 )
+# ## plotting distributions
+for angle_of_attack in [6.8]:
+    for side_slip in [5]:
+        print(f"\nangle_of_attack: {angle_of_attack}, side_slip: {side_slip}")
+        body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+        body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+
+        plot_distribution(
+            y_coordinates_list=[
+                [panels.aerodynamic_center[1] for panels in body_aero_breukels.panels],
+                [panels.aerodynamic_center[1] for panels in body_aero_polar.panels],
+            ],
+            results_list=[
+                solver_base_version.solve(body_aero_breukels),
+                solver_base_version.solve(body_aero_polar),
+            ],
+            label_list=[
+                "VSM Breukels",
+                "VSM Corrected",
+            ],
+            title=f"spanwise_distribution_effects_alpha_{angle_of_attack:.1f}_beta_{side_slip:.1f}",
+            data_type=".pdf",
+            save_path=Path(save_folder),
+            is_save=True,
+            is_show=False,
+        )
