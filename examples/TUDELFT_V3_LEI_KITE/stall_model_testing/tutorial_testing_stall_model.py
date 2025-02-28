@@ -1,28 +1,18 @@
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
-import pickle
-import os
+
 import pandas as pd
 from pathlib import Path
 from VSM.WingGeometry import Wing
 from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
-from VSM.plotting import (
-    plot_polars,
-    plot_distribution,
-    plot_geometry,
-    plot_panel_coefficients,
-    process_panel_coefficients,
-)
+from VSM.plotting import plot_polars, plot_distribution
 from VSM.interactive import interactive_plot
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
-file_path = (
-    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "geometry_corrected.csv"
-)
-
+file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_LEI_KITE" / "wing_geometry.csv"
 path_polar_data_dir = (
     Path(PROJECT_DIR)
     / "examples"
@@ -30,345 +20,169 @@ path_polar_data_dir = (
     / "polar_engineering"
     / "csv_files"
 )
-n_panels = 20
-angle_of_attack = 10
-side_slip = 0
-yaw_rate = 0
-Umag = 3.15
+
+n_panels = 150
 spanwise_panel_distribution = "linear"
-# body_aero_breukels = create_wing_aero(
-#     file_path,
-#     n_panels,
-#     spanwise_panel_distribution,
-#     is_with_corrected_polar=False,
-#     path_polar_data_dir=path_polar_data_dir,
-# )
 wing_instance = Wing(n_panels, spanwise_panel_distribution)
+print(f"Creating breukels input")
 body_aero_breukels = BodyAerodynamics.from_file(
+    wing_instance, file_path, is_with_corrected_polar=False
+)
+print(f"Creating corrected polar input")
+wing_instance = Wing(n_panels, spanwise_panel_distribution)
+body_aero_polar = BodyAerodynamics.from_file(
     wing_instance,
     file_path,
-    is_with_corrected_polar=False,
+    is_with_corrected_polar=True,
     path_polar_data_dir=path_polar_data_dir,
 )
+
+Umag = 3.15
+angle_of_attack = 6.5
+side_slip = 0
+yaw_rate = 0
+alpha_range = [15, 16, 17, 18, 19, 20]
+
 
 body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-VSM_base = Solver(
-    aerodynamic_model_type="VSM",
-    is_with_artificial_damping=False,
-    is_new_vector_definition=False,
-)
-results_without = VSM_base.solve(body_aero_breukels)
-print(f'lift: {results_without["lift"]}, drag: {results_without["drag"]}')
+body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-breakpoint()
-### testing with bridles
-body_aero_breukels = create_wing_aero(
-    file_path,
-    n_panels,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=False,
-    path_polar_data_dir=path_polar_data_dir,
-    is_with_bridles=True,
-    path_bridle_data=Path(PROJECT_DIR)
-    / "data"
+solver_base_version = Solver()
+solver_smooth_circulation_04 = Solver(
+    is_smooth_circulation=True, smoothness_factor=0.04
+)
+solver_smooth_circulation_08 = Solver(
+    is_smooth_circulation=True, smoothness_factor=0.08
+)
+solver_smooth_circulation_12 = Solver(
+    is_smooth_circulation=True, smoothness_factor=0.08
+)
+solver_smooth_circulation_16 = Solver(
+    is_smooth_circulation=True, smoothness_factor=0.16
+)
+
+save_folder = (
+    Path(PROJECT_DIR)
+    / "examples"
     / "TUDELFT_V3_LEI_KITE"
-    / "bridle_lines.csv",
+    / "stall_model_testing"
+    / "results"
 )
-body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-VSM_base = Solver(
-    aerodynamic_model_type="VSM",
-    is_with_artificial_damping=False,
-    is_new_vector_definition=False,
-)
-results_with = VSM_base.solve(body_aero_breukels)
-print(f'WITH: lift: {results_with["lift"]}, drag: {results_with["drag"]}')
-# breakpoint()
-####
-wing_aero_polar = create_wing_aero(
-    file_path,
-    n_panels,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
-)
-body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-
-wing_aero_polar_35 = create_wing_aero(
-    file_path,
-    35,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
-)
-wing_aero_polar_70 = create_wing_aero(
-    file_path,
-    70,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
-)
-wing_aero_polar_105 = create_wing_aero(
-    file_path,
-    105,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
-)
-wing_aero_polar_140 = create_wing_aero(
-    file_path,
-    140,
-    spanwise_panel_distribution,
-    is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
-)
-
-#### Solvers
-VSM_base = Solver(
-    aerodynamic_model_type="VSM",
-    is_with_artificial_damping=False,
-    is_new_vector_definition=False,
-)
-VSM_with_stall_correction = Solver(
-    aerodynamic_model_type="VSM",
-    is_with_artificial_damping=True,
-    is_new_vector_definition=False,
-)
-
-# ## Plotting GEOMETRY
-# plot_geometry(
-#     body_aero_breukels,
-#     title=" ",
-#     data_type=".svg",
-#     save_path=" ",
-#     is_save=False,
-#     is_show=True,
-#     view_elevation=15,
-#     view_azimuth=-120,
-# )
-
-VSM_base.solve(body_aero_breukels)
-
-# #### INTERACTIVE PLOT
-# interactive_plot(
-#     body_aero_breukels,
-#     vel=Umag,
-#     angle_of_attack=angle_of_attack,
-#     side_slip=side_slip,
-#     yaw_rate=yaw_rate,
-#     is_with_aerodynamic_details=True,
-# )
-# breakpoint()
-# # interactive_plot(
-# #     wing_aero_CAD_19ribs,
-# #     vel=Umag,
-# #     angle_of_attack=angle_of_attack,
-# #     side_slip=10,
-# #     yaw_rate=yaw_rate,
-# #     is_with_aerodynamic_details=True,
-# # )
-
-save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
-
-# # ## plotting distributions
-# for angle_of_attack in [6.8]:
-#     for side_slip in [10, 20]:
-#         print(f"\nangle_of_attack: {angle_of_attack}, side_slip: {side_slip}")
-#         body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-#         wing_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-
-#         plot_distribution(
-#             y_coordinates_list=[
-#                 [panels.aerodynamic_center[1] for panels in body_aero_breukels.panels],
-#                 [panels.aerodynamic_center[1] for panels in body_aero_breukels.panels],
-#                 [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
-#                 [panels.aerodynamic_center[1] for panels in wing_aero_polar.panels],
-#             ],
-#             results_list=[
-#                 VSM_base.solve(body_aero_breukels),
-#                 VSM_with_stall_correction.solve(body_aero_breukels),
-#                 VSM_base.solve(wing_aero_polar),
-#                 VSM_with_stall_correction.solve(wing_aero_polar),
-#             ],
-#             label_list=[
-#                 "VSM Breukels",
-#                 "VSM Breukels stall",
-#                 "VSM Corrected",
-#                 "VSM Corrected stall",
-#             ],
-#             title=f"spanwise_distribution_effects_alpha_{angle_of_attack:.1f}_beta_{side_slip:.1f}_smoothing",
-#             data_type=".pdf",
-#             save_path=Path(save_folder) / "spanwise_distributions",
-#             is_save=True,
-#             is_show=False,
-#         )
 
 ## plotting alpha-polar
-path_cfd_lebesque = (
-    Path(PROJECT_DIR)
-    / "data"
-    / "TUDELFT_V3_LEI_KITE"
-    / "literature_results"
-    / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
-)
+# path_cfd_lebesque = (
+#     Path(PROJECT_DIR)
+#     / "data"
+#     / "TUDELFT_V3_LEI_KITE"
+#     / "literature_results"
+#     / "V3_CL_CD_RANS_Lebesque_2024_Rey_300e4.csv"
+# )
 plot_polars(
     solver_list=[
-        # VSM_base,
-        # VSM_base,
-        # VSM_with_stall_correction,
-        # VSM_with_stall_correction,
-        # VSM_with_stall_correction,
-        VSM_with_stall_correction,
+        solver_base_version,
+        solver_base_version,
+        solver_smooth_circulation_08,
+        solver_smooth_circulation_08,
+        solver_smooth_circulation_12,
+        solver_smooth_circulation_16,
     ],
-    wing_aero_list=[
-        # body_aero_breukels,
-        # wing_aero_polar,
-        # body_aero_breukels,
-        # wing_aero_polar_35,
-        # wing_aero_polar_70,
-        # wing_aero_polar_105,
-        wing_aero_polar_140,
+    body_aero_list=[
+        body_aero_breukels,
+        body_aero_breukels,
+        body_aero_polar,
+        body_aero_polar,
+        body_aero_polar,
+        body_aero_polar,
     ],
     label_list=[
-        # "VSM Breukels",
-        # "VSM Corrected",
-        # "VSM Breukels (+stall)",
-        # "35 VSM Corrected (+stall)",
-        # "70 VSM Corrected (+stall)",
-        # "105 VSM Corrected (+stall)",
-        "140 VSM Corrected (+stall)",
-        "CFD_Lebesque Rey 30e5",
+        "Breukels",
+        "Breukels + smooth 0.08",
+        "Polar",
+        "Polar + smooth 0.08",
+        "Polar + smooth 0.12",
+        "Polar + smooth 0.16",
     ],
-    literature_path_list=[path_cfd_lebesque],
-    angle_range=[3, 6],  # np.linspace(-10, 25, 10),
+    literature_path_list=[],
+    angle_range=alpha_range,  # np.linspace(-10, 25, 10),
     angle_type="angle_of_attack",
     angle_of_attack=0,
     side_slip=0,
     yaw_rate=0,
     Umag=Umag,
-    title=f"alphasweep_n_panels",
+    title=f"alphasweep",
     data_type=".pdf",
-    save_path=Path(save_folder) / "polars",
+    save_path=Path(save_folder),
     is_save=True,
-    is_show=True,
+    is_show=False,
 )
+
+# generate results
+y_coordinates = [panels.aerodynamic_center[1] for panels in body_aero_breukels.panels]
+
+for alpha in alpha_range:
+    results_base_breukels = solver_base_version.solve(body_aero_breukels)
+    results_base_polar = solver_base_version.solve(body_aero_polar)
+    result_stall_08_breukels = solver_smooth_circulation_08.solve(body_aero_breukels)
+    result_stall_08_polar = solver_smooth_circulation_08.solve(body_aero_polar)
+    results_stall_12_polar = solver_smooth_circulation_12.solve(body_aero_polar)
+    results_stall_16_polar = solver_smooth_circulation_16.solve(body_aero_polar)
+
+    plot_distribution(
+        y_coordinates_list=[
+            y_coordinates,
+            y_coordinates,
+            y_coordinates,
+            y_coordinates,
+            y_coordinates,
+            y_coordinates,
+        ],
+        results_list=[
+            results_base_breukels,
+            result_stall_08_breukels,
+            results_base_polar,
+            result_stall_08_polar,
+            results_stall_12_polar,
+            results_stall_16_polar,
+        ],
+        label_list=[z
+            "Breukels",
+            "Breukels + smooth 0.08",
+            "Polar",
+            "Polar + smooth 0.08",
+            "Polar + smooth 0.12",
+            "Polar + smooth 0.16",
+        ],
+        title=f"spanwise_distribution_alpha_{alpha}",
+        data_type=".pdf",
+        save_path=save_folder,
+        is_save=True,
+        is_show=False,
+    )
+
 # ### plot beta sweep
 # plot_polars(
 #     solver_list=[
-#         VSM_base,
-#         VSM_base,
-#         VSM_with_stall_correction,
-#         VSM_with_stall_correction,
-#         # VSM_with_stall_correction,
-#         # VSM_with_stall_correction,
+#         solver_base_version,
+#         solver_base_version,
 #     ],
-#     wing_aero_list=[
+#     body_aero_list=[
 #         body_aero_breukels,
-#         wing_aero_polar,
-#         body_aero_breukels,
-#         wing_aero_polar,
-#         # wing_aero_polar_35,
-#         # wing_aero_polar_70,
-#         # wing_aero_polar_105,
-#         # wing_aero_polar_140,
+#         body_aero_polar,
 #     ],
 #     label_list=[
 #         "VSM Breukels",
 #         "VSM Corrected",
-#         "VSM Breukels (+stall)",
-#         "VSM Corrected (+stall)",
-#         # "35 VSM Corrected (+stall)",
-#         # "70 VSM Corrected (+stall)",
-#         # "105 VSM Corrected (+stall)",
-#         # "140 VSM Corrected (+stall)",
 #     ],
 #     literature_path_list=[],
-#     angle_range=np.linspace(-20, 20, 20),
+#     angle_range=[0, 3, 6, 9, 12],
 #     angle_type="side_slip",
 #     angle_of_attack=6.8,
 #     side_slip=0,
 #     yaw_rate=0,
 #     Umag=3.15,
-#     title=f"betasweep_n_panels_130_linear",
+#     title=f"betasweep",
 #     data_type=".pdf",
-#     save_path=Path(save_folder) / "polars",
+#     save_path=Path(save_folder),
 #     is_save=True,
 #     is_show=True,
-# ),
-
-
-# solver_list = (
-#     [
-#         # VSM_base,
-#         VSM_base,
-#         VSM_with_stall_correction,
-#         VSM_base,
-#         VSM_with_stall_correction,
-#         # VSM_with_stall_correction,
-#         # VSM_with_stall_correction,
-#     ],
 # )
-# wing_aero_list = (
-#     [
-#         body_aero_breukels,
-#         body_aero_breukels,
-#         wing_aero_polar,
-#         wing_aero_polar,
-#     ],
-# )
-# #         wing_aero_polar_35,
-# #         wing_aero_polar_70,
-# #         wing_aero_polar_105,
-# #         wing_aero_polar_140,
-# #     ],
-# label_list = (
-#     [
-#         "VSM_Breukels",
-#         "VSM_Breukels_stall",
-#         "VSM_Corrected",
-#         "VSM_Corrected_stall",
-#         # "35 VSM Corrected (+stall)",
-#         # "70 VSM Corrected (+stall)",
-#         # "105 VSM Corrected (+stall)",
-#         # "140 VSM Corrected (+stall)",
-#         # "CFD_Lebesque Rey 30e5",
-#     ],
-# )
-# angle_range = np.linspace(-10, 25, 20)
-# angle_type = "angle_of_attack"
-# angle_of_attack = 0
-# side_slip = 0
-# yaw_rate = 0
-# Umag = Umag
-
-# from VSM.plotting import generate_polar_data
-
-# save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_LEI_KITE"
-
-# polar_data_list = []
-# for i, (solver, wing_aero, label) in enumerate(
-#     zip(solver_list, wing_aero_list, label_list)
-# ):
-#     polar_data, reynolds_number = generate_polar_data(
-#         solver=solver,
-#         wing_aero=wing_aero,
-#         angle_range=angle_range,
-#         angle_type=angle_type,
-#         angle_of_attack=angle_of_attack,
-#         side_slip=side_slip,
-#         yaw_rate=yaw_rate,
-#         Umag=Umag,
-#     )
-#     df = pd.DataFrame(polar_data, columns=["alpha", "cl", "cd", "cm"])
-#     df.to_csv(Path(save_folder) / f"_{label}.csv")
-
-#     polar_data_list.append(polar_data)
-#     # Appending Reynolds numbers to the labels of the solvers
-#     label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
-
-
-##TODO: user experience would be something like below
-# model kcu as thick cylinder, use emperical relations to get drag.
-# kcu_parameters = [model_type, length, diameter]
-# kite_aero = KiteAerodynamics([CAD_wing], bridle_lines, kcu)
-# VSM_base.solve(kite_aero)
