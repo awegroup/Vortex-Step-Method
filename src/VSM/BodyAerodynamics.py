@@ -442,29 +442,55 @@ class BodyAerodynamics:
         """
         Calculates the circulation distribution for an elliptical wing.
 
+        Assumes that the wing's span is defined in self.wings[0].span and that the
+        y-coordinates of the control points (from self.panels) are measured relative
+        to the wing center, ranging from -wing_span/2 to wing_span/2.
+
         Args:
-            wings (list): List of wing instances
-            gamma_0 (float): The circulation at the wing root
+            gamma_0 (float): The circulation at the wing root.
 
         Returns:
-            np.array: The circulation distribution
+            np.array: The circulation distribution following an elliptical profile.
         """
-        gamma_i = np.array([])
         if len(self.wings) > 1:
             raise NotImplementedError("Multiple wings not yet implemented")
 
         wing_span = self.wings[0].span
-
         logging.debug(f"wing_span: {wing_span}")
 
+        # Get the y-coordinate for each panel's control point.
         y = np.array([panel.control_point[1] for panel in self.panels])
-        gamma_i_wing = gamma_0 * np.sqrt(1 - (2 * y / wing_span) ** 2)
-        gamma_i = np.append(gamma_i, gamma_i_wing)
 
-        logging.debug(
-            f"inside calculate_circulation_distribution_elliptical_wing, gamma_i: {gamma_i}"
-        )
+        # Compute the elliptical circulation distribution.
+        gamma_i = gamma_0 * np.sqrt(1 - (2 * y / wing_span) ** 2)
 
+        logging.debug(f"Calculated elliptical gamma distribution: {gamma_i}")
+        return gamma_i
+
+    def calculate_circulation_distribution_cosine(self, gamma_0=1):
+        """
+        Calculates the circulation distribution based on a cosine profile,
+        i.e. f(x) = 1 - cos(x), where x is remapped over [0, π].
+
+        This function assumes that the number of panels defines the resolution
+        of the distribution. The distribution is scaled such that its maximum
+        (at x = π) is gamma_0.
+
+        Args:
+            gamma_0 (float): Scaling factor (or the circulation value at x = π).
+
+        Returns:
+            np.array: The circulation distribution based on the cosine function.
+        """
+        import numpy as np
+
+        # Create a set of x-values uniformly distributed between 0 and π.
+        x = np.linspace(0, np.pi, len(self.panels))
+
+        # Compute the distribution: f(x) = 1 - cos(x).
+        gamma_i = gamma_0 * (1 - np.cos(x))
+
+        logging.debug(f"Calculated cosine gamma distribution: {gamma_i}")
         return gamma_i
 
     # def calculate_stall_angle_list(
@@ -791,8 +817,11 @@ class BodyAerodynamics:
 
         # Calculating projected_area, wing_span, aspect_ratio
         projected_area = 0
-        for i, wing in enumerate(self.wings):
-            projected_area += wing.calculate_projected_area()
+        if len(self.wings) > 1:
+            raise ValueError("more than 1 wing functions have not been implemented yet")
+
+        wing = self.wings[0]
+        projected_area = wing.calculate_projected_area()
         wing_span = wing.span
         aspect_ratio_projected = wing_span**2 / projected_area
 

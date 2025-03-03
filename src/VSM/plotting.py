@@ -551,7 +551,13 @@ def plot_distribution(
             # If no data is within the range, fall back to a default
             ax.set_ylim(y_min_allowed, y_max_allowed)
 
-    plt.tight_layout()
+    # Place the legend below the axes
+    labels = [label for label in label_list]
+    handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
+
+    # Manually increase the bottom margin to make room for the legend
+    fig.subplots_adjust(bottom=0.2)
 
     # Save or show plot
     if is_save:
@@ -612,9 +618,11 @@ def generate_3D_polar_data(
                 "angle_type should be either 'angle_of_attack' or 'side_slip'"
             )
 
-        # Set the inflow conditions
+        import time as time
 
-        results = solver.solve(body_aero)
+        begin_time = time.time()
+        results = solver.solve(body_aero, gamma_distribution=gamma)
+        print(f"Time: {time.time() - begin_time:.4f}s")
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
@@ -713,7 +721,10 @@ def plot_polars(
 
     # generating polar data
     polar_data_list = []
-    for i, (solver, body_aero) in enumerate(zip(solver_list, body_aero_list)):
+    for i, (solver, body_aero, label) in enumerate(
+        zip(solver_list, body_aero_list, label_list)
+    ):
+        print(f"label: {label}")
         polar_data, reynolds_number = generate_3D_polar_data(
             solver=solver,
             body_aero=body_aero,
@@ -785,7 +796,6 @@ def plot_polars(
         if max(polar_data[2]) > 10:
             axs[0, 1].set_ylim([-0.2, 0.5])
     axs[0, 1].set_ylabel(r"$C_{\mathrm{D}}$")
-    axs[0, 1].legend(loc="best")
 
     # CL-CD plot
     if angle_type == "angle_of_attack":
@@ -897,6 +907,14 @@ def plot_polars(
         else:
             # If no data is within the range, you might choose to set default limits or skip
             pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
+
+    # Place the legend below the axes
+    labels = [label for label in label_list]
+    handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
+
+    # Manually increase the bottom margin to make room for the legend
+    fig.subplots_adjust(bottom=0.2)
 
     # Ensure the figure is fully rendered
     fig.canvas.draw()
