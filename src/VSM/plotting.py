@@ -408,7 +408,7 @@ def plot_distribution(
         )
 
     # Create figure and axes: 3 rows x 3 columns
-    fig, axs = plt.subplots(3, 3, figsize=(20, 15))
+    fig, axs = plt.subplots(3, 3, figsize=(27, 15))
     # fig.suptitle(title)
 
     # --- Row 1: CD, CL, CS ---------------------------------------------------
@@ -421,7 +421,7 @@ def plot_distribution(
         )
     axs[0, 0].set_ylabel(r"$C_D$ Distribution")
     axs[0, 0].tick_params(labelbottom=False)
-    axs[0, 0].legend()
+    # axs[0, 0].legend()
 
     # Column 2: CL
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
@@ -432,7 +432,7 @@ def plot_distribution(
         )
     axs[0, 1].set_ylabel(r"$C_L$ Distribution")
     axs[0, 1].tick_params(labelbottom=False)
-    axs[0, 1].legend()
+    # axs[0, 1].legend()
 
     # Column 3: CS (side force coefficient)
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
@@ -443,7 +443,7 @@ def plot_distribution(
         )
     axs[0, 2].set_ylabel(r"$C_S$ Distribution")
     axs[0, 2].tick_params(labelbottom=False)
-    axs[0, 2].legend()
+    # axs[0, 2].legend()
 
     # --- Row 2: CMx, CMy, CMz ------------------------------------------------
     # Column 1: CMx
@@ -466,7 +466,7 @@ def plot_distribution(
         )
     axs[1, 1].set_ylabel(r"$C_{my}$ Distribution")
     axs[1, 1].tick_params(labelbottom=False)
-    axs[1, 1].legend()
+    # axs[1, 1].legend()
 
     # Column 3: CMz
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
@@ -477,7 +477,7 @@ def plot_distribution(
         )
     axs[1, 2].set_ylabel(r"$C_{mz}$ Distribution")
     axs[1, 2].tick_params(labelbottom=False)
-    axs[1, 2].legend()
+    # axs[1, 2].legend()
 
     # --- Row 3:  -----------------------------------------
     # Column 1: Gamma
@@ -489,7 +489,7 @@ def plot_distribution(
         )
     axs[2, 0].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 0].set_ylabel(r"Gamma")
-    axs[2, 0].legend()
+    # axs[2, 0].legend()
 
     # Column 2: Gamma distribution
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
@@ -500,7 +500,7 @@ def plot_distribution(
         )
     axs[2, 1].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 1].set_ylabel(r"Geometric $\alpha$ (deg)")
-    axs[2, 1].legend()
+    # axs[2, 1].legend()
 
     # Column 3: alpha (corrected to aerodynamic center)
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
@@ -511,7 +511,7 @@ def plot_distribution(
         )
     axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 2].set_ylabel(r"Corrected $\alpha$ (deg)")
-    axs[2, 2].legend()
+    # axs[2, 2].legend()
 
     # --- Adjust y-limits intelligently --------------------------------------
     # We'll define allowed ranges per subplot index:

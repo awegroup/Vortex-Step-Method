@@ -49,8 +49,6 @@ class Solver:
         max_iterations: int = 5000,
         allowed_error: float = 1e-12,  # 1e-5,
         relaxation_factor: float = 0.01,
-        is_with_artificial_damping: bool = False,
-        artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
         type_initial_gamma_distribution: str = "elliptic",
         is_with_gamma_feedback: bool = True,
         core_radius_fraction: float = 1e-20,
@@ -58,7 +56,12 @@ class Solver:
         is_only_f_and_gamma_output: bool = False,
         is_new_vector_definition: bool = True,
         reference_point: list = [-0.17, 0.00, 9.25],
+        # --- STALL: smooth_circulation ---
+        is_smooth_circulation: bool = False,
         smoothness_factor: float = 0.08,  # for smoothing stall model
+        # --- STALL: artificial damping ---
+        is_artificial_damping: bool = False,
+        artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
         ## TODO: would be nice to having these defined here instead of inside the panel class?
         # aerodynamic_center_location: float = 0.25,
         # control_point_location: float = 0.75,
@@ -71,8 +74,7 @@ class Solver:
         self.max_iterations = max_iterations
         self.allowed_error = allowed_error
         self.relaxation_factor = relaxation_factor
-        self.is_with_artificial_damping = is_with_artificial_damping
-        self.artificial_damping = artificial_damping
+
         self.type_initial_gamma_distribution = type_initial_gamma_distribution
         self.core_radius_fraction = core_radius_fraction
         self.mu = mu
@@ -81,6 +83,10 @@ class Solver:
         self.is_new_vector_definition = is_new_vector_definition
         self.reference_point = reference_point
         self.smoothness_factor = smoothness_factor
+        # stall model things
+        self.is_smooth_circulation = is_smooth_circulation
+        self.is_artificial_damping = is_artificial_damping
+        self.artificial_damping = artificial_damping
 
     def solve(self, wing_aero, gamma_distribution=None):
         """Solve the aerodynamic model
@@ -268,42 +274,49 @@ class Solver:
             )
             gamma_new = 0.5 * Umag_array**2 / Umagw_array * cl_array * chord_array
 
-            if self.is_with_artificial_damping:
-                # damp, is_damping_applied = self.smooth_circulation(
-                #     circulation=gamma, smoothness_factor=0.1, damping_factor=0.5
-                # )
-                ## below works well for "split-provided" n_panel=105 V3
-                # damp, is_damping_applied = self.smooth_circulation(
-                # circulation=gamma, smoothness_factor=0.15, damping_factor=0.5
-                # )
-                ## below works well for "linear" n_panel=130 V3
+            if self.is_smooth_circulation:
                 damp, is_damping_applied = self.smooth_circulation(
                     circulation=gamma,
                     smoothness_factor=self.smoothness_factor,
                     damping_factor=0.5,
                 )
-                # logging.debug("damp: %s", damp)
-                # J_diag = self.compute_J_diag_finite_diff(
-                #     gamma,
-                #     AIC_x,
-                #     AIC_y,
-                #     AIC_z,
-                #     va_array,
-                #     chord_array,
-                #     x_airf_array,
-                #     y_airf_array,
-                #     z_airf_array,
-                #     panels,
-                # )
 
-                # damp, mu = self.apply_artificial_viscosity_chattot(
-                #     gamma=gamma,
-                #     y_panel_centers=[panel.control_point[1] for panel in panels],
-                #     Jdiag=J_diag,
-                #     b_array=[panel.width for panel in panels],
-                #     fva=1e-3,  # user-chosen "area" scaling, m^3 units
-                # )
-                # is_damping_applied = True
+            # elif self.is_artificial_damping:
+            # damp, is_damping_applied = self.smooth_circulation(
+            #     circulation=gamma, smoothness_factor=0.1, damping_factor=0.5
+            # )
+            ## below works well for "split-provided" n_panel=105 V3
+            # damp, is_damping_applied = self.smooth_circulation(
+            # circulation=gamma, smoothness_factor=0.15, damping_factor=0.5
+            # )
+            ## below works well for "linear" n_panel=130 V3
+            # damp, is_damping_applied = self.smooth_circulation(
+            #     circulation=gamma,
+            #     smoothness_factor=self.smoothness_factor,
+            #     damping_factor=0.5,
+            # )
+            # logging.debug("damp: %s", damp)
+            # J_diag = self.compute_J_diag_finite_diff(
+            #     gamma,
+            #     AIC_x,
+            #     AIC_y,
+            #     AIC_z,
+            #     va_array,
+            #     chord_array,
+            #     x_airf_array,
+            #     y_airf_array,
+            #     z_airf_array,
+            #     panels,
+            # )
+
+            # damp, mu = self.apply_artificial_viscosity_chattot(
+            #     gamma=gamma,
+            #     y_panel_centers=[panel.control_point[1] for panel in panels],
+            #     Jdiag=J_diag,
+            #     b_array=[panel.width for panel in panels],
+            #     fva=1e-3,  # user-chosen "area" scaling, m^3 units
+            # )
+            # is_damping_applied = True
 
             else:
                 damp = 0
