@@ -104,7 +104,7 @@ class Panel:
             self._panel_polar_data = np.array(
                 [0.5 * (a1 + a2) for a1, a2 in zip(aero_1, aero_2)]
             )
-        if self._panel_aero_model == "lei_airfoil_breukels":
+        elif self._panel_aero_model == "lei_airfoil_breukels":
             self.instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(
                 section_1, section_2
             )
@@ -367,7 +367,6 @@ class Panel:
             return cl
         elif self._panel_aero_model == "inviscid":
             return 2 * np.pi * alpha
-
         elif self._panel_aero_model == "cl_is_pisin2alpha":
             return np.pi * np.sin(2 * alpha)
         else:

@@ -16,6 +16,7 @@ from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution
 from VSM.interactive import interactive_plot
+from VSM.plot_styling import set_plot_style
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
@@ -223,7 +224,7 @@ mu = 2e-5
 Umag = 20
 print(f"Re should be 1e6 and ={density * Umag * chord / mu/1e6:.2f}e6")
 n_panels = 50
-alpha_range = np.linspace(0, 90, 20)
+alpha_range = np.linspace(0, 90, 10)
 print(f"alpha_range: {alpha_range}")
 # ==========================
 # Building the wing instance
@@ -264,33 +265,33 @@ body_aero_off_center_cosine = BodyAerodynamics(
 # ==========================
 #   INTERACTIVE PLOT
 # ==========================
-angle_of_attack = 10
-side_slip = 0
-yaw_rate = 0
-interactive_plot(
-    body_aero_uniform,
-    vel=Umag,
-    angle_of_attack=angle_of_attack,
-    side_slip=side_slip,
-    yaw_rate=yaw_rate,
-    is_with_aerodynamic_details=True,
-)
-interactive_plot(
-    body_aero_cosine,
-    vel=Umag,
-    angle_of_attack=angle_of_attack,
-    side_slip=side_slip,
-    yaw_rate=yaw_rate,
-    is_with_aerodynamic_details=True,
-)
-interactive_plot(
-    body_aero_off_center_cosine,
-    vel=Umag,
-    angle_of_attack=angle_of_attack,
-    side_slip=side_slip,
-    yaw_rate=yaw_rate,
-    is_with_aerodynamic_details=True,
-)
+# angle_of_attack = 10
+# side_slip = 0
+# yaw_rate = 0
+# interactive_plot(
+#     body_aero_uniform,
+#     vel=Umag,
+#     angle_of_attack=angle_of_attack,
+#     side_slip=side_slip,
+#     yaw_rate=yaw_rate,
+#     is_with_aerodynamic_details=True,
+# )
+# interactive_plot(
+#     body_aero_cosine,
+#     vel=Umag,
+#     angle_of_attack=angle_of_attack,
+#     side_slip=side_slip,
+#     yaw_rate=yaw_rate,
+#     is_with_aerodynamic_details=True,
+# )
+# interactive_plot(
+#     body_aero_off_center_cosine,
+#     vel=Umag,
+#     angle_of_attack=angle_of_attack,
+#     side_slip=side_slip,
+#     yaw_rate=yaw_rate,
+#     is_with_aerodynamic_details=True,
+# )
 
 solver_base = Solver(
     # max_iterations=5e3,
@@ -342,6 +343,7 @@ for alpha in alpha_range:
 # ==========================
 # Plotting
 # ==========================
+set_plot_style()
 plt.figure()
 plt.plot(
     df["alpha"],
@@ -371,6 +373,7 @@ plt.plot(
     df["CL_VSM_off_center_cosine"],
     label="VSM off-center",
 )
+plt.grid()
 plt.legend()
 plt.xlabel(r"alpha [$^{\circ}$]")
 plt.ylabel(r"$C_L$")
