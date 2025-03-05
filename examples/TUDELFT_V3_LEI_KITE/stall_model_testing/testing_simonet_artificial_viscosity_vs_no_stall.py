@@ -35,14 +35,17 @@ angle_of_attack = 6.5
 side_slip = 0
 yaw_rate = 0
 alpha_range = [
-    17,
-    18,
+    # 14,
+    # 15,
+    # 16,
+    # 17,
+    # 18,
     19,
-    20,
+    # 20,
     21,
-    22,
-    23,
-    24,
+    # 22,
+    # 23,
+    # 24,
 ]
 
 # Wing and Aerodynamic Setup
@@ -50,12 +53,20 @@ n_panels = 100
 spanwise_panel_distribution = "linear"
 
 # Initialize solver
-solver_gamma_loop_non_linear_ChatGPT = Solver(
-    gamma_loop_type="gamma_loop_non_linear_ChatGPT"
-)
-solver_gamma_loop_newton_raphson_simonet = Solver(
-    gamma_loop_type="gamma_loop_newton_raphson_simonet",
+solver_base = Solver()
+solver_base_simonet_stall = Solver(
+    gamma_loop_type="simonet_stall",
     is_with_simonet_artificial_viscosity=True,
+    simonet_artificial_viscosity_fva=1e2,
+)
+solver_non_linear = Solver(
+    gamma_loop_type="non_linear",
+    is_with_simonet_artificial_viscosity=False,
+)
+solver_non_linear_simonet_stall = Solver(
+    gamma_loop_type="non_linear_simonet_stall",
+    is_with_simonet_artificial_viscosity=True,
+    simonet_artificial_viscosity_fva=1e2,
 )
 
 # Initialize body_aero
@@ -68,63 +79,87 @@ body_aero_polar = BodyAerodynamics.from_file(
 )
 body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-# plotting alpha-polar
-plot_polars(
-    solver_list=[
-        solver_gamma_loop_non_linear_ChatGPT,
-        solver_gamma_loop_newton_raphson_simonet,
-    ],
-    body_aero_list=[
-        body_aero_polar,
-        body_aero_polar,
-    ],
-    label_list=[
-        "gamma_loop_non_linear_ChatGPT",
-        "gamma_loop_newton_raphson_simonet",
-    ],
-    literature_path_list=[],
-    angle_range=alpha_range,  # np.linspace(-10, 25, 10),
-    angle_type="angle_of_attack",
-    angle_of_attack=0,
-    side_slip=0,
-    yaw_rate=0,
-    Umag=Umag,
-    title=f"alphasweep",
-    data_type=".pdf",
-    save_path=Path(save_folder),
-    is_save=True,
-    is_show=False,
-)
+# # plotting alpha-polar
+# plot_polars(
+#     solver_list=[
+#         solver_base,
+#         solver_base_simonet_stall,
+#         solver_non_linear,
+#         solver_non_linear_simonet_stall,
+#         # solver_newton_krylov,
+#         # solver_newton_raphson,
+#         # solver_newton_raphson_simonet_1,
+#         # solver_newton_raphson_simonet_01,
+#         # solver_newton_raphson_simonet_001,
+#     ],
+#     body_aero_list=[
+#         body_aero_polar,
+#         body_aero_polar,
+#         body_aero_polar,
+#         body_aero_polar,
+#         # body_aero_polar,
+#         # body_aero_polar,
+#         # body_aero_polar,
+#         # body_aero_polar,
+#         # body_aero_polar,
+#     ],
+#     label_list=[
+#         "base",
+#         "base_simonet_stall",
+#         "non_linear",
+#         "non_linear_simonet_stall",
+#         # "newton_krylov",
+#         # "newton_raphson",
+#         # "newton_raphson_simonet fva = 1",
+#         # "newton_raphson_simonet fva = 0.1",
+#         # "newton_raphson_simonet fva = 0.01",
+#     ],
+#     literature_path_list=[],
+#     angle_range=alpha_range,  # np.linspace(-10, 25, 10),
+#     angle_type="angle_of_attack",
+#     angle_of_attack=0,
+#     side_slip=0,
+#     yaw_rate=0,
+#     Umag=Umag,
+#     title=f"alphasweep",
+#     data_type=".pdf",
+#     save_path=Path(save_folder),
+#     is_save=True,
+#     is_show=False,
+# )
 
 # generate results
 y_coordinates = [panels.aerodynamic_center[1] for panels in body_aero_polar.panels]
 
 gamma = None
-alpha_range = [17, 18, 19, 20, 21, 22, 23, 24, 25]
+alpha_range = [17, 19, 21, 23]
 for alpha in alpha_range:
+    print(f"\nalpha: {alpha}")
     body_aero_polar.va_initialize(Umag, alpha, side_slip, yaw_rate)
-    results_gamma_loop_non_linear_ChatGPT = solver_gamma_loop_non_linear_ChatGPT.solve(
+    results_base = solver_base.solve(body_aero_polar, gamma_distribution=None)
+    results_base_simonet_stall = solver_base_simonet_stall.solve(
         body_aero_polar, gamma_distribution=None
     )
-    results_gamma_loop_newton_raphson_simone = (
-        solver_gamma_loop_newton_raphson_simonet.solve(
-            body_aero_polar, gamma_distribution=None
-        )
+    # results_non_linear = solver_non_linear.solve(
+    #     body_aero_polar, gamma_distribution=None
+    # )
+    results_non_linear_simonet_stall = solver_non_linear_simonet_stall.solve(
+        body_aero_polar, gamma_distribution=None
     )
-    # gamma = results_non_linear_Claude_elliptical_with_feedback["gamma_distribution"]
-    # print(f"\nalpha: {alpha}, gamma: {gamma}")
+
     plot_distribution(
-        y_coordinates_list=[
-            y_coordinates,
-            y_coordinates,
-        ],
+        y_coordinates_list=[y_coordinates, y_coordinates, y_coordinates],
         results_list=[
-            results_gamma_loop_non_linear_ChatGPT,
-            results_gamma_loop_newton_raphson_simone,
+            results_base,
+            results_base_simonet_stall,
+            # results_non_linear,
+            results_non_linear_simonet_stall,
         ],
         label_list=[
-            "gamma_loop_non_linear_ChatGPT",
-            "gamma_loop_newton_raphson_simonet",
+            "base",
+            "base_simonet_stall",
+            # "non_linear",
+            "non_linear_simonet_stall",
         ],
         title=f"spanwise_distribution_alpha_{alpha}",
         data_type=".pdf",

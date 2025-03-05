@@ -79,6 +79,7 @@ class Panel:
         self._corner_points = np.array([LE_point_1, TE_point_1, TE_point_2, LE_point_2])
 
         # Defining panel_aero_model
+        self._panel_polar_data = None
         if section_1.aero_input[0] != section_2.aero_input[0]:
             raise ValueError(
                 "Both sections should have the same aero_input, got"
@@ -89,13 +90,7 @@ class Panel:
         self._panel_aero_model = section_1.aero_input[0]
 
         # Initializing the panel aerodynamic data dependent on the aero_model
-        if self._panel_aero_model == "lei_airfoil_breukels":
-            self.instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(
-                section_1, section_2
-            )
-        elif self._panel_aero_model == "inviscid":
-            pass
-        elif self._panel_aero_model == "polar_data":
+        if self._panel_aero_model == "polar_data":
             # Average the polar_data of the two sections
             aero_1 = section_1.aero_input[1]
             aero_2 = section_2.aero_input[1]
@@ -109,6 +104,15 @@ class Panel:
             self._panel_polar_data = np.array(
                 [0.5 * (a1 + a2) for a1, a2 in zip(aero_1, aero_2)]
             )
+        if self._panel_aero_model == "lei_airfoil_breukels":
+            self.instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(
+                section_1, section_2
+            )
+        elif (
+            self._panel_aero_model == "inviscid"
+            or self._panel_aero_model == "cl_is_pisin2alpha"
+        ):
+            pass
         else:
             raise NotImplementedError
 
@@ -135,11 +139,6 @@ class Panel:
     ###########################
 
     @property
-    def z_airf(self):
-        """Unit vector pointing in the airfoil plane, so that is towards left-tip in spanwise direction"""
-        return self._z_airf
-
-    @property
     def x_airf(self):
         """Unit vector pointing upwards from the chord-line, perpendicular to the panel"""
         return self._x_airf
@@ -148,6 +147,11 @@ class Panel:
     def y_airf(self):
         """Unit vector pointing parallel to the chord-line, from LE-to-TE"""
         return self._y_airf
+
+    @property
+    def z_airf(self):
+        """Unit vector pointing in the airfoil plane, so that is towards left-tip in spanwise direction"""
+        return self._z_airf
 
     @property
     def va(self):
@@ -202,6 +206,10 @@ class Panel:
     @property
     def filaments(self):
         return self._filaments
+
+    @property
+    def panel_polar_data(self):
+        return self._panel_polar_data
 
     ###########################
     ## SETTER FUNCTIONS
@@ -339,7 +347,13 @@ class Panel:
         Returns:
             float: Interpolated lift coefficient (Cl).
         """
-        if self._panel_aero_model == "lei_airfoil_breukels":
+        if self._panel_aero_model == "polar_data":
+            return np.interp(
+                alpha,
+                self._panel_polar_data[:, 0],
+                self._panel_polar_data[:, 1],
+            )
+        elif self._panel_aero_model == "lei_airfoil_breukels":
             cl = np.polyval(self._cl_coefficients, np.rad2deg(alpha))
             # if outside of 20 degrees which in rad = np.pi/9
             if alpha > (np.pi / 9) or alpha < -(np.pi / 9):
@@ -353,12 +367,9 @@ class Panel:
             return cl
         elif self._panel_aero_model == "inviscid":
             return 2 * np.pi * alpha
-        elif self._panel_aero_model == "polar_data":
-            return np.interp(
-                alpha,
-                self._panel_polar_data[:, 0],
-                self._panel_polar_data[:, 1],
-            )
+
+        elif self._panel_aero_model == "cl_is_pisin2alpha":
+            return np.pi * np.sin(2 * alpha)
         else:
             raise NotImplementedError
 
@@ -373,7 +384,15 @@ class Panel:
         Returns:
             tuple: Interpolated (Cl, Cd, Cm) coefficients.
         """
-        if self._panel_aero_model == "lei_airfoil_breukels":
+        if self._panel_aero_model == "polar_data":
+            cd = np.interp(
+                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
+            )
+            cm = np.interp(
+                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
+            )
+            return cd, cm
+        elif self._panel_aero_model == "lei_airfoil_breukels":
             cd = np.polyval(self._cd_coefficients, np.rad2deg(alpha))
             cm = np.polyval(self._cm_coefficients, np.rad2deg(alpha))
             # if outside of 20 degrees (np.pi/9)
@@ -384,14 +403,9 @@ class Panel:
             cd = 0.0
             cm = 0.0
             return cd, cm
-        elif self._panel_aero_model == "polar_data":
-            cd = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
-            )
-            cm = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
-            )
-            return cd, cm
+
+        elif self._panel_aero_model == "cl_is_pisin2alpha":
+            return 0, 0
         else:
             raise NotImplementedError
 

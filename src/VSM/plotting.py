@@ -401,10 +401,12 @@ def plot_distribution(
     """
     set_plot_style()
 
-    if len(results_list) != len(label_list):
+    if len(results_list) != len(label_list) or len(y_coordinates_list) != len(
+        results_list
+    ):
         raise ValueError(
-            f"The number of results and labels should match. "
-            f"Got {len(results_list)} results and {len(label_list)} labels."
+            f"The number of y_coordinates = number of results = number of labels. "
+            f"Got {len(y_coordinates_list)} y_coordinates, {len(results_list)} results, {len(label_list)} labels."
         )
 
     # Create figure and axes: 3 rows x 3 columns
@@ -417,33 +419,33 @@ def plot_distribution(
         axs[0, 0].plot(
             y_coords,
             result["cd_distribution"],
-            label=label + rf" $C_D$: {result['cd']:.2f}",
+            label=rf"$C_D$: {result['cd']:.2f}",
         )
     axs[0, 0].set_ylabel(r"$C_D$ Distribution")
     axs[0, 0].tick_params(labelbottom=False)
-    # axs[0, 0].legend()
+    axs[0, 0].legend()
 
     # Column 2: CL
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
         axs[0, 1].plot(
             y_coords,
             result["cl_distribution"],
-            label=label + rf" $C_L$: {result['cl']:.2f}",
+            label="$C_L$: {result['cl']:.2f}",
         )
     axs[0, 1].set_ylabel(r"$C_L$ Distribution")
     axs[0, 1].tick_params(labelbottom=False)
-    # axs[0, 1].legend()
+    axs[0, 1].legend()
 
     # Column 3: CS (side force coefficient)
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
         axs[0, 2].plot(
             y_coords,
             result["cs_distribution"],
-            label=label + rf" $C_S$: {result['cs']:.2f}",
+            label=rf"$C_S$: {result['cs']:.2f}",
         )
     axs[0, 2].set_ylabel(r"$C_S$ Distribution")
     axs[0, 2].tick_params(labelbottom=False)
-    # axs[0, 2].legend()
+    axs[0, 2].legend()
 
     # --- Row 2: CMx, CMy, CMz ------------------------------------------------
     # Column 1: CMx
@@ -451,7 +453,7 @@ def plot_distribution(
         axs[1, 0].plot(
             y_coords,
             result["cmx_distribution"],
-            label=label + rf" $C_{{mx}}$: {result['cmx']:.2f}",
+            label=rf"$C_{{mx}}$: {result['cmx']:.2f}",
         )
     axs[1, 0].set_ylabel(r"$C_{mx}$ Distribution")
     axs[1, 0].tick_params(labelbottom=False)
@@ -462,22 +464,22 @@ def plot_distribution(
         axs[1, 1].plot(
             y_coords,
             result["cmy_distribution"],
-            label=label + rf" $C_{{my}}$: {result['cmy']:.2f}",
+            label=rf"$C_{{my}}$: {result['cmy']:.2f}",
         )
     axs[1, 1].set_ylabel(r"$C_{my}$ Distribution")
     axs[1, 1].tick_params(labelbottom=False)
-    # axs[1, 1].legend()
+    axs[1, 1].legend()
 
     # Column 3: CMz
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
         axs[1, 2].plot(
             y_coords,
             result["cmz_distribution"],
-            label=label + rf" $C_{{mz}}$: {result['cmz']:.2f}",
+            label=rf"$C_{{mz}}$: {result['cmz']:.2f}",
         )
     axs[1, 2].set_ylabel(r"$C_{mz}$ Distribution")
     axs[1, 2].tick_params(labelbottom=False)
-    # axs[1, 2].legend()
+    axs[1, 2].legend()
 
     # --- Row 3:  -----------------------------------------
     # Column 1: Gamma
@@ -507,7 +509,7 @@ def plot_distribution(
         axs[2, 2].plot(
             y_coords,
             np.rad2deg(result["alpha_at_ac"]),
-            label=label,
+            # label=label,
         )
     axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 2].set_ylabel(r"Corrected $\alpha$ (deg)")
@@ -553,7 +555,7 @@ def plot_distribution(
 
     # Place the legend below the axes
     labels = [label for label in label_list]
-    handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
+    handles = [axs[0, 0].get_lines()[i] for i in range(len(y_coordinates_list))]
     fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
 
     # Manually increase the bottom margin to make room for the legend
@@ -622,7 +624,7 @@ def generate_3D_polar_data(
 
         begin_time = time.time()
         results = solver.solve(body_aero, gamma_distribution=gamma)
-        print(f"Time: {time.time() - begin_time:.4f}s")
+        print(f"Angle: {angle_i}deg. Time: {time.time() - begin_time:.4f}s")
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
@@ -724,7 +726,7 @@ def plot_polars(
     for i, (solver, body_aero, label) in enumerate(
         zip(solver_list, body_aero_list, label_list)
     ):
-        print(f"label: {label}")
+        print(f"\n=== label: {label} ===")
         polar_data, reynolds_number = generate_3D_polar_data(
             solver=solver,
             body_aero=body_aero,
