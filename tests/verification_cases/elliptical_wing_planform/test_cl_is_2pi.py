@@ -11,12 +11,14 @@ from copy import deepcopy
 
 import pandas as pd
 from pathlib import Path
+from scipy.optimize import root
+
 from VSM.WingGeometry import Wing
 from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution
 from VSM.interactive import interactive_plot
-from VSM.plot_styling import set_plot_style
+from VSM.plot_styling import set_plot_style, plot_on_ax
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
@@ -172,10 +174,9 @@ def elliptical_aspect_ratio(span, max_chord):
 # ==========================
 #   Prandlts semi-analytical solution
 # ==========================
-from scipy.optimize import root
 
 
-def prandtl_semianalytical_CL(alpha, AR):
+def prandtl_semianalytical_simonet(alpha, AR):
     """
     Solve eq. (31) for A1, then compute CL(α) = π * AR * A1.
 
@@ -195,12 +196,14 @@ def prandtl_semianalytical_CL(alpha, AR):
 
     # Define the residual of eq. (31): f(A1) = A1 - (1/AR)*sin(2α - 2arctan(A1)) = 0
     def eq_31_res(A1):
-        return A1 - (1.0 / AR) * np.sin(2.0 * alpha - 2.0 * np.arctan(A1))
+        return A1 - ((1.0 / AR) * np.sin(2.0 * alpha - 2.0 * np.arctan(A1)))
 
     # Solve for A1 using a root-finding method. We'll pick a small positive initial guess.
     sol = root(eq_31_res, 0.1)
     if not sol.success:
-        raise RuntimeError(f"Failed to solve eq. (31) for alpha={alpha} rad, AR={AR}")
+        raise RuntimeError(
+            f"Failed to solve eq. (31) for alpha={np.rad2deg(alpha)} rad, AR={AR}"
+        )
 
     A1 = sol.x[0]
 
@@ -213,18 +216,22 @@ def prandtl_semianalytical_CL(alpha, AR):
 # Settings
 # AR_chattot = 12.7
 # n_chattot = 51
+# AR_simonet = 5
 # n_simonet = 50
 # ==========================
-AR = 5
-span = 10
+
+span_chattot = 10  # gives AR=12.7
+span_simonet = 3.927  # gives AR=5
+span = span_simonet
 chord = 1
-print(f"Chattot AR=12.7 and our AR={elliptical_aspect_ratio(span,chord):.2f} ")
+AR = elliptical_aspect_ratio(span, chord)
+print(f"Chattot AR=12.7 and our AR={AR:.2f} ")
 density = 1
 mu = 2e-5
 Umag = 20
 print(f"Re should be 1e6 and ={density * Umag * chord / mu/1e6:.2f}e6")
 n_panels = 50
-alpha_range = np.linspace(0, 90, 10)
+alpha_range = np.linspace(0, 90, 20)
 print(f"alpha_range: {alpha_range}")
 # ==========================
 # Building the wing instance
@@ -293,10 +300,15 @@ body_aero_off_center_cosine = BodyAerodynamics(
 #     is_with_aerodynamic_details=True,
 # )
 
+
+# ==========================
+# Plotting CL-alpha (Fig. 7)
+# ==========================
 solver_base = Solver(
     # max_iterations=5e3,
-    # allowed_error=1e-6,
+    allowed_error=1e-6,
     # relaxation_factor=0.05,
+    gamma_loop_type="non_linear",
 )
 
 df = pd.DataFrame(
@@ -305,9 +317,10 @@ df = pd.DataFrame(
         "CL_VSM_uniform",
         "CL_VSM_cosine",
         "CL_VSM_off_center_cosine",
-        "CL_analytical",
+        "CL_analytical_simonet",
     ]
 )
+
 for alpha in alpha_range:
     body_aero_uniform.va_initialize(Umag, alpha, side_slip=0, yaw_rate=0)
     results_VSM_uniform = solver_base.solve(body_aero_uniform, gamma_distribution=None)
@@ -323,7 +336,7 @@ for alpha in alpha_range:
     )
     CL_VSM_off_center_cosine = results_VSM_off_center_cosine["cl"]
 
-    CL_analytical = prandtl_semianalytical_CL(alpha, AR)
+    CL_analytical_simonet = prandtl_semianalytical_simonet(alpha, AR)
     df = pd.concat(
         [
             df,
@@ -333,49 +346,87 @@ for alpha in alpha_range:
                     "CL_VSM_uniform": [CL_VSM_uniform],
                     "CL_VSM_cosine": [CL_VSM_cosine],
                     "CL_VSM_off_center_cosine": [CL_VSM_off_center_cosine],
-                    "CL_analytical": [CL_analytical],
+                    "CL_analytical_simonet": [CL_analytical_simonet],
                 }
             ),
         ],
         ignore_index=True,
     )
 
-# ==========================
-# Plotting
-# ==========================
+
 set_plot_style()
-plt.figure()
-plt.plot(
+fig, ax = plt.subplots(figsize=(8, 6))
+
+plot_on_ax(
+    ax,
     df["alpha"],
     np.pi * np.sin(2 * np.deg2rad(df["alpha"])),
     label="2D Analytical",
     color="black",
 )
-plt.plot(
+plot_on_ax(
+    ax,
     df["alpha"],
-    df["CL_analytical"],
-    label="3D Analytical",
+    df["CL_analytical_simonet"],
+    label="Analytical Simonet",
+    color="black",
     marker="o",
     linestyle="None",
 )
-plt.plot(
-    df["alpha"],
-    df["CL_VSM_uniform"],
-    label="VSM",
-)
-plt.plot(
-    df["alpha"],
-    df["CL_VSM_cosine"],
-    label="VSM cosine",
-)
-plt.plot(
+plot_on_ax(ax, df["alpha"], df["CL_VSM_uniform"], label="VSM uniform")
+plot_on_ax(ax, df["alpha"], df["CL_VSM_cosine"], label="VSM cosine")
+plot_on_ax(
+    ax,
     df["alpha"],
     df["CL_VSM_off_center_cosine"],
-    label="VSM off-center",
+    label="VSM off-center_cosine",
+    is_with_grid=True,
 )
-plt.grid()
-plt.legend()
-plt.xlabel(r"alpha [$^{\circ}$]")
-plt.ylabel(r"$C_L$")
-plt.title(r"$C_L$ vs alpha")
-plt.savefig(Path(save_folder) / "CL_vs_alpha.pdf")
+
+ax.grid(True)
+ax.legend()
+ax.set_xlabel(r"$\alpha$ [$^{\circ}$]")
+ax.set_ylabel(r"$C_L$")
+ax.set_title(r"$C_L$ vs $\alpha$")
+plt.tight_layout()
+plt.savefig(Path(save_folder) / f"CL_vs_alpha_AR_{AR:.1f}.pdf")
+plt.show()
+
+
+# ==========================
+# Plotting Circulation (Fig. 8)
+# ==========================
+solver_base = Solver(
+    # max_iterations=5e3,
+    allowed_error=1e-6,
+    # relaxation_factor=0.05,
+    gamma_loop_type="non_linear",
+)
+
+df = pd.DataFrame(
+    columns=[
+        "alpha",
+        "gama_VSM_uniform",
+        "gama_VSM_cosine",
+        "gama_VSM_off_center_cosine",
+    ]
+)
+
+
+set_plot_style()
+y_coordinates = [panel.control_point[1] for panel in body_aero_uniform.panels]
+fig, ax = plt.subplots(figsize=(8, 6))
+fva = 0
+for alpha in [40, 50, 60, 70, 80]:
+    body_aero_uniform.va_initialize(Umag, alpha, side_slip=0, yaw_rate=0)
+    results_VSM_uniform = solver_base.solve(body_aero_uniform, gamma_distribution=None)
+    gamma_VSM_uniform = results_VSM_uniform["gamma_distribution"]
+    plot_on_ax(ax, y_coordinates, gamma_VSM_uniform, label=r"$\alpha$" + f"={alpha}")
+
+ax.grid(True)
+ax.legend()
+ax.set_xlabel(r"$y$ [m]")
+ax.set_ylabel(r"$\Gamma$")
+ax.set_title(r"$\Gamma$ vs $y$")
+plt.tight_layout()
+plt.savefig(Path(save_folder) / f"Gamma_vs_alpha_AR_{AR:.1f}_fva_{fva:.1f}.pdf")

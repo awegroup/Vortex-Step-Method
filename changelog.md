@@ -16,7 +16,8 @@ feeding in gamma_distribution `results = solver.solve(body_aero,gamma_distrbutio
 
 -Panel: added panel_polar_data property, added "cl_is_pisinalpha" to the _panel_aero_model options
 
-Added a test function for the elliptical_wing_planform, from ch 4.1 of Simonet
+Added a test function under folder elliptical_wing_planform, from ch 4.1 of Simonet.
+
 
 
 
