@@ -557,7 +557,6 @@ class BodyAerodynamics:
         va_unit_array,
         panels,
         is_only_f_and_gamma_output,
-        is_new_vector_definition,
         reference_point,
     ):
 
@@ -686,7 +685,6 @@ class BodyAerodynamics:
                 drag_induced_va, va_unit
             )
 
-            # if is_new_vector_definition:
             dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
             side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
                 drag_induced_va, dir_side

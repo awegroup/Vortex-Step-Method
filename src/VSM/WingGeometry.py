@@ -16,7 +16,7 @@ class Wing:
     Args:
         - n_panels (int): Number of panels to be used in the aerodynamic mesh
         - spanwise_panel_distribution (str): Spanwise panel distribution type, options:
-            - "linear": Linear distribution
+            - "uniform": Linear distribution
             - "cosine": Cosine distribution
             - "cosine_van_Garrel": Cosine distribution based on van Garrel method
             - "split_provided": Split the provided sections into the desired number of panels
@@ -41,7 +41,7 @@ class Wing:
     """
 
     n_panels: int
-    spanwise_panel_distribution: str = "linear"
+    spanwise_panel_distribution: str = "uniform"
     spanwise_direction: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     sections: List["Section"] = field(default_factory=list)  # child-class
 
@@ -177,7 +177,7 @@ class Wing:
 
         # Linear or cosine spacing
         if (
-            self.spanwise_panel_distribution == "linear"
+            self.spanwise_panel_distribution == "uniform"
             or "cosine"
             or "cosine_van_Garrel"
         ):
@@ -192,7 +192,7 @@ class Wing:
 
         Args:
             - spanwise_panel_distribution (str): Spanwise panel distribution type, options:
-                - "linear": Linear distribution
+                - "uniform": Linear distribution
                 - "cosine": Cosine distribution
                 - "cosine_van_Garrel": Cosine distribution based on van Garrel method
             - n_sections (int): Number of sections to be used in the aerodynamic mesh
@@ -215,7 +215,7 @@ class Wing:
         qc_cum_length = np.concatenate(([0], np.cumsum(qc_lengths)))
 
         # 2. Define target lengths based on desired spacing
-        if spanwise_panel_distribution == "linear":
+        if spanwise_panel_distribution == "uniform":
             target_lengths = np.linspace(0, qc_total_length, n_sections)
         elif spanwise_panel_distribution == "cosine" or "cosine_van_Garrel":
             theta = np.linspace(0, np.pi, n_sections)
@@ -445,7 +445,7 @@ class Wing:
             # Generate the new sections for this pair
             if num_new_sections_this_pair > 0:
                 new_splitted_sections = self.refine_mesh_for_linear_cosine_distribution(
-                    "linear",
+                    "uniform",
                     num_new_sections_this_pair
                     + 2,  # +2 because refine_mesh expects total sections, including endpoints
                     LE_pair_list,

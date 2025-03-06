@@ -48,32 +48,27 @@ class Solver:
         max_iterations: float = 5000,
         allowed_error: float = 1e-5,  # 1e-5,
         relaxation_factor: float = 0.01,
-        min_relaxation_factor: float = 1e-4,
         core_radius_fraction: float = 1e-20,
-        jacobian_eps: float = 1e-5,
+        jacobian_eps: float = 1e-3,
         # === athmospheric properties ===
         mu: float = 1.81e-5,
         density: float = 1.225,
         # === other ===
         is_only_f_and_gamma_output: bool = False,
-        is_new_vector_definition: bool = True,
         reference_point: list = [-0.17, 0.00, 9.25],
-        # --- Gamma initialisation ---
-        ### Chattor [22] --> showed zero circulation is sufficient
-        ### Duport [11] studied the influence of three initialization shapes and concluded that the algorithm converges faster when a weighted elliptic circulation is used for initialization.
-        ### Simonet et al --> f(x) = 1 − cos(x)
+        # === Gamma initialisation ===
         is_with_gamma_feedback: bool = False,
         gamma_initial_distribution_type: str = "elliptical",
-        # --- STALL: smooth_circulation ---
+        # === STALL: smooth_circulation ===
         is_smooth_circulation: bool = False,
         smoothness_factor: float = 0.08,  # for smoothing stall model
-        # --- STALL: artificial damping ---
+        # === STALL: artificial damping ===
         is_artificial_damping: bool = False,
         artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
-        # --- STALL: simonet_aritificial_viscosity
+        # === STALL: simonet_aritificial_viscosity ===
         is_with_simonet_artificial_viscosity: bool = False,
         simonet_artificial_viscosity_fva: float = None,
-        # --- gamma_loop_type
+        # === gamma_loop_type ===
         gamma_loop_type: str = "base",
         ## TODO: would be nice to having these defined here instead of inside the panel class?
         # aerodynamic_center_location: float = 0.25,
@@ -87,7 +82,6 @@ class Solver:
         self.max_iterations = int(max_iterations)
         self.allowed_error = allowed_error
         self.relaxation_factor = relaxation_factor
-        self.min_relaxation_factor = min_relaxation_factor
         self.jacobian_eps = jacobian_eps
 
         self.gamma_initial_distribution_type = gamma_initial_distribution_type
@@ -95,7 +89,6 @@ class Solver:
         self.mu = mu
         self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
         self.is_with_gamma_feedback = is_with_gamma_feedback
-        self.is_new_vector_definition = is_new_vector_definition
         self.reference_point = reference_point
         self.smoothness_factor = smoothness_factor
         # stall model things
@@ -211,6 +204,12 @@ class Solver:
         if self.is_with_gamma_feedback and gamma_distribution is not None:
             gamma_initial = gamma_distribution
         else:
+            # gamma_0 = (
+            #     self.density
+            #     * np.average(va_norm_array)
+            #     * np.max(self.chord_array)
+            #     / self.mu
+            # ) / 1e5
             if self.gamma_initial_distribution_type == "elliptical":
                 gamma_initial = (
                     body_aero.calculate_circulation_distribution_elliptical_wing()
@@ -297,7 +296,6 @@ class Solver:
             va_unit_array,
             self.panels,
             self.is_only_f_and_gamma_output,
-            self.is_new_vector_definition,
             self.reference_point,  # roughly the cg of V3
         )
         return results
@@ -572,7 +570,8 @@ class Solver:
                 0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
             )
             second_derivative_of_gamma = compute_second_derivative_of_gamma(gamma)
-            G_residual = gamma - gamma_new - (mu_array * second_derivative_of_gamma)
+            # G_residual = gamma - gamma_new - (mu_array * second_derivative_of_gamma)
+            G_residual = (gamma_new + mu_array * second_derivative_of_gamma) - gamma
             return G_residual, alpha_array, Umag_array
 
         def compute_jacobian_K(F_func, gamma, *args):
@@ -632,7 +631,10 @@ class Solver:
         mu_array = np.zeros(self.n_panels)
         gamma = np.copy(gamma_initial)
         K = compute_jacobian_K(compute_G_residual, gamma, mu_array)
+        logging.debug(f"Diagonal of K: {np.diag(K)}")
         mu_tilde_array = compute_mu_tilde_array(K)
+        logging.debug(f"Mu_tilde_array: {mu_tilde_array}")
+
         # Using eq 26. and interpreting b as the local spanwise panel width
         mu_array = self.simonet_artificial_viscosity_fva * (
             mu_tilde_array / np.sum(mu_tilde_array * self.width_array)
@@ -723,7 +725,7 @@ class Solver:
                 0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
             )
             # Residual: difference between the computed and current gamma.
-            F_val = gamma_new - gamma
+            F_val = gamma - gamma_new
             return F_val, alpha_array, Umag_array
 
         # Define the residual function: only return F(gamma)
@@ -787,6 +789,7 @@ class Solver:
                     angle of attack array (np.array), relative velocity magnitude array (np.array))
         """
         from scipy.optimize import root, newton_krylov
+        from functools import partial
 
         # ===============================
         # Helper: compute finite-difference coefficients and second derivative
@@ -914,31 +917,106 @@ class Solver:
                 0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
             )
             second_derivative_of_gamma = compute_second_derivative_of_gamma(gamma)
-            G_residual = gamma - gamma_new - (mu_array * second_derivative_of_gamma)
+            G_residual = (gamma_new + mu_array * second_derivative_of_gamma) - gamma
             return G_residual, alpha_array, Umag_array
 
-        def compute_jacobian_K(F_func, gamma, *args):
-            """
-            Computes the Jacobian matrix K using finite differences.
+        def compute_G_residual_newton_krylov(
+            gamma,
+            mu_array,
+        ):
+            """Computes the residual vector G for the non_linear system, including the artificial viscosity term.
+
+            This function follows eq. (20) of Simonet et al., computing
+
+                G = gamma - gamma_new - (mu_array * (∂²gamma/∂y²))
 
             Args:
-                F_func (callable): Function to compute the residual vector.
-                gamma (np.array): Current circulation distribution.
-                eps (float): Finite difference step size.
-                args (tuple): Additional arguments for the residual function.
+                gamma (np.ndarray): Current circulation distribution (n x 1).
+                mu_array (np.ndarray): Artificial viscosity coefficients (n x 1).
 
             Returns:
-                np.ndarray: Jacobian matrix (n x n).
+                Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                    - Residual vector G (n x 1).
+                    - Angle of attack array (n x 1).
+                    - Relative velocity magnitude array (n x 1).
             """
-            n = self.n_panels
+            _, Umag_array, cl_array, Umagw_array = self.compute_aerodynamic_quantities(
+                gamma
+            )
+            gamma_new = (
+                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
+            )
+            second_derivative_of_gamma = compute_second_derivative_of_gamma(gamma)
+            G_residual = (gamma_new + mu_array * second_derivative_of_gamma) - gamma
+            return G_residual
+
+        def compute_F_residual(gamma):
+            _, Umag_array, cl_array, Umagw_array = self.compute_aerodynamic_quantities(
+                gamma
+            )
+            gamma_new = (
+                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
+            )
+            return (gamma_new) - gamma
+
+        # def compute_jacobian(F_func, gamma):
+        #     n = self.n_panels
+        #     K = np.zeros((n, n))
+        #     F0 = F_func(gamma)
+        #     for i in range(n):
+        #         gamma_eps = gamma.copy()
+        #         gamma_eps[i] += self.jacobian_eps
+        #         F1 = F_func(gamma_eps)
+        #         K[:, i] = (F0 - F1) / self.jacobian_eps
+        #     return K
+
+        def compute_jacobian(F_func, gamma):
+            n = len(gamma)
             K = np.zeros((n, n))
-            F0, _, _ = F_func(gamma, *args)
+            F0 = F_func(gamma)
+            # Typical small number:
+            # e.g. ~1e-7 or sqrt(machine_epsilon)
+            base_eps = 1e-7
+
             for i in range(n):
+                eps = base_eps * max(1.0, abs(gamma[i]))  # relative scale
                 gamma_eps = gamma.copy()
-                gamma_eps[i] += self.jacobian_eps
-                F1, _, _ = F_func(gamma_eps, *args)
-                K[:, i] = (F1 - F0) / self.jacobian_eps
+                gamma_eps[i] += eps
+                F1 = F_func(gamma_eps)
+                K[:, i] = (F1 - F0) / eps
+
             return K
+
+        import casadi as ca
+
+        def compute_jacobian_casadi_numerical(gamma_new):
+            n = len(gamma_new)
+
+            # Convert to CasADi symbols
+            gamma_sym = ca.SX.sym("gamma", n)
+
+            # Create a CasADi function that wraps your numpy-based function
+            F_expr = []
+
+            # For each input, create output symbol
+            for i in range(n):
+                gamma_perturb = gamma_new.copy()
+                # Small perturbation
+                eps = 1e-6
+                gamma_perturb[i] += eps
+                # Forward evaluation
+                f_forward = compute_F_residual(gamma_perturb)
+                # Backward evaluation
+                gamma_perturb[i] = gamma_new[i] - eps
+                f_backward = compute_F_residual(gamma_perturb)
+                # Central difference
+                df = (f_forward - f_backward) / (2 * eps)
+                F_expr.append(df)
+
+            # Convert list to matrix
+            J = np.column_stack(F_expr)
+
+            return J
 
         # ===============================
         # Helper: compute artificial viscosity coefficients mu_tilde_i (eq. 25)
@@ -966,20 +1044,90 @@ class Solver:
             # last panel
             a_dbl_prime, _, _ = compute_abc_dbl_prime()
             mu_tilde_array[n - 1] = np.minimum(0.0, K[n - 1, n - 1] / a_dbl_prime)
+            logging.debug(f"a_prime: {a_prime}, b: {b}, a_dbl_prime: {a_dbl_prime}")
             return mu_tilde_array
 
         # ===============================
-        #   Initializing the mu_array
+        # Doing a single iteration
         # ===============================
-        mu_array = np.zeros(self.n_panels)
         gamma = np.copy(gamma_initial)
-        K = compute_jacobian_K(compute_G_residual, gamma, mu_array)
-        mu_tilde_array = compute_mu_tilde_array(K)
-        # Using eq 26. and interpreting b as the local spanwise panel width
-        mu_array = self.simonet_artificial_viscosity_fva * (
-            mu_tilde_array / np.sum(mu_tilde_array * self.width_array)
+        alpha_array, Umag_array, cl_array, Umagw_array = (
+            self.compute_aerodynamic_quantities(gamma)
         )
+        gamma_new = 0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
+        gamma_new = (
+            1 - self.relaxation_factor
+        ) * gamma + self.relaxation_factor * gamma_new
 
+        # ===============================
+        #   Initializing the mu_array
+        # # ===============================
+        # mu_array = np.zeros(self.n_panels)
+        # # gamma = np.copy(gamma_initial)
+        # J = compute_jacobian(compute_F_residual, gamma_new)
+        # logging.info(f"Jacobian J diagonal: {np.diag(J)}")
+        # J = compute_jacobian_casadi_numerical(gamma_new)
+        # logging.info(f"Casadi Jacobian J diagonal: {np.diag(J)}")
+        # mu_tilde_array = compute_mu_tilde_array(J)
+        # sum_mu_tilde = np.sum(mu_tilde_array * self.width_array)
+        # logging.info(f"Sum of mu_tilde: {sum_mu_tilde}")
+        # if sum_mu_tilde != 0:
+        #     mu_array = self.simonet_artificial_viscosity_fva * (
+        #         mu_tilde_array / sum_mu_tilde
+        #     )
+        # else:
+        #     logging.info(f"Artificial viscosity not activated")
+
+        # ##TODO: remove the below
+
+        # logging.info(f"mu_tilde_array: {mu_tilde_array}")
+        # logging.info(f"mu_array: {mu_array}")
+
+        # Get Jacobian diagonal
+        def should_activate_artificial_viscosity(J_diagonal):
+            """
+            Determines if artificial viscosity should be activated based on Jacobian values.
+            Returns True if viscosity should be activated, False otherwise.
+            """
+            # Check if any interior Jacobian values deviate significantly from -1
+            # This indicates non-linear behavior that might need artificial viscosity
+            interior_values = J_diagonal[1:-1]  # Skip first and last points
+
+            # Calculate how much values deviate from -1
+            deviations = np.abs(
+                interior_values + 1
+            )  # +1 because we expect values around -1
+
+            # Define threshold for significant deviation
+            threshold = 0.1  # Adjust based on your needs
+
+            # If any interior point deviates significantly, activate viscosity
+            return np.any(deviations > threshold)
+
+        J = -compute_jacobian(compute_F_residual, gamma_new)
+        # Check if we should activate artificial viscosity
+        if should_activate_artificial_viscosity(np.diag(J)):
+            # Calculate mu_tilde_array and mu_array as before
+            mu_tilde_array = compute_mu_tilde_array(J)
+            sum_mu_tilde = np.sum(mu_tilde_array * self.width_array)
+            logging.info(f"sum mu tilde: {sum_mu_tilde:.1e}")
+
+            if np.abs(sum_mu_tilde) > 0:
+                mu_array = self.simonet_artificial_viscosity_fva * (
+                    mu_tilde_array / sum_mu_tilde
+                )
+            else:
+                logging.info(
+                    "Artificial viscosity not activated (sum is zero or negative)"
+                )
+                mu_array = np.zeros(self.n_panels)
+
+        else:
+            logging.info("Artificial viscosity not activated (linear regime detected)")
+            mu_array = np.zeros(self.n_panels)
+
+        logging.info(f"diag J: {np.diag(J)}")
+        logging.info(f"mu: {mu_array}")
         # First, try the Newton–Krylov method.
         try:
             # Set tolerances
@@ -988,14 +1136,13 @@ class Solver:
 
             # Call newton_krylov without unsupported keywords.
             sol = newton_krylov(
-                compute_G_residual,
-                gamma_initial,
+                partial(compute_G_residual_newton_krylov, mu_array=mu_array),
+                gamma_new,
                 method="lgmres",
                 f_tol=f_tol,
                 x_tol=atol,
                 maxiter=self.max_iterations,
                 verbose=False,
-                args=(mu_array,),
             )
             gamma_new = sol
 
@@ -1010,479 +1157,483 @@ class Solver:
             return converged, gamma_new, alpha_array, Umag_array
 
         except Exception as e:
-            logging.warning(
-                f"newton_krylov method failed: {str(e)}. \nFalling back to regular gamma_loop."
+            logging.warning(f"Newton_krylov method failed")
+            return (
+                False,
+                np.zeros(self.n_panels),
+                np.zeros(self.n_panels),
+                np.zeros(self.n_panels),
             )
-            return self.gamma_loop_simonet_stall(
-                gamma_initial,
-            )
-
-    # TODO: could used analytically expressed Jacobians
-    # TODO: could also represent the second derivatives as a matrix
-    # TODO: could probably also use jit for some things
-    def gamma_loop_newton_raphson_simonet(
-        self,
-        gamma_new,
-    ):
-        """Nonlinear Newton Raphson solver with adaptive relaxation to compute the circulation distribution.
-
-        The governing equation is modified by adding an artificial viscosity term
-        Γ_i - ½ V_proj,i c_i Cl(alpha_eff,i) - μ_i (∂²Γ/∂y_s²)_i = 0.
-
-        The second derivative is computed using a second order finite difference scheme on an irregular grid.
-        The viscosity coefficients μ_i are computed (once) from the initial diagonal of the Jacobian.
-
-        Args:
-            gamma_new (np.array): Initial gamma distribution.
-            AIC_x, AIC_y, AIC_z (np.array): Induced velocity influence matrices.
-            va_array (np.array): Free-stream velocity array.
-            chord_array (np.array): Chord length array.
-            x_airf_array, y_airf_array, z_airf_array (np.array): Local airfoil axes.
-            panels (list): List of Panel objects (each assumed to have a control-point coordinate, e.g. panel.y).
-            relaxation_factor (float): Initial relaxation factor.
-
-        Returns:
-            tuple: (converged (bool), final gamma distribution (np.array),
-                    angle of attack array (np.array), relative velocity magnitude (np.array))
-        """
-
-        # ===============================
-        # Helper: compute finite-difference coefficients and second derivative
-        # ===============================
-        def compute_abc_prime():
-            """
-            Compute the finite-difference coefficients a', b', c' for the boundary nodes.
-            """
-            # Boundary nodes
-            d1 = self.y_coords[1] - self.y_coords[0]
-            d2 = self.y_coords[2] - self.y_coords[0]
-            a_prime = 2.0 / (d1 * d2)
-            b_prime = 2.0 / ((d1 - d2) * d1)
-            c_prime = -2.0 / ((d1 - d2) * d2)
-            return a_prime, b_prime, c_prime
-
-        def compute_abc(i):
-            """
-            Compute the finite-difference coefficients a, b, c for the interior nodes.
-            """
-            d1 = self.y_coords[i + 1] - self.y_coords[i]
-            d_1 = self.y_coords[i] - self.y_coords[i - 1]
-            a = 2.0 / ((d1 + d_1) * d_1)
-            b = -2.0 / (d1 * d_1)
-            c = 2.0 / ((d1 + d_1) * d1)
-            return a, b, c
-
-        def compute_abc_dbl_prime():
-            """
-            Compute the finite-difference coefficients a'', b'', c'' for the boundary nodes.
-            """
-            # Boundary nodes
-            d1 = self.y_coords[-1] - self.y_coords[-2]
-            d2 = self.y_coords[-1] - self.y_coords[-3]
-            a_dbl_prime = 2.0 / (d1 * d2)
-            b_dbl_prime = 2.0 / ((d1 - d2) * d1)
-            c_dbl_prime = -2.0 / ((d1 - d2) * d2)
-            return a_dbl_prime, b_dbl_prime, c_dbl_prime
-
-        def compute_second_derivative_of_gamma(gamma):
-            """
-            Compute the second derivative of gamma along the span using the
-            exact boundary stencils from eq. (21) in your reference, plus the
-            interior formulas.
-
-            In the reference, i=1 and i=n are the boundary nodes. Here, we use
-            0-based Python indexing, so:
-            * i=0 in Python corresponds to i=1 in the reference
-            * i=n-1 in Python corresponds to i=n in the reference
-
-            For interior nodes (1 <= i <= n-2 in Python), we use:
-                (∂²Γ/∂y²)_i = a_i Γ[i-1] + b_i Γ[i] + c_i Γ[i+1]
-
-            For i=0 (the first node in Python, i=1 in reference):
-                (∂²Γ/∂y²)_0 = a' Γ[0] + b' Γ[1] + c' Γ[2]
-
-            For i=n-1 (the last node in Python, i=n in reference):
-                (∂²Γ/∂y²)_(n-1) = a'' Γ[n-1] + b'' Γ[n-2] + c'' Γ[n-3]
-
-            NOTE: The definitions of a', b', c', a'', b'', c'' come from eq. (22).
-                We also assume y_coords is sorted along the span (y[0] < y[1] < ...).
-            """
-
-            n = self.n_panels
-            second_deriv = np.zeros(n)
-
-            # Quick exit if too few points
-            if n < 3:
-                raise ValueError(
-                    "At least 3 panels are required to compute the second derivative."
-                )
-
-            # ===============================
-            # 1) Boundary formula for i=0 => eq. (21) at i=1 in reference
-            # ===============================
-            a_prime, b_prime, c_prime = compute_abc_prime()
-            second_deriv[0] = (
-                a_prime * gamma[0] + b_prime * gamma[1] + c_prime * gamma[2]
-            )
-
-            # ===============================
-            # 2) Interior points: i = 1..(n-2)
-            # ===============================
-            for i in range(1, n - 1):
-                a, b, c = compute_abc(i)
-                second_deriv[i] = a * gamma[i - 1] + b * gamma[i] + c * gamma[i + 1]
-
-            # ===============================
-            # 3) Boundary formula for i=n-1 => eq. (21) at i=n in reference
-            # ===============================
-            # here it is not y_coords[n], because of python 0-based indexing
-            a_dbl_prime, b_dbl_prime, c_dbl_prime = compute_abc_dbl_prime()
-            second_deriv[n - 1] = (
-                a_dbl_prime * gamma[n - 1]
-                + b_dbl_prime * gamma[n - 2]
-                + c_dbl_prime * gamma[n - 3]
-            )
-
-            return second_deriv
-
-        def compute_G_residual(
-            gamma,
-            mu_array,
-        ):
-            """Computes the residual vector G for the non_linear system, including the artificial viscosity term.
-
-            This function follows eq. (20) of Simonet et al., computing
-
-                G = gamma - gamma_new - (mu_array * (∂²gamma/∂y²))
-
-            Args:
-                gamma (np.ndarray): Current circulation distribution (n x 1).
-                mu_array (np.ndarray): Artificial viscosity coefficients (n x 1).
-
-            Returns:
-                Tuple[np.ndarray, np.ndarray, np.ndarray]:
-                    - Residual vector G (n x 1).
-                    - Angle of attack array (n x 1).
-                    - Relative velocity magnitude array (n x 1).
-            """
-            alpha_array, Umag_array, cl_array, Umagw_array = (
-                self.compute_aerodynamic_quantities(gamma)
-            )
-            gamma_new = (
-                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
-            )
-            second_derivative_of_gamma = compute_second_derivative_of_gamma(gamma)
-            G_residual = gamma - gamma_new - (mu_array * second_derivative_of_gamma)
-            return G_residual, alpha_array, Umag_array
-
-        def compute_jacobian_K(F_func, gamma, *args):
-            """
-            Computes the Jacobian matrix K using finite differences.
-
-            Args:
-                F_func (callable): Function to compute the residual vector.
-                gamma (np.array): Current circulation distribution.
-                eps (float): Finite difference step size.
-                args (tuple): Additional arguments for the residual function.
-
-            Returns:
-                np.ndarray: Jacobian matrix (n x n).
-            """
-            n = self.n_panels
-            K = np.zeros((n, n))
-            F0, _, _ = F_func(gamma, *args)
-            for i in range(n):
-                gamma_eps = gamma.copy()
-                gamma_eps[i] += self.jacobian_eps
-                F1, _, _ = F_func(gamma_eps, *args)
-                K[:, i] = (F1 - F0) / self.jacobian_eps
-            return K
-
-        # ===============================
-        # Helper: compute artificial viscosity coefficients mu_tilde_i (eq. 25)
-        # -------------------------------
-        def compute_mu_tilde_array(K):
-            """Computes μ_i from the diagonal of the Jacobian and the central finite-difference coefficient.
-
-            Args:
-                - K (np.ndarray): Jacobian matrix (n x n).
-                - y_coords (np.array): Spanwise coordinates of the panels.
-            Returns
-                - mu_tilde_array (np.array): Artificial viscosity coefficients.
-            """
-            n = self.n_panels
-            mu_tilde_array = np.zeros(n)
-
-            # first panel
-            a_prime, _, _ = compute_abc_prime()
-            mu_tilde_array[0] = np.minimum(0.0, K[0, 0] / a_prime)
-
-            for i in range(1, n - 1):
-                _, b, _ = compute_abc(i)
-                mu_tilde_array[i] = np.maximum(0.0, K[i, i] / b)
-
-            # last panel
-            a_dbl_prime, _, _ = compute_abc_dbl_prime()
-            mu_tilde_array[n - 1] = np.minimum(0.0, K[n - 1, n - 1] / a_dbl_prime)
-            return mu_tilde_array
-
-        # ===============================
-        # Main Newton–Raphson loop
-        # ===============================
-        # Extract spanwise coordinates from panels (assumes each panel has an attribute "y")
-        gamma = gamma_new.copy()
-        relaxation = self.relaxation_factor
-
-        # Initially, set μ_i = 0 (no viscosity) so that we can compute the first Jacobian.
-        mu_array = np.zeros_like(gamma)
-        # D_matrix = build_second_derivative_matrix(y_coords)
-
-        for it in range(self.max_iterations):
-            # Compute residual (F_val) and aerodynamic arrays.
-            F_val, alpha_array, Umag_array = compute_G_residual(
-                gamma,
-                mu_array,
-            )
-
-            # === Checking Convergence ===
-            # computes the infinity norm, also known as max norm (maximum absolute row sum)
-            norm_F = np.linalg.norm(F_val, np.inf)
-            if norm_F < self.allowed_error:
-                logging.info(
-                    f"Converged after {it} iterations with residual norm {norm_F:.3e}."
-                )
-                return True, gamma, alpha_array, Umag_array
-
-            # === Computing Jacobian K (=delta G/ delta Gamma) using finite differences ===
-            # TODO: this could be done analytically using eqs 23,24 and appendix A.
-            K = compute_jacobian_K(compute_G_residual, gamma, mu_array)
-
-            # On the first iteration, compute and fix the artificial viscosity coefficients.
-            if it == 0:
-                mu_tilde_array = compute_mu_tilde_array(K)
-                # Using eq 26. and interpreting b as the local spanwise panel width
-                b_array = np.array([panel.width for panel in self.panels])
-                total_tilde = np.sum(mu_tilde_array * b_array)
-                mu_array = self.simonet_artificial_viscosity_fva * (
-                    mu_tilde_array / total_tilde
-                )
-
-                # Recompute the residual with the new μ coefficients.
-                F_val, alpha_array, Umag_array = compute_G_residual(
-                    gamma,
-                    mu_array,
-                )
-
-                norm_F = np.linalg.norm(F_val, np.inf)
-
-            # Solve for the Newton step: K * delta = -F_val.
-            try:
-                delta = np.linalg.solve(K, -F_val)
-            except np.linalg.LinAlgError:
-                logging.error(f"Jacobian is singular at iteration {it}.")
-                return False, gamma, alpha_array, Umag_array
-
-            # Trial update using the current relaxation factor.
-            gamma_trial = gamma + relaxation * delta
-            F_trial, alpha_array, Umag_array = compute_G_residual(
-                gamma_trial,
-                mu_array,
-            )
-
-            # Adapt the relaxation factor: increase if the trial is successful; otherwise reduce.
-            if np.linalg.norm(F_trial, np.inf) < norm_F:
-                gamma = gamma_trial
-                relaxation = min(relaxation * 1.1, 1.0)
-            else:
-                relaxation *= 0.5
-                if relaxation < self.min_relaxation_factor:
-                    logging.error(
-                        "Relaxation coefficient too small; stopping iteration."
-                    )
-                    return False, gamma, alpha_array, Umag_array
-
-        logging.warning(
-            f"Did not converge within {self.max_iterations} iterations (final residual {norm_F:.3e})."
-        )
-        return False, gamma, alpha_array, Umag_array
-
-    def gamma_loop_newton_raphson(
-        self,
-        gamma_new,
-    ):
-        """
-        Nonlinear Newton Raphson solver with adaptive relaxation to compute the circulation distribution.
-
-        Args:
-            gamma_new (np.array): Initial gamma distribution.
-            AIC_x, AIC_y, AIC_z (np.array): Induced velocity influence matrices.
-            va_array (np.array): Free-stream velocity array.
-            chord_array (np.array): Chord length array.
-            x_airf_array, y_airf_array, z_airf_array (np.array): Airfoil coordinate arrays.
-            panels (list): List of Panel objects.
-            relaxation_factor (float): Initial relaxation factor.
-
-        Returns:
-            tuple: (converged (bool), final gamma distribution (np.array),
-                    angle of attack array (np.array), relative velocity magnitude (np.array))
-        """
-
-        # def compute_jacobian_J_analytic(self, gamma):
-        #     """
-        #     Compute the Jacobian (∂F/∂Γ) analytically, using the derivations
-        #     from Appendix A of your reference (eqs. A19–A21).
-
-        #     Args:
-        #         gamma (np.ndarray): Current circulation distribution (n x 1).
-
-        #     Returns:
-        #         J (np.ndarray): n-by-n matrix of partial derivatives J[i, j] = ∂F_i / ∂Γ_j
-        #     """
-
-        #     n = self.n_panels
-        #     J = np.zeros((n, n))
-
-        #     # 1) Recompute all aerodynamic quantities at the current circulation gamma.
-        #     #    - alpha_eff[i], the effective angle of attack at panel i
-        #     #    - V_proj[i], the "projected" velocity magnitude
-        #     #    - V_eff[i], the "effective" velocity magnitude
-        #     #    - c[i], the chord length for each panel
-        #     #    - Cl[i] = Cl(alpha_eff[i]), the 2D lift coefficient
-        #     #    etc.
-        #     alpha_array, Umag_array, cl_array, Umagw_array = (
-        #         self.compute_aerodynamic_quantities(gamma)
-        #     )
-        #     alpha_eff = alpha_array
-        #     V_proj = Umagw_array
-        #     V_eff = Umag_array
-
-        #     # 2) Compute the derivative dCl/dα at each panel.
-        #     #    (You might have a panel-specific function or a known formula.)
-        #     dCl_dalpha = np.array(
-        #         [panel.dCl_dalpha(alpha_eff[i]) for i, panel in enumerate(self.panels)]
-        #     )
-
-        #     # 3) For each pair (i, j), build the Jacobian using eq. (A19–A21).
-        #     #    In the paper, eq. (A21) typically looks like:
-        #     #
-        #     #      J_{ij} = δ_{ij}
-        #     #               - (1/2) * c_i * (V_eff[i] / V_proj[i])
-        #     #                 * [ Cl(alpha_eff[i]) + (dCl/dα)[i] * ∂α_eff[i]/∂Γ_j ]
-        #     #
-        #     #    or an equivalent expression. The tricky part is ∂α_eff[i]/∂Γ_j.
-        #     #
-        #     #    Also, the sign might differ if your F_i is defined as:
-        #     #        F_i(Γ) = Γ_i - Γ_calc,i(...)
-        #     #    or as
-        #     #        F_i(Γ) = Γ_calc,i(...) - Γ_i.
-        #     #
-        #     #    Make sure to be consistent with your definition of the residual F.
-        #     #
-        #     for i in range(n):
-        #         for j in range(n):
-
-        #             # δ_{ij} (Kronecker delta)
-        #             delta_ij = 1.0 if (i == j) else 0.0
-
-        #             # Compute the coefficients A_ij, B_ij from ~Eq.9,10
-        #             # v_ij: A 3D induced velocity vector at panel i due to panel (or vortex) j ~Eq.2
-        #             # ysi: local y-axis chordwise direction vector
-        #             # ||ysi||^2: squared norm of ysi
-        #             ##TODO: What you have here below is wrong
-        #             x1i = self.x_airf_array[i]  # vertical, in airfoil plane
-        #             x2i = self.y_airf_array[i]  # chordwise, in airfoil plane
-        #             x3i = self.z_airf_array[i]  # spanwise, in airfoil plane
-        #             ysi = self.y_coords
-        #             ysi_sq = np.dot(ysi, ysi)
-        #             vij = np.array(
-        #                 [
-        #                     self.AIC_x[i, j],
-        #                     self.AIC_y[i, j],
-        #                     self.AIC_z[i, j],
-        #                 ]
-        #             )
-        #             A_ij = vij * ysi_sq - x2i * np.dot(vij, x2i)
-        #             B_ij = x1i * np.dot(vij, x3i) - x3i * np.dot(vij, x1i)
-
-        #             # eq. A21
-        #             J[i, j] = delta_ij - 0.5 * self.chord_array[i] * (
-        #                 V_eff[i] / V_proj[i]
-        #             ) * (A_ij * cl_array[i] + B_ij * dCl_dalpha[i])
-
-        #     return J
-
-        # Nested helper function to compute the residual and related aerodynamic arrays.
-        def compute_gamma_residual(gamma):
-            alpha_array, Umag_array, cl_array, Umagw_array = (
-                self.compute_aerodynamic_quantities(gamma)
-            )
-            gamma_new = (
-                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
-            )
-            # Residual: difference between the computed and current gamma.
-            F_val = gamma_new - gamma
-            return F_val, alpha_array, Umag_array
-
-        # Nested helper function to compute the Jacobian using finite differences.
-        def compute_jacobian_J(F_func, gamma):
-            n = self.n_panels
-            K = np.zeros((n, n))
-            F0, _, _ = F_func(gamma)
-            for i in range(n):
-                gamma_eps = gamma.copy()
-                gamma_eps[i] += self.jacobian_eps
-                F1, _, _ = F_func(gamma_eps)
-                K[:, i] = (F1 - F0) / self.jacobian_eps
-            return K
-
-        # Begin the Newton–Raphson iteration.
-        gamma = gamma_new.copy()
-        relaxation = self.relaxation_factor
-
-        for i in range(self.max_iterations):
-            F_val, alpha_array, Umag_array = compute_gamma_residual(gamma)
-
-            # === checking for convergence ===
-            norm_F = np.linalg.norm(F_val, np.inf)
-            if norm_F < self.allowed_error:
-                logging.info(
-                    f"Converged after {i} iterations with residual norm {norm_F:.3e}."
-                )
-                return True, gamma, alpha_array, Umag_array
-
-            # TODO: this could be replaced using eq. 23,24 and Appendix A
-            # TODO: it could be written in analytical form
-            # Compute the Jacobian (K = delta G/ delta Gamma)
-            J = compute_jacobian_J(compute_gamma_residual, gamma)
-            # === use newton_raphson to solve the linear system ===
-            try:
-                # Compute the Newton step: J * delta = -F_val.
-                delta = np.linalg.solve(J, -F_val)
-            except np.linalg.LinAlgError:
-                logging.error(f"Jacobian is singular at iteration {i}.")
-                return False, gamma, alpha_array, Umag_array
-
-            # === dynamic relaxation part ===
-            # Trial update with the current relaxation factor.
-            gamma_trial = gamma + relaxation * delta
-            F_trial, _, _ = compute_gamma_residual(gamma_trial)
-
-            # Adapt the relaxation factor based on the trial result.
-            if np.linalg.norm(F_trial, np.inf) < norm_F:
-                gamma = gamma_trial
-                relaxation = min(relaxation * 1.1, 1.0)
-            else:
-                relaxation *= 0.5
-                if relaxation < self.min_relaxation_factor:
-                    logging.error(
-                        "Relaxation coefficient too small; stopping iteration."
-                    )
-                    return False, gamma, alpha_array, Umag_array
-
-        logging.warning(
-            f"Did not converge within {self.max_iterations} iterations (final residual {norm_F:.3e})."
-        )
-        return False, gamma, alpha_array, Umag_array
+            # return self.gamma_loop_simonet_stall(
+            #     gamma_initial,
+            # )
+
+    # # TODO: could used analytically expressed Jacobians
+    # # TODO: could also represent the second derivatives as a matrix
+    # # TODO: could probably also use jit for some things
+    # def gamma_loop_newton_raphson_simonet(
+    #     self,
+    #     gamma_new,
+    # ):
+    #     """Nonlinear Newton Raphson solver with adaptive relaxation to compute the circulation distribution.
+
+    #     The governing equation is modified by adding an artificial viscosity term
+    #     Γ_i - ½ V_proj,i c_i Cl(alpha_eff,i) - μ_i (∂²Γ/∂y_s²)_i = 0.
+
+    #     The second derivative is computed using a second order finite difference scheme on an irregular grid.
+    #     The viscosity coefficients μ_i are computed (once) from the initial diagonal of the Jacobian.
+
+    #     Args:
+    #         gamma_new (np.array): Initial gamma distribution.
+    #         AIC_x, AIC_y, AIC_z (np.array): Induced velocity influence matrices.
+    #         va_array (np.array): Free-stream velocity array.
+    #         chord_array (np.array): Chord length array.
+    #         x_airf_array, y_airf_array, z_airf_array (np.array): Local airfoil axes.
+    #         panels (list): List of Panel objects (each assumed to have a control-point coordinate, e.g. panel.y).
+    #         relaxation_factor (float): Initial relaxation factor.
+
+    #     Returns:
+    #         tuple: (converged (bool), final gamma distribution (np.array),
+    #                 angle of attack array (np.array), relative velocity magnitude (np.array))
+    #     """
+
+    #     # ===============================
+    #     # Helper: compute finite-difference coefficients and second derivative
+    #     # ===============================
+    #     def compute_abc_prime():
+    #         """
+    #         Compute the finite-difference coefficients a', b', c' for the boundary nodes.
+    #         """
+    #         # Boundary nodes
+    #         d1 = self.y_coords[1] - self.y_coords[0]
+    #         d2 = self.y_coords[2] - self.y_coords[0]
+    #         a_prime = 2.0 / (d1 * d2)
+    #         b_prime = 2.0 / ((d1 - d2) * d1)
+    #         c_prime = -2.0 / ((d1 - d2) * d2)
+    #         return a_prime, b_prime, c_prime
+
+    #     def compute_abc(i):
+    #         """
+    #         Compute the finite-difference coefficients a, b, c for the interior nodes.
+    #         """
+    #         d1 = self.y_coords[i + 1] - self.y_coords[i]
+    #         d_1 = self.y_coords[i] - self.y_coords[i - 1]
+    #         a = 2.0 / ((d1 + d_1) * d_1)
+    #         b = -2.0 / (d1 * d_1)
+    #         c = 2.0 / ((d1 + d_1) * d1)
+    #         return a, b, c
+
+    #     def compute_abc_dbl_prime():
+    #         """
+    #         Compute the finite-difference coefficients a'', b'', c'' for the boundary nodes.
+    #         """
+    #         # Boundary nodes
+    #         d1 = self.y_coords[-1] - self.y_coords[-2]
+    #         d2 = self.y_coords[-1] - self.y_coords[-3]
+    #         a_dbl_prime = 2.0 / (d1 * d2)
+    #         b_dbl_prime = 2.0 / ((d1 - d2) * d1)
+    #         c_dbl_prime = -2.0 / ((d1 - d2) * d2)
+    #         return a_dbl_prime, b_dbl_prime, c_dbl_prime
+
+    #     def compute_second_derivative_of_gamma(gamma):
+    #         """
+    #         Compute the second derivative of gamma along the span using the
+    #         exact boundary stencils from eq. (21) in your reference, plus the
+    #         interior formulas.
+
+    #         In the reference, i=1 and i=n are the boundary nodes. Here, we use
+    #         0-based Python indexing, so:
+    #         * i=0 in Python corresponds to i=1 in the reference
+    #         * i=n-1 in Python corresponds to i=n in the reference
+
+    #         For interior nodes (1 <= i <= n-2 in Python), we use:
+    #             (∂²Γ/∂y²)_i = a_i Γ[i-1] + b_i Γ[i] + c_i Γ[i+1]
+
+    #         For i=0 (the first node in Python, i=1 in reference):
+    #             (∂²Γ/∂y²)_0 = a' Γ[0] + b' Γ[1] + c' Γ[2]
+
+    #         For i=n-1 (the last node in Python, i=n in reference):
+    #             (∂²Γ/∂y²)_(n-1) = a'' Γ[n-1] + b'' Γ[n-2] + c'' Γ[n-3]
+
+    #         NOTE: The definitions of a', b', c', a'', b'', c'' come from eq. (22).
+    #             We also assume y_coords is sorted along the span (y[0] < y[1] < ...).
+    #         """
+
+    #         n = self.n_panels
+    #         second_deriv = np.zeros(n)
+
+    #         # Quick exit if too few points
+    #         if n < 3:
+    #             raise ValueError(
+    #                 "At least 3 panels are required to compute the second derivative."
+    #             )
+
+    #         # ===============================
+    #         # 1) Boundary formula for i=0 => eq. (21) at i=1 in reference
+    #         # ===============================
+    #         a_prime, b_prime, c_prime = compute_abc_prime()
+    #         second_deriv[0] = (
+    #             a_prime * gamma[0] + b_prime * gamma[1] + c_prime * gamma[2]
+    #         )
+
+    #         # ===============================
+    #         # 2) Interior points: i = 1..(n-2)
+    #         # ===============================
+    #         for i in range(1, n - 1):
+    #             a, b, c = compute_abc(i)
+    #             second_deriv[i] = a * gamma[i - 1] + b * gamma[i] + c * gamma[i + 1]
+
+    #         # ===============================
+    #         # 3) Boundary formula for i=n-1 => eq. (21) at i=n in reference
+    #         # ===============================
+    #         # here it is not y_coords[n], because of python 0-based indexing
+    #         a_dbl_prime, b_dbl_prime, c_dbl_prime = compute_abc_dbl_prime()
+    #         second_deriv[n - 1] = (
+    #             a_dbl_prime * gamma[n - 1]
+    #             + b_dbl_prime * gamma[n - 2]
+    #             + c_dbl_prime * gamma[n - 3]
+    #         )
+
+    #         return second_deriv
+
+    #     def compute_G_residual(
+    #         gamma,
+    #         mu_array,
+    #     ):
+    #         """Computes the residual vector G for the non_linear system, including the artificial viscosity term.
+
+    #         This function follows eq. (20) of Simonet et al., computing
+
+    #             G = gamma - gamma_new - (mu_array * (∂²gamma/∂y²))
+
+    #         Args:
+    #             gamma (np.ndarray): Current circulation distribution (n x 1).
+    #             mu_array (np.ndarray): Artificial viscosity coefficients (n x 1).
+
+    #         Returns:
+    #             Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    #                 - Residual vector G (n x 1).
+    #                 - Angle of attack array (n x 1).
+    #                 - Relative velocity magnitude array (n x 1).
+    #         """
+    #         alpha_array, Umag_array, cl_array, Umagw_array = (
+    #             self.compute_aerodynamic_quantities(gamma)
+    #         )
+    #         gamma_new = (
+    #             0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
+    #         )
+    #         second_derivative_of_gamma = compute_second_derivative_of_gamma(gamma)
+    #         G_residual = (gamma_new + mu_array * second_derivative_of_gamma) - gamma
+    #         return G_residual, alpha_array, Umag_array
+
+    #     def compute_jacobian_K(F_func, gamma, *args):
+    #         """
+    #         Computes the Jacobian matrix K using finite differences.
+
+    #         Args:
+    #             F_func (callable): Function to compute the residual vector.
+    #             gamma (np.array): Current circulation distribution.
+    #             eps (float): Finite difference step size.
+    #             args (tuple): Additional arguments for the residual function.
+
+    #         Returns:
+    #             np.ndarray: Jacobian matrix (n x n).
+    #         """
+    #         n = self.n_panels
+    #         K = np.zeros((n, n))
+    #         F0, _, _ = F_func(gamma, *args)
+    #         for i in range(n):
+    #             gamma_eps = gamma.copy()
+    #             gamma_eps[i] += self.jacobian_eps
+    #             F1, _, _ = F_func(gamma_eps, *args)
+    #             K[:, i] = (F1 - F0) / self.jacobian_eps
+    #         return K
+
+    #     # ===============================
+    #     # Helper: compute artificial viscosity coefficients mu_tilde_i (eq. 25)
+    #     # -------------------------------
+    #     def compute_mu_tilde_array(K):
+    #         """Computes μ_i from the diagonal of the Jacobian and the central finite-difference coefficient.
+
+    #         Args:
+    #             - K (np.ndarray): Jacobian matrix (n x n).
+    #             - y_coords (np.array): Spanwise coordinates of the panels.
+    #         Returns
+    #             - mu_tilde_array (np.array): Artificial viscosity coefficients.
+    #         """
+    #         n = self.n_panels
+    #         mu_tilde_array = np.zeros(n)
+
+    #         # first panel
+    #         a_prime, _, _ = compute_abc_prime()
+    #         mu_tilde_array[0] = np.minimum(0.0, K[0, 0] / a_prime)
+
+    #         for i in range(1, n - 1):
+    #             _, b, _ = compute_abc(i)
+    #             mu_tilde_array[i] = np.maximum(0.0, K[i, i] / b)
+
+    #         # last panel
+    #         a_dbl_prime, _, _ = compute_abc_dbl_prime()
+    #         mu_tilde_array[n - 1] = np.minimum(0.0, K[n - 1, n - 1] / a_dbl_prime)
+    #         return mu_tilde_array
+
+    #     # ===============================
+    #     # Main Newton–Raphson loop
+    #     # ===============================
+    #     # Extract spanwise coordinates from panels (assumes each panel has an attribute "y")
+    #     gamma = gamma_new.copy()
+    #     relaxation = self.relaxation_factor
+
+    #     # Initially, set μ_i = 0 (no viscosity) so that we can compute the first Jacobian.
+    #     mu_array = np.zeros_like(gamma)
+    #     # D_matrix = build_second_derivative_matrix(y_coords)
+
+    #     for it in range(self.max_iterations):
+    #         # Compute residual (F_val) and aerodynamic arrays.
+    #         F_val, alpha_array, Umag_array = compute_G_residual(
+    #             gamma,
+    #             mu_array,
+    #         )
+
+    #         # === Checking Convergence ===
+    #         # computes the infinity norm, also known as max norm (maximum absolute row sum)
+    #         norm_F = np.linalg.norm(F_val, np.inf)
+    #         if norm_F < self.allowed_error:
+    #             logging.info(
+    #                 f"Converged after {it} iterations with residual norm {norm_F:.3e}."
+    #             )
+    #             return True, gamma, alpha_array, Umag_array
+
+    #         # === Computing Jacobian K (=delta G/ delta Gamma) using finite differences ===
+    #         # TODO: this could be done analytically using eqs 23,24 and appendix A.
+    #         K = compute_jacobian_K(compute_G_residual, gamma, mu_array)
+
+    #         # On the first iteration, compute and fix the artificial viscosity coefficients.
+    #         if it == 0:
+    #             mu_tilde_array = compute_mu_tilde_array(K)
+    #             # Using eq 26. and interpreting b as the local spanwise panel width
+    #             b_array = np.array([panel.width for panel in self.panels])
+    #             total_tilde = np.sum(mu_tilde_array * b_array)
+    #             mu_array = self.simonet_artificial_viscosity_fva * (
+    #                 mu_tilde_array / total_tilde
+    #             )
+
+    #             # Recompute the residual with the new μ coefficients.
+    #             F_val, alpha_array, Umag_array = compute_G_residual(
+    #                 gamma,
+    #                 mu_array,
+    #             )
+
+    #             norm_F = np.linalg.norm(F_val, np.inf)
+
+    #         # Solve for the Newton step: K * delta = -F_val.
+    #         try:
+    #             delta = np.linalg.solve(K, -F_val)
+    #         except np.linalg.LinAlgError:
+    #             logging.error(f"Jacobian is singular at iteration {it}.")
+    #             return False, gamma, alpha_array, Umag_array
+
+    #         # Trial update using the current relaxation factor.
+    #         gamma_trial = gamma + relaxation * delta
+    #         F_trial, alpha_array, Umag_array = compute_G_residual(
+    #             gamma_trial,
+    #             mu_array,
+    #         )
+
+    #         # Adapt the relaxation factor: increase if the trial is successful; otherwise reduce.
+    #         if np.linalg.norm(F_trial, np.inf) < norm_F:
+    #             gamma = gamma_trial
+    #             relaxation = min(relaxation * 1.1, 1.0)
+    #         else:
+    #             relaxation *= 0.5
+    #             if relaxation < self.min_relaxation_factor:
+    #                 logging.error(
+    #                     "Relaxation coefficient too small; stopping iteration."
+    #                 )
+    #                 return False, gamma, alpha_array, Umag_array
+
+    #     logging.warning(
+    #         f"Did not converge within {self.max_iterations} iterations (final residual {norm_F:.3e})."
+    #     )
+    #     return False, gamma, alpha_array, Umag_array
+
+    # def gamma_loop_newton_raphson(
+    #     self,
+    #     gamma_new,
+    # ):
+    #     """
+    #     Nonlinear Newton Raphson solver with adaptive relaxation to compute the circulation distribution.
+
+    #     Args:
+    #         gamma_new (np.array): Initial gamma distribution.
+    #         AIC_x, AIC_y, AIC_z (np.array): Induced velocity influence matrices.
+    #         va_array (np.array): Free-stream velocity array.
+    #         chord_array (np.array): Chord length array.
+    #         x_airf_array, y_airf_array, z_airf_array (np.array): Airfoil coordinate arrays.
+    #         panels (list): List of Panel objects.
+    #         relaxation_factor (float): Initial relaxation factor.
+
+    #     Returns:
+    #         tuple: (converged (bool), final gamma distribution (np.array),
+    #                 angle of attack array (np.array), relative velocity magnitude (np.array))
+    #     """
+
+    #     # def compute_jacobian_J_analytic(self, gamma):
+    #     #     """
+    #     #     Compute the Jacobian (∂F/∂Γ) analytically, using the derivations
+    #     #     from Appendix A of your reference (eqs. A19–A21).
+
+    #     #     Args:
+    #     #         gamma (np.ndarray): Current circulation distribution (n x 1).
+
+    #     #     Returns:
+    #     #         J (np.ndarray): n-by-n matrix of partial derivatives J[i, j] = ∂F_i / ∂Γ_j
+    #     #     """
+
+    #     #     n = self.n_panels
+    #     #     J = np.zeros((n, n))
+
+    #     #     # 1) Recompute all aerodynamic quantities at the current circulation gamma.
+    #     #     #    - alpha_eff[i], the effective angle of attack at panel i
+    #     #     #    - V_proj[i], the "projected" velocity magnitude
+    #     #     #    - V_eff[i], the "effective" velocity magnitude
+    #     #     #    - c[i], the chord length for each panel
+    #     #     #    - Cl[i] = Cl(alpha_eff[i]), the 2D lift coefficient
+    #     #     #    etc.
+    #     #     alpha_array, Umag_array, cl_array, Umagw_array = (
+    #     #         self.compute_aerodynamic_quantities(gamma)
+    #     #     )
+    #     #     alpha_eff = alpha_array
+    #     #     V_proj = Umagw_array
+    #     #     V_eff = Umag_array
+
+    #     #     # 2) Compute the derivative dCl/dα at each panel.
+    #     #     #    (You might have a panel-specific function or a known formula.)
+    #     #     dCl_dalpha = np.array(
+    #     #         [panel.dCl_dalpha(alpha_eff[i]) for i, panel in enumerate(self.panels)]
+    #     #     )
+
+    #     #     # 3) For each pair (i, j), build the Jacobian using eq. (A19–A21).
+    #     #     #    In the paper, eq. (A21) typically looks like:
+    #     #     #
+    #     #     #      J_{ij} = δ_{ij}
+    #     #     #               - (1/2) * c_i * (V_eff[i] / V_proj[i])
+    #     #     #                 * [ Cl(alpha_eff[i]) + (dCl/dα)[i] * ∂α_eff[i]/∂Γ_j ]
+    #     #     #
+    #     #     #    or an equivalent expression. The tricky part is ∂α_eff[i]/∂Γ_j.
+    #     #     #
+    #     #     #    Also, the sign might differ if your F_i is defined as:
+    #     #     #        F_i(Γ) = Γ_i - Γ_calc,i(...)
+    #     #     #    or as
+    #     #     #        F_i(Γ) = Γ_calc,i(...) - Γ_i.
+    #     #     #
+    #     #     #    Make sure to be consistent with your definition of the residual F.
+    #     #     #
+    #     #     for i in range(n):
+    #     #         for j in range(n):
+
+    #     #             # δ_{ij} (Kronecker delta)
+    #     #             delta_ij = 1.0 if (i == j) else 0.0
+
+    #     #             # Compute the coefficients A_ij, B_ij from ~Eq.9,10
+    #     #             # v_ij: A 3D induced velocity vector at panel i due to panel (or vortex) j ~Eq.2
+    #     #             # ysi: local y-axis chordwise direction vector
+    #     #             # ||ysi||^2: squared norm of ysi
+    #     #             ##TODO: What you have here below is wrong
+    #     #             x1i = self.x_airf_array[i]  # vertical, in airfoil plane
+    #     #             x2i = self.y_airf_array[i]  # chordwise, in airfoil plane
+    #     #             x3i = self.z_airf_array[i]  # spanwise, in airfoil plane
+    #     #             ysi = self.y_coords
+    #     #             ysi_sq = np.dot(ysi, ysi)
+    #     #             vij = np.array(
+    #     #                 [
+    #     #                     self.AIC_x[i, j],
+    #     #                     self.AIC_y[i, j],
+    #     #                     self.AIC_z[i, j],
+    #     #                 ]
+    #     #             )
+    #     #             A_ij = vij * ysi_sq - x2i * np.dot(vij, x2i)
+    #     #             B_ij = x1i * np.dot(vij, x3i) - x3i * np.dot(vij, x1i)
+
+    #     #             # eq. A21
+    #     #             J[i, j] = delta_ij - 0.5 * self.chord_array[i] * (
+    #     #                 V_eff[i] / V_proj[i]
+    #     #             ) * (A_ij * cl_array[i] + B_ij * dCl_dalpha[i])
+
+    #     #     return J
+
+    #     # Nested helper function to compute the residual and related aerodynamic arrays.
+    #     def compute_gamma_residual(gamma):
+    #         alpha_array, Umag_array, cl_array, Umagw_array = (
+    #             self.compute_aerodynamic_quantities(gamma)
+    #         )
+    #         gamma_new = (
+    #             0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
+    #         )
+    #         # Residual: difference between the computed and current gamma.
+    #         F_val = gamma_new - gamma
+    #         return F_val, alpha_array, Umag_array
+
+    #     # Nested helper function to compute the Jacobian using finite differences.
+    #     def compute_jacobian_J(F_func, gamma):
+    #         n = self.n_panels
+    #         K = np.zeros((n, n))
+    #         F0, _, _ = F_func(gamma)
+    #         for i in range(n):
+    #             gamma_eps = gamma.copy()
+    #             gamma_eps[i] += self.jacobian_eps
+    #             F1, _, _ = F_func(gamma_eps)
+    #             K[:, i] = (F1 - F0) / self.jacobian_eps
+    #         return K
+
+    #     # Begin the Newton–Raphson iteration.
+    #     gamma = gamma_new.copy()
+    #     relaxation = self.relaxation_factor
+
+    #     for i in range(self.max_iterations):
+    #         F_val, alpha_array, Umag_array = compute_gamma_residual(gamma)
+
+    #         # === checking for convergence ===
+    #         norm_F = np.linalg.norm(F_val, np.inf)
+    #         if norm_F < self.allowed_error:
+    #             logging.info(
+    #                 f"Converged after {i} iterations with residual norm {norm_F:.3e}."
+    #             )
+    #             return True, gamma, alpha_array, Umag_array
+
+    #         # TODO: this could be replaced using eq. 23,24 and Appendix A
+    #         # TODO: it could be written in analytical form
+    #         # Compute the Jacobian (K = delta G/ delta Gamma)
+    #         J = compute_jacobian_J(compute_gamma_residual, gamma)
+    #         # === use newton_raphson to solve the linear system ===
+    #         try:
+    #             # Compute the Newton step: J * delta = -F_val.
+    #             delta = np.linalg.solve(J, -F_val)
+    #         except np.linalg.LinAlgError:
+    #             logging.error(f"Jacobian is singular at iteration {i}.")
+    #             return False, gamma, alpha_array, Umag_array
+
+    #         # === dynamic relaxation part ===
+    #         # Trial update with the current relaxation factor.
+    #         gamma_trial = gamma + relaxation * delta
+    #         F_trial, _, _ = compute_gamma_residual(gamma_trial)
+
+    #         # Adapt the relaxation factor based on the trial result.
+    #         if np.linalg.norm(F_trial, np.inf) < norm_F:
+    #             gamma = gamma_trial
+    #             relaxation = min(relaxation * 1.1, 1.0)
+    #         else:
+    #             relaxation *= 0.5
+    #             if relaxation < self.min_relaxation_factor:
+    #                 logging.error(
+    #                     "Relaxation coefficient too small; stopping iteration."
+    #                 )
+    #                 return False, gamma, alpha_array, Umag_array
+
+    #     logging.warning(
+    #         f"Did not converge within {self.max_iterations} iterations (final residual {norm_F:.3e})."
+    #     )
+    #     return False, gamma, alpha_array, Umag_array
 
     ####################
     ### STALL MODELS ###

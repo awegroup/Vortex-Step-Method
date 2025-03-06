@@ -12,14 +12,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [x] plotting.py: inside the generate_3D_polar_data, 
 feeding in gamma_distribution `results = solver.solve(body_aero,gamma_distrbution=gamma)`, also changed the way the legends are plotted: is now below the graphs in distribution and polars.
 - [x] BodyAerodynamics, changed `calculate_circulation_distribution_elliptical_wing` and added `calculate_circulation_distribution_cosine`
-- [x] Solver, changed _init_ statement, added artificial viscosity as property and setter, change gamma_initialisation inside solver function, added the gamma_loop types, and added the non_linear gamma loop functions. Also updated the artificial viscosity stall model, changed elliptic to elliptical, rewriting some of the variables inside solver, to become self. to make them callable from anywhere within the class, added min_relaxation_error, adding a compute_aerodynamic_quantities function
+- [x] Solver, changed _init_ statement, added artificial viscosity as property and setter, change gamma_initialisation inside solver function, added the gamma_loop types, and added the non_linear gamma loop functions. Also updated the artificial viscosity stall model, changed elliptic to elliptical, rewriting some of the variables inside solver, to become self. to make them callable from anywhere within the class, added min_relaxation_error, adding a compute_aerodynamic_quantities function, further adjusting the simonet functions
+removed: min_relaxation_error
+removed: is_new_vector_definition
+
+changing TUDELFT_V3_LEI_KITE, to TUDELFT_V3_KITE
 
 -Panel: added panel_polar_data property, added "cl_is_pisinalpha" to the _panel_aero_model options
 
 Added a test function under folder elliptical_wing_planform, from ch 4.1 of Simonet.
 
+Added a rectangular wing test function
 
-
+Changed spanwise panel distribution to uniform
 
 
 ### Added
