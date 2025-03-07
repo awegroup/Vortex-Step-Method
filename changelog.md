@@ -16,6 +16,8 @@ feeding in gamma_distribution `results = solver.solve(body_aero,gamma_distrbutio
 removed: min_relaxation_error
 removed: is_new_vector_definition
 
+moving everything from Solver to solver_functions, that is related to stall models
+
 changing TUDELFT_V3_LEI_KITE, to TUDELFT_V3_KITE
 
 -Panel: added panel_polar_data property, added "cl_is_pisinalpha" to the _panel_aero_model options
@@ -25,6 +27,7 @@ Added a test function under folder elliptical_wing_planform, from ch 4.1 of Simo
 Added a rectangular wing test function
 
 Changed spanwise panel distribution to uniform
+
 
 
 ### Added

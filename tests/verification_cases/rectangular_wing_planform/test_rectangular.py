@@ -22,8 +22,6 @@ from VSM.plotting import plot_polars, plot_distribution
 from VSM.interactive import interactive_plot
 from VSM.plot_styling import set_plot_style, plot_on_ax
 
-gamma = 0.2
-
 
 def cosine_spacing(min, max, n_points):
     """
@@ -361,103 +359,105 @@ body_aero_uniform = BodyAerodynamics(
 # Plotting CL-alpha fva (Fig. 12)
 # ==========================
 
-# set_plot_style()
-# fig, ax = plt.subplots(figsize=(8, 6))
+set_plot_style()
+fig, ax = plt.subplots(figsize=(8, 6))
 
-# # alpha_range = [15]
-# for fva in [0, 1e-4, 1e-3, 2e-3, 3e-3, 5e-3, 1e-2]:
+# alpha_range = [15]
+fva_list = [
+    0,
+    1e-4,
+    5e-4,
+    1e-4,
+    1e-2,
+    1e-1,
+    1e0,
+]
+for fva in fva_list:
 
-#     if fva == 0:
-#         is_with_damp = False
-#     else:
-#         is_with_damp = True
-#     solver_base = Solver(
-#         allowed_error=1e-6,
-#         relaxation_factor=1e-4,
-#         gamma_loop_type="non_linear_simonet_stall",
-#         is_with_simonet_artificial_viscosity=is_with_damp,
-#         simonet_artificial_viscosity_fva=fva,
-#     )
-#     cl_list = []
-#     for alpha in alpha_range:
-#         body_aero_uniform.va_initialize(Umag, alpha, side_slip=0, yaw_rate=0)
-#         results_VSM_uniform = solver_base.solve(
-#             body_aero_uniform, gamma_distribution=None
-#         )
-#         cl_list.append(results_VSM_uniform["cl"])
+    if fva == 0:
+        is_with_damp = False
+    else:
+        is_with_damp = True
+    solver_base = Solver(
+        allowed_error=1e-6,
+        relaxation_factor=1e-4,
+        gamma_loop_type="non_linear_simonet_stall",
+        is_with_simonet_artificial_viscosity=is_with_damp,
+        simonet_artificial_viscosity_fva=fva,
+    )
+    cl_list = []
+    for alpha in alpha_range:
+        body_aero_uniform.va_initialize(Umag, alpha, side_slip=0, yaw_rate=0)
+        results_VSM_uniform = solver_base.solve(
+            body_aero_uniform, gamma_distribution=None
+        )
+        cl_list.append(results_VSM_uniform["cl"])
 
-#     plot_on_ax(ax, alpha_range, cl_list, label=f"VSM fva:{fva}")
+    plot_on_ax(ax, alpha_range, cl_list, label=f"VSM fva:{fva}")
 
 
-# # Loading the 3D results
-# df_polar_3D = pd.read_csv(
-#     Path(PROJECT_DIR)
-#     / "tests"
-#     / "verification_cases"
-#     / "rectangular_wing_planform"
-#     / "polar_3D_WT_test_Chiereghin2020.csv"
-# )
+# Loading the 3D results
+df_polar_3D = pd.read_csv(
+    Path(PROJECT_DIR)
+    / "tests"
+    / "verification_cases"
+    / "rectangular_wing_planform"
+    / "polar_3D_WT_test_Chiereghin2020.csv"
+)
 
-# plot_on_ax(
-#     ax,
-#     df_polar["alpha"],
-#     df_polar["cl"],
-#     label="2D Experimental",
-#     color="black",
-#     linestyle="dashed",
-# )
-# plot_on_ax(
-#     ax,
-#     df_polar_3D["alpha"],
-#     df_polar_3D["cl"],
-#     label="3D Experimental",
-#     color="black",
-#     marker="x",
-#     linestyle="None",
-# )
+plot_on_ax(
+    ax,
+    df_polar["alpha"],
+    df_polar["cl"],
+    label="2D Experimental",
+    color="black",
+    linestyle="dashed",
+)
+plot_on_ax(
+    ax,
+    df_polar_3D["alpha"],
+    df_polar_3D["cl"],
+    label="3D Experimental",
+    color="black",
+    marker="x",
+    linestyle="None",
+)
 
-# ax.grid(True)
-# ax.legend()
-# ax.set_xlabel(r"$\alpha$ [$^{\circ}$]")
-# ax.set_ylabel(r"$C_L$")
-# ax.set_title(r"$C_L$ vs $\alpha$")
-# plt.tight_layout()
-# plt.savefig(Path(save_folder) / f"CL_vs_alpha_fva_new_activation.pdf")
+ax.grid(True)
+ax.legend()
+ax.set_xlabel(r"$\alpha$ [$^{\circ}$]")
+ax.set_ylabel(r"$C_L$")
+ax.set_title(r"$C_L$ vs $\alpha$")
+plt.tight_layout()
+plt.savefig(Path(save_folder) / f"CL_vs_alpha_fva_new_activation.pdf")
 
 
 # ==========================
 # Plotting Circulation (Fig. 14)
 # ==========================
-solver_base = Solver(
-    # max_iterations=5e3,
-    allowed_error=1e-6,
-    # relaxation_factor=0.05,
-    gamma_loop_type="non_linear",
-)
 
 
-set_plot_style()
-y_coordinates = [panel.control_point[1] for panel in body_aero_uniform.panels]
-
-# alpha_range = [15, 16]
+# set_plot_style()
+# y_coordinates = [panel.control_point[1] for panel in body_aero_uniform.panels]
+# # alpha_range = [16]  # , 15, 16]
+# alpha_range = [12, 13, 14, 15]
 # cl_fva_0 = np.zeros(len(alpha_range))
-# for fva in [0, 1e-9, 1e-5, 1e-4, 1e-3]:
-#     print(f"\nfva: {fva}")
-
+# for fva in [0, 1e-4, 1e-3, 1e-2]:
 #     if fva == 0:
 #         is_with_damp = False
 #     else:
 #         is_with_damp = True
 #     solver_base = Solver(
-#         allowed_error=1e-6,
-#         relaxation_factor=1e-4,
-#         gamma_loop_type="non_linear_simonet_stall",
+#         allowed_error=1e-2,
+#         relaxation_factor=1e-3,
+#         gamma_loop_type="non_linear_simonet_stall_newton_raphson",
 #         is_with_simonet_artificial_viscosity=is_with_damp,
 #         simonet_artificial_viscosity_fva=fva,
 #     )
 #     fig, ax = plt.subplots(figsize=(8, 6))
 
 #     for i, alpha in enumerate(alpha_range):
+#         print(f"\nfva: {fva}, alpha: {alpha}")
 #         body_aero_uniform.va_initialize(Umag, alpha, side_slip=0, yaw_rate=0)
 #         results_VSM_uniform = solver_base.solve(
 #             body_aero_uniform, gamma_distribution=None
@@ -468,7 +468,7 @@ y_coordinates = [panel.control_point[1] for panel in body_aero_uniform.panels]
 #             y_coordinates,
 #             gamma_VSM_uniform,
 #             label=r"$\alpha$"
-#             + f"={alpha}"
+#             + f"={alpha:.1f}"
 #             + r" $\Delta$"
 #             + f'cl={results_VSM_uniform["cl"] - cl_fva_0[i]:.2f}'
 #             + f"cl={results_VSM_uniform['cl']:.2f}, cl_fva0 ={cl_fva_0[i]:.2f}",
@@ -486,7 +486,7 @@ y_coordinates = [panel.control_point[1] for panel in body_aero_uniform.panels]
 #     plt.savefig(Path(save_folder) / f"Gamma_vs_alpha_uniform_fva_{fva}.pdf")
 
 
-def plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates):
+def plot_subplots_for_fva(save_folder, body_aero_uniform):
     """
     For a set of fva values and a given alpha_range, solve the aerodynamic model
     and plot the gamma distribution on only one half of the wing (e.g., positive y)
@@ -499,9 +499,21 @@ def plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates):
         y_coordinates (np.ndarray): The spanwise coordinates for the panels.
     """
     # Define the alpha range and the list of fva values
-    alpha_range = [13, 14, 15, 16, 17, 18, 19]  # angles in degrees
-    fva_list = [0, 1e-4, 1e-3, 2e-3, 3e-3, 5e-3, 1e-2]
+
+    alpha_range = [11, 13, 15, 17, 19]  # angles in degrees
+    fva_list = [
+        0,
+        1e-4,
+        5e-4,
+        1e-4,
+        1e-2,
+        1e-1,
+        1e0,
+    ]  # , 1e-1, 1, 10, 100]  # , 1e-4, 1e-3, 2e-3, 3e-3, 5e-3, 1e-2]
+
     num_fva = len(fva_list)
+    y_coordinates = [panel.control_point[1] for panel in body_aero_uniform.panels]
+    set_plot_style()
 
     # Compute number of rows required (3 columns)
     ncols = 3
@@ -530,10 +542,10 @@ def plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates):
 
         # Create a solver with the given fva value.
         solver = Solver(
-            allowed_error=1e-6,
+            allowed_error=1e-3,
             relaxation_factor=1e-4,
             max_iterations=1e4,
-            gamma_loop_type="non_linear_simonet_stall",
+            gamma_loop_type="non_linear_simonet_stall_newton_raphson",
             is_with_simonet_artificial_viscosity=is_with_damp,
             simonet_artificial_viscosity_fva=fva,
         )
@@ -551,6 +563,12 @@ def plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates):
             label = r"$\alpha$=" + f"{alpha}° + cl={results['cl']:.3f}"
             ax.plot(y_half, gamma_half, label=label)
 
+            # ax.plot(
+            #     y_half,
+            #     smooth_array(np.array(gamma_half), 10),
+            #     label=label + "smoothened",
+            # )
+
         ax.grid(True)
         ax.set_xlabel(r"$y$ [m]")
         ax.set_ylabel(r"$\Gamma$")
@@ -565,9 +583,7 @@ def plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates):
         axes[row, col].axis("off")
 
     plt.tight_layout()
-    fig.savefig(
-        Path(save_folder) / f"Gamma_vs_alpha_uniform_all_fva_new_activation.pdf"
-    )
+    fig.savefig(Path(save_folder) / f"Gamma_vs_alpha_uniform_all_fva_J_analytical.pdf")
 
 
-plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates)
+plot_subplots_for_fva(save_folder, body_aero_uniform)

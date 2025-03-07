@@ -401,14 +401,11 @@ def plot_distribution(
     """
     set_plot_style()
 
-    if len(results_list) != len(label_list) or len(y_coordinates_list) != len(
-        results_list
-    ):
+    if len(y_coordinates_list) != len(results_list) != len(label_list):
         raise ValueError(
             f"The number of y_coordinates = number of results = number of labels. "
             f"Got {len(y_coordinates_list)} y_coordinates, {len(results_list)} results, {len(label_list)} labels."
         )
-
     # Create figure and axes: 3 rows x 3 columns
     fig, axs = plt.subplots(3, 3, figsize=(27, 15))
     # fig.suptitle(title)
@@ -430,7 +427,7 @@ def plot_distribution(
         axs[0, 1].plot(
             y_coords,
             result["cl_distribution"],
-            label="$C_L$: {result['cl']:.2f}",
+            label=rf"$C_L$: {result['cl']:.2f}",
         )
     axs[0, 1].set_ylabel(r"$C_L$ Distribution")
     axs[0, 1].tick_params(labelbottom=False)
@@ -624,7 +621,7 @@ def generate_3D_polar_data(
 
         begin_time = time.time()
         results = solver.solve(body_aero, gamma_distribution=gamma)
-        print(f"Angle: {angle_i}deg. Time: {time.time() - begin_time:.4f}s")
+        print(f"Angle: {angle_i:.1f}deg. Time: {time.time() - begin_time:.4f}s")
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]

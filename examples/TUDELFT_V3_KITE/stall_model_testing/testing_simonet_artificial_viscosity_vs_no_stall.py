@@ -86,10 +86,11 @@ body_aero_uniform.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 # Plotting CL-alpha fva (Fig. 12)
 # ==========================
 
+alpha_range = np.linspace(0, 25, 10)
+fva_range = [0]  # [0, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2]
 set_plot_style()
 fig, ax = plt.subplots(figsize=(8, 6))
-alpha_range = np.linspace(0, 25, 26)
-for fva in [0, 1e-4, 5e-4, 1e-3]:
+for fva in fva_range:
     # alpha_range = [5, 23]
     # for fva in [1e1]:
     if fva == 0:
@@ -99,7 +100,7 @@ for fva in [0, 1e-4, 5e-4, 1e-3]:
     solver_base = Solver(
         allowed_error=1e-6,
         relaxation_factor=1e-4,
-        gamma_loop_type="non_linear_simonet_stall",
+        gamma_loop_type="base",
         is_with_simonet_artificial_viscosity=is_with_damp,
         simonet_artificial_viscosity_fva=fva,
     )
@@ -141,6 +142,7 @@ plt.tight_layout()
 plt.savefig(Path(save_folder) / f"CL_vs_alpha_fva_new_activation.pdf")
 
 
+# ==========================
 # # plotting alpha-polar
 # plot_polars(
 #     solver_list=[
@@ -245,7 +247,7 @@ def plot_subplots_for_fva(save_folder, body_aero_uniform, y_coordinates):
     """
     # Define the alpha range and the list of fva values
     alpha_range = [16, 17, 18, 19, 20, 21, 22, 23]  # angles in degrees
-    fva_list = [0, 1e-4, 5e-4, 1e-3]
+    fva_list = fva_range
     num_fva = len(fva_list)
 
     # Compute number of rows required (3 columns)
