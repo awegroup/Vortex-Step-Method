@@ -28,6 +28,7 @@ Added a rectangular wing test function
 
 Changed spanwise panel distribution to uniform
 
+Added testing optimal solver configurations testing
 
 
 ### Added

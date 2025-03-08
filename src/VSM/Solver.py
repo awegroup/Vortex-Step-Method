@@ -48,20 +48,17 @@ class Solver:
         ### Below are all settings, with a default value, that can but don't have to be changed
         aerodynamic_model_type: str = "VSM",
         max_iterations: float = 5000,
-        allowed_error: float = 1e-4,  # 1e-5,
+        allowed_error: float = 1e-6,  # 1e-5,
         relaxation_factor: float = 0.01,
         core_radius_fraction: float = 1e-20,
-        jacobian_eps: float = 1e-3,
-        # === athmospheric properties ===
-        mu: float = 1.81e-5,
-        density: float = 1.225,
-        # === other ===
-        is_only_f_and_gamma_output: bool = False,
-        reference_point: list = [-0.17, 0.00, 9.25],  # roughly the cg of V3
-        # === Gamma ===
         gamma_loop_type: str = "base",
         is_with_gamma_feedback: bool = False,
         gamma_initial_distribution_type: str = "elliptical",
+        is_only_f_and_gamma_output: bool = False,
+        reference_point: list = [-0.17, 0.00, 9.25],  # roughly the cg of V3
+        # === athmospheric properties ===
+        mu: float = 1.81e-5,
+        density: float = 1.225,
         # ===============================
         #       STALL MODELS
         # ===============================
@@ -86,17 +83,14 @@ class Solver:
         self.allowed_error = allowed_error
         self.relaxation_factor = relaxation_factor
         self.core_radius_fraction = core_radius_fraction
-        self.jacobian_eps = jacobian_eps
-        # === athmospheric properties ===
-        self.mu = mu
-        self.density = density
-        # === other ===
-        self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
-        self.reference_point = reference_point
-        # === Gamma ===
         self.gamma_loop_type = gamma_loop_type
         self.is_with_gamma_feedback = is_with_gamma_feedback
         self.gamma_initial_distribution_type = gamma_initial_distribution_type
+        self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
+        self.reference_point = reference_point
+        # === athmospheric properties ===
+        self.mu = mu
+        self.density = density
         # ===============================
         #       STALL MODELS
         # ===============================
@@ -306,7 +300,7 @@ class Solver:
         return alpha_array, Umag_array, cl_array, Umagw_array
 
     # should add smooth circulation back
-    # could add dynamic relaxation back
+    # could add dynamic relaxation back, although it didnt work
     def gamma_loop(
         self,
         gamma_initial,
@@ -350,7 +344,7 @@ class Solver:
                 ):
                     # Oscillation detected, apply additional damping
                     gamma_new = 0.75 * gamma_new + 0.25 * gamma
-                    logging.info(
+                    logging.debug(
                         f"Oscillation detected at iteration {i}, applying additional damping"
                     )
 
@@ -540,3 +534,8 @@ class Solver:
             return self.gamma_loop(
                 gamma_initial,
             )
+        if success:
+            alpha_array, Umag_array, cl_array, Umagw_array = (
+                self.compute_aerodynamic_quantities(gamma_new)
+            )
+            return True, gamma_new, alpha_array, Umag_array

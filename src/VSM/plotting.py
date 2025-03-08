@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import time as time
 from pathlib import Path
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -375,6 +375,7 @@ def plot_distribution(
     save_path=None,
     is_save=True,
     is_show=True,
+    run_time_list=None,
 ):
     """
     Plots a 3x3 spanwise distribution:
@@ -551,7 +552,13 @@ def plot_distribution(
             ax.set_ylim(y_min_allowed, y_max_allowed)
 
     # Place the legend below the axes
-    labels = [label for label in label_list]
+    labels = []
+    for i, label in enumerate(label_list):
+        if run_time_list is not None:
+            labels.append(label + f" t: {run_time_list[i]:.3f}s")
+        else:
+            labels.append(label)
+    # labels = [label for label in label_list]
     handles = [axs[0, 0].get_lines()[i] for i in range(len(y_coordinates_list))]
     fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
 
@@ -605,6 +612,7 @@ def generate_3D_polar_data(
     cd_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
     cs_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
     reynolds_number = np.zeros(len(angle_range))
+    run_time = np.zeros(len(angle_range))
     # initialize the gamma with None
     gamma = None
     for i, angle_i in enumerate(angle_range):
@@ -617,11 +625,10 @@ def generate_3D_polar_data(
                 "angle_type should be either 'angle_of_attack' or 'side_slip'"
             )
 
-        import time as time
-
         begin_time = time.time()
         results = solver.solve(body_aero, gamma_distribution=gamma)
-        print(f"Angle: {angle_i:.1f}deg. Time: {time.time() - begin_time:.4f}s")
+        run_time[i] = time.time() - begin_time
+        print(f"Angle: {angle_i:.1f}deg. Time: {run_time[i]:.4f}s")
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
@@ -648,6 +655,7 @@ def generate_3D_polar_data(
         cd_distribution,
         cs_distribution,
         reynolds_number,
+        run_time,
     ]
     reynolds_number = results["Rey"]
 
@@ -908,7 +916,9 @@ def plot_polars(
             pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
 
     # Place the legend below the axes
-    labels = [label for label in label_list]
+    labels = []
+    for label, polar_data in zip(label_list, polar_data):
+        labels.append(label)  # + f" t: {polar_data[-1]:.3f}s")
     handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
     fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
 
