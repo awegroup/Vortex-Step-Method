@@ -11,7 +11,7 @@ from VSM.sensitivity_analysis import (
 
 if __name__ == "__main__":
     # Example usage
-    PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
+    PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
     file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
     polar_data_dir = (
         Path(PROJECT_DIR)
