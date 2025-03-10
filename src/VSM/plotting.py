@@ -744,7 +744,7 @@ def plot_polars(
         )
         polar_data_list.append(polar_data)
         # Appending Reynolds numbers to the labels of the solvers
-        label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
+        label_list[i] += f" (Re = {1e-5*reynolds_number:.1f}e5)"
 
     # Grabbing additional data from literature
     if literature_path_list is not None:

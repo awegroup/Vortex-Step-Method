@@ -1,7 +1,7 @@
 # User defined files and folders
 #data/
 # processed_data/
-# results/
+results/
 old_code/
 venv/
 

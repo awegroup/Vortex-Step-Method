@@ -28,8 +28,22 @@ Added a rectangular wing test function
 
 Changed spanwise panel distribution to uniform
 
-Added testing optimal solver configurations testing
+### Bodyaerodynamics
+- Changing hardcoded 0.25 and 0.75 in calculate_panel_properties, to ac and cp.
 
+### solver setting testing
+- "aerodynamic_model_type": LTT (1/4chord evaluation) vs VSM (3/4chord including the angle correction)
+- "allowed_error"
+- "core_radius_fraction"
+- "gamma_initial_distribution_type": "elliptical","cosine","zero"
+- "gamma_loop_type": "base","non_linear"
+- "is_with_gamma_feedback": True or False
+- "max_iterations"
+- "relaxation_factor"
+
+### other
+- adding a sensitivity_analysis.py file
+- git_ignoring results/
 
 ### Added
 - **Interactive Visualization:** Introduced an interactive Plotly environment for data visualization.

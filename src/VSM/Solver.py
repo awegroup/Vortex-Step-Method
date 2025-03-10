@@ -45,7 +45,6 @@ class Solver:
 
     def __init__(
         self,
-        ### Below are all settings, with a default value, that can but don't have to be changed
         aerodynamic_model_type: str = "VSM",
         max_iterations: float = 5000,
         allowed_error: float = 1e-6,  # 1e-5,

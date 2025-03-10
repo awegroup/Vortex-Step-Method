@@ -268,6 +268,136 @@ class BodyAerodynamics:
     ## CALCULATE FUNCTIONS
     ###########################
 
+    # def calculate_panel_properties(
+    #     self,
+    #     section_list,
+    #     n_panels,
+    #     aerodynamic_center_location,
+    #     control_point_location,
+    # ):
+
+    #     # Initialize lists
+    #     aerodynamic_center_list = []
+    #     control_point_list = []
+    #     bound_point_1_list = []
+    #     bound_point_2_list = []
+    #     x_airf_list = []
+    #     y_airf_list = []
+    #     z_airf_list = []
+
+    #     # defining coordinates
+    #     coordinates = np.zeros((2 * (n_panels + 1), 3))
+    #     logging.debug(f"shape of coordinates: {coordinates.shape}")
+    #     for i in range(n_panels):
+    #         coordinates[2 * i] = section_list[i].LE_point
+    #         coordinates[2 * i + 1] = section_list[i].TE_point
+    #         coordinates[2 * i + 2] = section_list[i + 1].LE_point
+    #         coordinates[2 * i + 3] = section_list[i + 1].TE_point
+
+    #     logging.debug(f"coordinates: {coordinates}")
+
+    #     for i in range(n_panels):
+    #         # Identify points defining the panel
+    #         section = {
+    #             "p1": coordinates[2 * i, :],  # p1 = LE_1
+    #             "p2": coordinates[2 * i + 2, :],  # p2 = LE_2
+    #             "p3": coordinates[2 * i + 3, :],  # p3 = TE_2
+    #             "p4": coordinates[2 * i + 1, :],  # p4 = TE_1
+    #         }
+
+    #         di = jit_norm(
+    #             coordinates[2 * i, :] * 0.75
+    #             + coordinates[2 * i + 1, :] * 0.25
+    #             - (coordinates[2 * i + 2, :] * 0.75 + coordinates[2 * i + 3, :] * 0.25)
+    #         )
+    #         if i == 0:
+    #             diplus = jit_norm(
+    #                 coordinates[2 * (i + 1), :] * 0.75
+    #                 + coordinates[2 * (i + 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i + 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i + 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             ncp = di / (di + diplus)
+    #         elif i == n_panels - 1:
+    #             dimin = jit_norm(
+    #                 coordinates[2 * (i - 1), :] * 0.75
+    #                 + coordinates[2 * (i - 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i - 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i - 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             ncp = dimin / (dimin + di)
+    #         else:
+    #             dimin = jit_norm(
+    #                 coordinates[2 * (i - 1), :] * 0.75
+    #                 + coordinates[2 * (i - 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i - 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i - 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             diplus = jit_norm(
+    #                 coordinates[2 * (i + 1), :] * 0.75
+    #                 + coordinates[2 * (i + 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i + 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i + 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             ncp = 0.25 * (dimin / (dimin + di) + di / (di + diplus) + 1)
+
+    #         ncp = 1 - ncp
+
+    #         # aerodynamic center at 1/4c
+    #         LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 3 / 4 + (
+    #             section["p3"] * (1 - ncp) + section["p4"] * ncp
+    #         ) * 1 / 4
+    #         # control point at 3/4c
+    #         VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 1 / 4 + (
+    #             section["p3"] * (1 - ncp) + section["p4"] * ncp
+    #         ) * 3 / 4
+
+    #         # Calculating the bound
+    #         bound_1 = section["p1"] * 3 / 4 + section["p4"] * 1 / 4
+    #         bound_2 = section["p2"] * 3 / 4 + section["p3"] * 1 / 4
+
+    #         ### Calculate the local reference frame, below are all unit_vectors
+    #         # NORMAL x_airf defined upwards from the chord-line, perpendicular to the panel
+    #         # used to be: p2 - p1
+    #         x_airf = jit_cross(VSMpoint - LLpoint, section["p1"] - section["p2"])
+    #         x_airf = x_airf / jit_norm(x_airf)
+
+    #         # TANGENTIAL y_airf defined parallel to the chord-line, from LE-to-TE
+    #         y_airf = VSMpoint - LLpoint
+    #         y_airf = y_airf / jit_norm(y_airf)
+
+    #         # SPAN z_airf along the LE, in plane (towards left tip, along span) from the airfoil perspective
+    #         # used to be bound_2 - bound_1
+    #         z_airf = bound_1 - bound_2
+    #         z_airf = z_airf / jit_norm(z_airf)
+
+    #         # Appending
+    #         aerodynamic_center_list.append(LLpoint)
+    #         control_point_list.append(VSMpoint)
+    #         bound_point_1_list.append(bound_1)
+    #         bound_point_2_list.append(bound_2)
+    #         x_airf_list.append(x_airf)
+    #         y_airf_list.append(y_airf)
+    #         z_airf_list.append(z_airf)
+
+    #     return (
+    #         aerodynamic_center_list,
+    #         control_point_list,
+    #         bound_point_1_list,
+    #         bound_point_2_list,
+    #         x_airf_list,
+    #         y_airf_list,
+    #         z_airf_list,
+    #     )
+
     def calculate_panel_properties(
         self,
         section_list,
@@ -275,6 +405,9 @@ class BodyAerodynamics:
         aerodynamic_center_location,
         control_point_location,
     ):
+        ac = aerodynamic_center_location
+        cp = control_point_location
+
         # Initialize lists
         aerodynamic_center_list = []
         control_point_list = []
@@ -305,63 +438,63 @@ class BodyAerodynamics:
             }
 
             di = jit_norm(
-                coordinates[2 * i, :] * 0.75
-                + coordinates[2 * i + 1, :] * 0.25
-                - (coordinates[2 * i + 2, :] * 0.75 + coordinates[2 * i + 3, :] * 0.25)
+                coordinates[2 * i, :] * cp
+                + coordinates[2 * i + 1, :] * ac
+                - (coordinates[2 * i + 2, :] * cp + coordinates[2 * i + 3, :] * ac)
             )
             if i == 0:
                 diplus = jit_norm(
-                    coordinates[2 * (i + 1), :] * 0.75
-                    + coordinates[2 * (i + 1) + 1, :] * 0.25
+                    coordinates[2 * (i + 1), :] * cp
+                    + coordinates[2 * (i + 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i + 1) + 2, :] * 0.75
-                        + coordinates[2 * (i + 1) + 3, :] * 0.25
+                        coordinates[2 * (i + 1) + 2, :] * cp
+                        + coordinates[2 * (i + 1) + 3, :] * ac
                     )
                 )
                 ncp = di / (di + diplus)
             elif i == n_panels - 1:
                 dimin = jit_norm(
-                    coordinates[2 * (i - 1), :] * 0.75
-                    + coordinates[2 * (i - 1) + 1, :] * 0.25
+                    coordinates[2 * (i - 1), :] * cp
+                    + coordinates[2 * (i - 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i - 1) + 2, :] * 0.75
-                        + coordinates[2 * (i - 1) + 3, :] * 0.25
+                        coordinates[2 * (i - 1) + 2, :] * cp
+                        + coordinates[2 * (i - 1) + 3, :] * ac
                     )
                 )
                 ncp = dimin / (dimin + di)
             else:
                 dimin = jit_norm(
-                    coordinates[2 * (i - 1), :] * 0.75
-                    + coordinates[2 * (i - 1) + 1, :] * 0.25
+                    coordinates[2 * (i - 1), :] * cp
+                    + coordinates[2 * (i - 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i - 1) + 2, :] * 0.75
-                        + coordinates[2 * (i - 1) + 3, :] * 0.25
+                        coordinates[2 * (i - 1) + 2, :] * cp
+                        + coordinates[2 * (i - 1) + 3, :] * ac
                     )
                 )
                 diplus = jit_norm(
-                    coordinates[2 * (i + 1), :] * 0.75
-                    + coordinates[2 * (i + 1) + 1, :] * 0.25
+                    coordinates[2 * (i + 1), :] * cp
+                    + coordinates[2 * (i + 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i + 1) + 2, :] * 0.75
-                        + coordinates[2 * (i + 1) + 3, :] * 0.25
+                        coordinates[2 * (i + 1) + 2, :] * cp
+                        + coordinates[2 * (i + 1) + 3, :] * ac
                     )
                 )
-                ncp = 0.25 * (dimin / (dimin + di) + di / (di + diplus) + 1)
+                ncp = ac * (dimin / (dimin + di) + di / (di + diplus) + 1)
 
             ncp = 1 - ncp
 
             # aerodynamic center at 1/4c
-            LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 3 / 4 + (
+            LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * cp + (
                 section["p3"] * (1 - ncp) + section["p4"] * ncp
-            ) * 1 / 4
+            ) * ac
             # control point at 3/4c
-            VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 1 / 4 + (
+            VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * ac + (
                 section["p3"] * (1 - ncp) + section["p4"] * ncp
-            ) * 3 / 4
+            ) * cp
 
             # Calculating the bound
-            bound_1 = section["p1"] * 3 / 4 + section["p4"] * 1 / 4
-            bound_2 = section["p2"] * 3 / 4 + section["p3"] * 1 / 4
+            bound_1 = section["p1"] * cp + section["p4"] * ac
+            bound_2 = section["p2"] * cp + section["p3"] * ac
 
             ### Calculate the local reference frame, below are all unit_vectors
             # NORMAL x_airf defined upwards from the chord-line, perpendicular to the panel
@@ -398,22 +531,24 @@ class BodyAerodynamics:
         )
 
     def calculate_AIC_matrices(
-        self, model, core_radius_fraction, va_norm_array, va_unit_array
+        self, aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
     ):
         """Calculates the AIC matrices for the given aerodynamic model
 
         Args:
-            model (str): The aerodynamic model to be used, either VSM or LLT
+            aerodynamic_model_type (str): The aerodynamic model to be used, either VSM or LLT
             core_radius_fraction (float): The core radius fraction for the vortex model
 
         Returns:
             Tuple[np.array, np.array, np.array]: The x, y, and z components of the AIC matrix
         """
-        if model not in ["VSM", "LLT"]:
+        if aerodynamic_model_type not in ["VSM", "LLT"]:
             raise ValueError("Invalid aerodynamic model type, should be VSM or LLT")
 
-        evaluation_point = "control_point" if model == "VSM" else "aerodynamic_center"
-        evaluation_point_on_bound = model == "LLT"
+        evaluation_point = (
+            "control_point" if aerodynamic_model_type == "VSM" else "aerodynamic_center"
+        )
+        evaluation_point_on_bound = aerodynamic_model_type == "LLT"
 
         AIC = np.empty((3, self.n_panels, self.n_panels))
 
@@ -432,7 +567,7 @@ class BodyAerodynamics:
                 )
                 AIC[:, icp, jring] = velocity_induced
 
-                if icp == jring and model == "VSM":
+                if icp == jring and aerodynamic_model_type == "VSM":
                     U_2D = panel_jring.calculate_velocity_induced_bound_2D(ep)
                     AIC[:, icp, jring] -= U_2D
 

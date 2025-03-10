@@ -133,7 +133,7 @@ class Wing:
         #     self.sections, key=lambda section: section.LE_point[1], reverse=True
         # )
 
-        # Perform additional sorting on z
+        # Perform additional sorting
         self.sections = self.find_farthest_point_and_sort(self.sections)
 
         # Ensure we get 1 section more than the desired number of panels
