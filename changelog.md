@@ -28,6 +28,8 @@ Added a rectangular wing test function
 
 Changed spanwise panel distribution to uniform
 
+Removed 'using_previous gamma' option, and added it to the 'initial_gamma_distribution function'
+
 ### Bodyaerodynamics
 - Changing hardcoded 0.25 and 0.75 in calculate_panel_properties, to ac and cp.
 

@@ -553,7 +553,8 @@ def plot_distribution(
 
     # Place the legend below the axes
     labels = []
-    for i, label in enumerate(label_list):
+    for i, label in enumerate(results_list):
+        label = label_list[i]
         if run_time_list is not None:
             labels.append(label + f" t: {run_time_list[i]:.3f}s")
         else:
@@ -748,11 +749,18 @@ def plot_polars(
 
     # Grabbing additional data from literature
     if literature_path_list is not None:
-        for literature_path in literature_path_list:
-            CL, CD, angle = np.loadtxt(
-                literature_path, delimiter=",", skiprows=1, unpack=True
-            )
-            polar_data_list.append([angle, CL, CD])
+        if angle_type == "angle_of_attack":
+            for literature_path in literature_path_list:
+                CL, CD, aoa = np.loadtxt(
+                    literature_path, delimiter=",", skiprows=1, unpack=True
+                )
+                polar_data_list.append([aoa, CL, CD])
+        elif angle_type == "side_slip":
+            for literature_path in literature_path_list:
+                CL, CD, CS, beta = np.loadtxt(
+                    literature_path, delimiter=",", skiprows=1, unpack=True
+                )
+                polar_data_list.append([beta, CL, CD, CS])
 
     # Initializing plot
     fig, axs = plt.subplots(2, 3, figsize=(15, 10))

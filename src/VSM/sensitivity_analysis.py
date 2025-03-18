@@ -23,6 +23,10 @@ def testing_single_solver_setting(
     angle_of_attack=6.5,
     side_slip=0,
     yaw_rate=0,
+    literature_path_list_alpha=[],
+    literature_label_list_alpha=[],
+    literature_path_list_beta=[],
+    literature_label_list_beta=[],
 ):
 
     solver_list = []
@@ -36,24 +40,33 @@ def testing_single_solver_setting(
             "relaxation_factor",
             "core_radius_fraction",
             "gamma_loop_type",
-            "is_with_gamma_feedback",
             "gamma_initial_distribution_type",
         ]:
             solver_list.append(Solver(**{parameter: value}))
         else:
             raise ValueError(
-                f"Parameter {parameter} not recognized. \nPlease choose from ['aerodynamic_model_type', 'max_iterations', 'allowed_error', 'relaxation_factor', 'core_radius_fraction', 'gamma_loop_type', 'is_with_gamma_feedback', 'gamma_initial_distribution_type']"
+                f"Parameter {parameter} not recognized. \nPlease choose from ['aerodynamic_model_type', 'max_iterations', 'allowed_error', 'relaxation_factor', 'core_radius_fraction', 'gamma_loop_type', 'gamma_initial_distribution_type']"
             )
 
         label_list.append(f"{parameter} = {value}")
         y_coords_list.append([panel.control_point[1] for panel in body_aero.panels])
 
+    label_list_alpha = label_list.copy()
+    if len(literature_label_list_alpha) > 0:
+        for literature_label in enumerate(literature_label_list_alpha):
+            label_list_alpha.append(literature_label)
+
+    label_list_beta = label_list.copy()
+    if len(literature_label_list_beta) > 0:
+        for literature_label in enumerate(literature_label_list_beta):
+            label_list_beta.append(literature_label)
+
     # plotting alpha-polar
     plot_polars(
         solver_list=solver_list,
         body_aero_list=body_aero_list,
-        label_list=label_list,
-        literature_path_list=[],
+        label_list=label_list_alpha,
+        literature_path_list=literature_path_list_alpha,
         angle_range=alpha_range,
         angle_type="angle_of_attack",
         angle_of_attack=angle_of_attack,
@@ -70,8 +83,8 @@ def testing_single_solver_setting(
     plot_polars(
         solver_list=solver_list,
         body_aero_list=body_aero_list,
-        label_list=label_list,
-        literature_path_list=[],
+        label_list=label_list_beta,
+        literature_path_list=literature_path_list_beta,
         angle_range=beta_range,
         angle_type="side_slip",
         angle_of_attack=angle_of_attack,
@@ -117,7 +130,6 @@ def testing_all_solver_settings(
     relaxation_factor_list,
     core_radius_fraction_list,
     gamma_loop_type_list,
-    is_with_gamma_feedback_list,
     gamma_initial_distribution_type_list,
     sensitivity_results_dir,
     body_aero_uniform,
@@ -129,6 +141,10 @@ def testing_all_solver_settings(
     angle_of_attack=6.5,
     side_slip=0,
     yaw_rate=0,
+    literature_path_list_alpha=[],
+    literature_label_list_alpha=[],
+    literature_path_list_beta=[],
+    literature_label_list_beta=[],
 ):
 
     parameter_list = [
@@ -138,7 +154,6 @@ def testing_all_solver_settings(
         "relaxation_factor",
         "core_radius_fraction",
         "gamma_loop_type",
-        "is_with_gamma_feedback",
         "gamma_initial_distribution_type",
     ]
     value_list_list = [
@@ -148,7 +163,6 @@ def testing_all_solver_settings(
         relaxation_factor_list,
         core_radius_fraction_list,
         gamma_loop_type_list,
-        is_with_gamma_feedback_list,
         gamma_initial_distribution_type_list,
     ]
     for parameter, value_list in zip(parameter_list, value_list_list):
@@ -168,6 +182,10 @@ def testing_all_solver_settings(
             angle_of_attack,
             side_slip,
             yaw_rate,
+            literature_path_list_alpha,
+            literature_label_list_alpha,
+            literature_path_list_beta,
+            literature_label_list_beta,
         )
 
 
@@ -185,6 +203,10 @@ def testing_n_panels_effect(
     angle_of_attack=6.5,
     side_slip=0,
     yaw_rate=0,
+    literature_path_list_alpha=[],
+    literature_label_list_alpha=[],
+    literature_path_list_beta=[],
+    literature_label_list_beta=[],
 ):
     """
     Test the effects of different n_panels values on aerodynamic performance.
@@ -244,6 +266,16 @@ def testing_n_panels_effect(
         label_list.append(f"n_panels = {n_panels}")
         y_coords_list.append([panel.control_point[1] for panel in body_aero.panels])
 
+    label_list_alpha = label_list.copy()
+    if len(literature_label_list_alpha) > 0:
+        for literature_label in enumerate(literature_label_list_alpha):
+            label_list_alpha.append(literature_label)
+
+    label_list_beta = label_list.copy()
+    if len(literature_label_list_beta) > 0:
+        for literature_label in enumerate(literature_label_list_beta):
+            label_list_beta.append(literature_label)
+
     # Create a list of solvers (same solver for each wing)
     solver_list = [solver] * len(n_panels_list)
 
@@ -251,8 +283,8 @@ def testing_n_panels_effect(
     plot_polars(
         solver_list=solver_list,
         body_aero_list=body_aero_list,
-        label_list=label_list,
-        literature_path_list=[],
+        label_list=label_list_alpha,
+        literature_path_list=literature_path_list_alpha,
         angle_range=alpha_range,
         angle_type="angle_of_attack",
         angle_of_attack=angle_of_attack,
@@ -270,8 +302,8 @@ def testing_n_panels_effect(
     plot_polars(
         solver_list=solver_list,
         body_aero_list=body_aero_list,
-        label_list=label_list,
-        literature_path_list=[],
+        label_list=label_list_beta,
+        literature_path_list=literature_path_list_beta,
         angle_range=beta_range,
         angle_type="side_slip",
         angle_of_attack=angle_of_attack,

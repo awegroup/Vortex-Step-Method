@@ -51,7 +51,6 @@ class Solver:
         relaxation_factor: float = 0.01,
         core_radius_fraction: float = 1e-20,
         gamma_loop_type: str = "base",
-        is_with_gamma_feedback: bool = False,
         gamma_initial_distribution_type: str = "elliptical",
         is_only_f_and_gamma_output: bool = False,
         reference_point: list = [-0.17, 0.00, 9.25],  # roughly the cg of V3
@@ -83,7 +82,6 @@ class Solver:
         self.relaxation_factor = relaxation_factor
         self.core_radius_fraction = core_radius_fraction
         self.gamma_loop_type = gamma_loop_type
-        self.is_with_gamma_feedback = is_with_gamma_feedback
         self.gamma_initial_distribution_type = gamma_initial_distribution_type
         self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
         self.reference_point = reference_point
@@ -168,21 +166,28 @@ class Solver:
             va_unit_array,
         )
 
-        if self.is_with_gamma_feedback and gamma_distribution is not None:
+        if (
+            gamma_distribution is not None
+            and self.gamma_initial_distribution_type == "previous"
+        ):
             gamma_initial = gamma_distribution
+        elif (
+            gamma_distribution is None
+            and self.gamma_initial_distribution_type == "previous"
+        ):
+            gamma_initial = np.zeros(self.n_panels)
+        elif self.gamma_initial_distribution_type == "elliptical":
+            gamma_initial = (
+                body_aero.calculate_circulation_distribution_elliptical_wing()
+            )
+        elif self.gamma_initial_distribution_type == "cosine":
+            gamma_initial = body_aero.calculate_circulation_distribution_cosine()
+        elif self.gamma_initial_distribution_type == "zero":
+            gamma_initial = np.zeros(self.n_panels)
         else:
-            if self.gamma_initial_distribution_type == "elliptical":
-                gamma_initial = (
-                    body_aero.calculate_circulation_distribution_elliptical_wing()
-                )
-            elif self.gamma_initial_distribution_type == "cosine":
-                gamma_initial = body_aero.calculate_circulation_distribution_cosine()
-            elif self.gamma_initial_distribution_type == "zero":
-                gamma_initial = np.zeros(self.n_panels)
-            else:
-                raise ValueError(
-                    "Invalid gamma_initial_distribution_type, should be either: 'elliptical', 'cosine' or 'zero'"
-                )
+            raise ValueError(
+                "Invalid gamma_initial_distribution_type, should be either: 'previous', 'elliptical', 'cosine' or 'zero'"
+            )
 
         # === run one of the iterative loops ===
         if self.gamma_loop_type == "base":

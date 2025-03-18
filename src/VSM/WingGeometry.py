@@ -156,33 +156,29 @@ class Wing:
         # Handling wrong input
         if len(LE) != len(TE) or len(LE) != len(aero_input):
             raise ValueError("LE, TE, and aero_input must have the same length")
-
-        # If "unchanged" OR the provided section is equal to number of desired
-        if (self.spanwise_panel_distribution == "unchanged") or (
+        elif (self.spanwise_panel_distribution == "unchanged") or (
             len(self.sections) == n_sections
         ):
             return self.sections
-
-        # If only two sections are DESIRED, return them directly
-        if n_sections == 2:
+        elif n_sections == 2:
             new_sections = [
                 Section(LE[0], TE[0], aero_input[0]),
                 Section(LE[-1], TE[-1], aero_input[-1]),
             ]
             return new_sections
-
-        # spacing based on the provided splits
-        if self.spanwise_panel_distribution == "split_provided":
+        elif self.spanwise_panel_distribution == "split_provided":
             return self.refine_mesh_by_splitting_provided_sections()
-
-        # Linear or cosine spacing
-        if (
+        elif (
             self.spanwise_panel_distribution == "uniform"
             or "cosine"
             or "cosine_van_Garrel"
         ):
             return self.refine_mesh_for_linear_cosine_distribution(
                 self.spanwise_panel_distribution, n_sections, LE, TE, aero_input
+            )
+        else:
+            raise ValueError(
+                "Unsupported spanwise panel distribution, choose: uniform, unchanged, cosine, cosine_van_Garrel"
             )
 
     def refine_mesh_for_linear_cosine_distribution(
