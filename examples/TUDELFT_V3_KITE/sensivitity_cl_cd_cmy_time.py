@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 
 # Assuming these are your project modules:
 from VSM.Solver import Solver
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.plot_styling import set_plot_style
 from VSM.sensitivity_analysis import (
     generate_sensitivity_csv,
     plot_param_variation_from_csv_list,
@@ -27,11 +24,12 @@ if __name__ == "__main__":
     sensivity_save_dir = (
         Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "sensitivity_analysis"
     )
-    n_panels_list = [10, 20, 30, 40, 50, 70, 90, 110, 140, 180]
+    n_panels_list = [10, 20, 30, 40, 50, 70, 90, 110, 140, 180, 220, 260, 300, 400, 500]
     generate_sensitivity_csv(
         file_path,
         polar_data_dir,
-        save_csv_path=Path(sensivity_save_dir) / "sensivitivy_results_uniform.csv",
+        save_csv_path=Path(sensivity_save_dir)
+        / "sensivitivy_results_uniform_error_1e4.csv",
         parameter_list=["n_panels"],
         allowed_error_list=None,
         core_radius_fraction_list=[1e-20],
@@ -43,12 +41,13 @@ if __name__ == "__main__":
         angle_of_attack=6.5,
         side_slip=0,
         yaw_rate=0,
+        solver_instance=Solver(allowed_error=1e-4),
     )
     generate_sensitivity_csv(
         file_path,
         polar_data_dir,
         save_csv_path=Path(sensivity_save_dir)
-        / "sensivitivy_results_uniform_error_1e3.csv",
+        / "sensivitivy_results_uniform_error_1e5.csv",
         parameter_list=["n_panels"],
         allowed_error_list=None,
         core_radius_fraction_list=[1e-20],
@@ -60,7 +59,25 @@ if __name__ == "__main__":
         angle_of_attack=6.5,
         side_slip=0,
         yaw_rate=0,
-        solver_instance=Solver(allowed_error=1e-3),
+        solver_instance=Solver(allowed_error=1e-5),
+    )
+    generate_sensitivity_csv(
+        file_path,
+        polar_data_dir,
+        save_csv_path=Path(sensivity_save_dir)
+        / "sensivitivy_results_uniform_error_1e6.csv",
+        parameter_list=["n_panels"],
+        allowed_error_list=None,
+        core_radius_fraction_list=[1e-20],
+        relaxation_factor_list=None,
+        n_panels_list=n_panels_list,
+        spanwise_panel_distribution="uniform",
+        n_panels=50,
+        Umag=3.15,
+        angle_of_attack=6.5,
+        side_slip=0,
+        yaw_rate=0,
+        solver_instance=Solver(allowed_error=1e-6),
     )
     generate_sensitivity_csv(
         file_path,
@@ -81,10 +98,11 @@ if __name__ == "__main__":
 
     plot_param_variation_from_csv_list(
         csv_paths=[
-            Path(sensivity_save_dir) / "sensivitivy_results_uniform.csv",
-            Path(sensivity_save_dir) / "sensivitivy_results_uniform_error_1e3.csv",
+            Path(sensivity_save_dir) / "sensivitivy_results_uniform_error_1e4.csv",
+            Path(sensivity_save_dir) / "sensivitivy_results_uniform_error_1e5.csv",
+            Path(sensivity_save_dir) / "sensivitivy_results_uniform_error_1e6.csv",
             Path(sensivity_save_dir) / "sensivitivy_results_cosine.csv",
         ],
-        labels=["Uniform", "Uniform_1e3", "Cosine"],
+        labels=["Uniform_1e4", "Uniform_1e5", "Uniform_1e6", "Cosine"],
         save_path=Path(sensivity_save_dir) / "sensitivity_plot.pdf",
     )
