@@ -161,7 +161,6 @@ save_folder = (
     / "results"
 )
 
-
 span = 1
 chord = 0.1
 AR = span / chord

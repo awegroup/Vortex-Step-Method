@@ -531,29 +531,29 @@ class StallSolvers:
         ) * gamma + self.solver.relaxation_factor * gamma_new
 
         logging.info(
-            f"condition number: {self.check_multidim_condition_number(compute_F_residual, gamma_new)[0]}"
+            f"condition number: {self.check_multidim_condition_number(self.compute_F_residual, gamma_new)[0]}"
         )
 
-        # Get Jacobian diagonal
-        def should_activate_artificial_viscosity(J_diagonal):
-            """
-            Determines if artificial viscosity should be activated based on Jacobian values.
-            Returns True if viscosity should be activated, False otherwise.
-            """
-            # Check if any interior Jacobian values deviate significantly from -1
-            # This indicates non-linear behavior that might need artificial viscosity
-            interior_values = J_diagonal[1:-1]  # Skip first and last points
+    # Get Jacobian diagonal
+    def should_activate_artificial_viscosity(J_diagonal):
+        """
+        Determines if artificial viscosity should be activated based on Jacobian values.
+        Returns True if viscosity should be activated, False otherwise.
+        """
+        # Check if any interior Jacobian values deviate significantly from -1
+        # This indicates non-linear behavior that might need artificial viscosity
+        interior_values = J_diagonal[1:-1]  # Skip first and last points
 
-            # Calculate how much values deviate from -1
-            deviations = np.abs(
-                interior_values + 1
-            )  # +1 because we expect values around -1
+        # Calculate how much values deviate from -1
+        deviations = np.abs(
+            interior_values + 1
+        )  # +1 because we expect values around -1
 
-            # Define threshold for significant deviation
-            threshold = 0.1  # Adjust based on your needs
+        # Define threshold for significant deviation
+        threshold = 0.1  # Adjust based on your needs
 
-            # If any interior point deviates significantly, activate viscosity
-            return np.any(deviations > threshold)
+        # If any interior point deviates significantly, activate viscosity
+        return np.any(deviations > threshold)
 
         K = -self.compute_jacobian_K_finite_difference(
             self.compute_F_residual, gamma_new

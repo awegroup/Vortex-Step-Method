@@ -92,7 +92,8 @@ dependencies = [
   "plotly",
   "nbformat",
   "pandas",
-  "neuralfoil"
+  "neuralfoil",
+  "PyYAML",
 ]
 
 

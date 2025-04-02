@@ -390,7 +390,7 @@ ax.set_ylabel(r"$C_L$")
 ax.set_title(r"$C_L$ vs $\alpha$")
 plt.tight_layout()
 plt.savefig(Path(save_folder) / f"CL_vs_alpha_AR_{AR:.1f}.pdf")
-plt.show()
+# plt.show()
 
 
 # ==========================

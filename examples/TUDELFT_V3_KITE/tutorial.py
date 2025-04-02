@@ -15,14 +15,14 @@ from VSM.interactive import interactive_plot
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 
 file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
-path_polar_data_dir = (
+polar_data_dir = (
     Path(PROJECT_DIR)
     / "examples"
     / "TUDELFT_V3_KITE"
     / "polar_engineering"
     / "csv_files"
 )
-path_bridle_data = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_lines.csv"
+bridle_data_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_lines.csv"
 n_panels = 40
 spanwise_panel_distribution = "uniform"
 wing_instance = Wing(n_panels, spanwise_panel_distribution)
@@ -36,7 +36,7 @@ body_aero_polar = BodyAerodynamics.from_file(
     wing_instance,
     file_path,
     is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
+    polar_data_dir=polar_data_dir,
 )
 print(f"\nCreating corrected polar input with bridles")
 wing_instance = Wing(n_panels, spanwise_panel_distribution)
@@ -44,9 +44,9 @@ body_aero_polar_with_bridles = BodyAerodynamics.from_file(
     wing_instance,
     file_path,
     is_with_corrected_polar=True,
-    path_polar_data_dir=path_polar_data_dir,
+    polar_data_dir=polar_data_dir,
     is_with_bridles=True,
-    path_bridle_data=path_bridle_data,
+    bridle_data_path=bridle_data_path,
 )
 
 Umag = 3.15

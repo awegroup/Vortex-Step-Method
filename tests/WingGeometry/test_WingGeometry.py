@@ -6,7 +6,7 @@ from VSM.WingGeometry import Wing, Section  # Replace with your actual module na
 def test_wing_initialization():
     example_wing = Wing(n_panels=10)
     assert example_wing.n_panels == 10
-    assert example_wing.spanwise_panel_distribution == "linear"
+    assert example_wing.spanwise_panel_distribution == "uniform"
     np.testing.assert_array_equal(example_wing.spanwise_direction, np.array([0, 1, 0]))
     assert isinstance(example_wing.sections, list)
     assert len(example_wing.sections) == 0  # Initially, sections list should be empty
@@ -30,12 +30,16 @@ def test_robustness_left_to_right():
     # Test correct order
     example_wing.add_section(np.array([0, 1, 0]), np.array([0, 1, 0]), ["inviscid"])
     example_wing.add_section(np.array([0, -1, 0]), np.array([0, -1, 0]), ["inviscid"])
-    example_wing.add_section(np.array([0, -1.5, 0]), np.array([0, -1.5, 0]), ["inviscid"])
+    example_wing.add_section(
+        np.array([0, -1.5, 0]), np.array([0, -1.5, 0]), ["inviscid"]
+    )
     example_wing.refine_aerodynamic_mesh()
 
     example_wing_1 = Wing(n_panels=10)
     # Test right to left order
-    example_wing_1.add_section(np.array([0, -1.5, 0]), np.array([0, -1.5, 0]), ["inviscid"])
+    example_wing_1.add_section(
+        np.array([0, -1.5, 0]), np.array([0, -1.5, 0]), ["inviscid"]
+    )
     example_wing_1.add_section(np.array([0, -1, 0]), np.array([0, -1, 0]), ["inviscid"])
     example_wing_1.add_section(np.array([0, 1, 0]), np.array([0, 1, 0]), ["inviscid"])
     example_wing_1.refine_aerodynamic_mesh()
@@ -43,7 +47,9 @@ def test_robustness_left_to_right():
     example_wing_2 = Wing(n_panels=10)
     # Test random order
     example_wing_2.add_section(np.array([0, 1, 0]), np.array([0, 1, 0]), ["inviscid"])
-    example_wing_2.add_section(np.array([0, -1.5, 0]), np.array([0, -1.5, 0]), ["inviscid"])
+    example_wing_2.add_section(
+        np.array([0, -1.5, 0]), np.array([0, -1.5, 0]), ["inviscid"]
+    )
     example_wing_2.add_section(np.array([0, -1, 0]), np.array([0, -1, 0]), ["inviscid"])
     example_wing_2.refine_aerodynamic_mesh()
 
@@ -67,7 +73,7 @@ def test_refine_aerodynamic_mesh():
     span = 20
 
     ## Test linear distribution
-    wing = Wing(n_panels, spanwise_panel_distribution="linear")
+    wing = Wing(n_panels, spanwise_panel_distribution="uniform")
     wing.add_section([0, span / 2, 0], [-1, span / 2, 0], ["inviscid"])
     wing.add_section([0, -span / 2, 0], [-1, -span / 2, 0], ["inviscid"])
     sections = wing.refine_aerodynamic_mesh()
@@ -112,7 +118,7 @@ def test_refine_aerodynamic_mesh_1_panel():
     n_panels = 1
     span = 20
 
-    wing = Wing(n_panels, spanwise_panel_distribution="linear")
+    wing = Wing(n_panels, spanwise_panel_distribution="uniform")
     wing.add_section([0, span / 2, 0], [-1, span / 2, 0], ["inviscid"])
     wing.add_section([0, -span / 2, 0], [-1, -span / 2, 0], ["inviscid"])
 
@@ -129,7 +135,7 @@ def test_refine_aeordynamic_mesh_2_panel():
     n_panels = 2
     span = 20
 
-    wing = Wing(n_panels, spanwise_panel_distribution="linear")
+    wing = Wing(n_panels, spanwise_panel_distribution="uniform")
     wing.add_section([0, span / 2, 0], [-1, span / 2, 0], ["inviscid"])
     wing.add_section([0, -span / 2, 0], [-1, -span / 2, 0], ["inviscid"])
 
@@ -147,7 +153,7 @@ def test_refine_aeordynamic_mesh_more_sections_than_panels():
     n_panels = 2
     span = 20
 
-    wing = Wing(n_panels, spanwise_panel_distribution="linear")
+    wing = Wing(n_panels, spanwise_panel_distribution="uniform")
     wing.add_section([0, span / 2, 0], [-1, span / 2, 0], ["inviscid"])
     wing.add_section([0, span / 4, 0], [-1, span / 4, 0], ["inviscid"])
     wing.add_section([0, 0, 0], [-1, 0, 0], ["inviscid"])
@@ -174,10 +180,9 @@ def test_refine_aerodynamic_mesh_for_symmetrical_wing():
     n_panels = 2
     span = 10  # Total span from -5 to 5
 
-    wing = Wing(n_panels, spanwise_panel_distribution="linear")
+    wing = Wing(n_panels, spanwise_panel_distribution="uniform")
     wing.add_section([0, 5, 0], [-1, 5, 0], ["inviscid"])
     wing.add_section([0, -5, 0], [-1, -5, 0], ["inviscid"])
-
 
     sections = wing.refine_aerodynamic_mesh()
 
@@ -238,7 +243,7 @@ def test_refine_aeordynamic_mesh_lei_airfoil_interpolation():
     n_panels = 4
     span = 20
 
-    wing = Wing(n_panels, spanwise_panel_distribution="linear")
+    wing = Wing(n_panels, spanwise_panel_distribution="uniform")
     wing.add_section(
         [0, span / 2, 0], [-1, span / 2, 0], ["lei_airfoil_breukels", [0, 0]]
     )

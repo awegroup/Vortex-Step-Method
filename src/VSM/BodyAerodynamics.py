@@ -48,11 +48,31 @@ class BodyAerodynamics:
         control_point_location: float = 0.75,
     ):
         self._wings = wings
-        # Defining the panels by refining the aerodynamic mesh
+        self._aerodynamic_center_location = aerodynamic_center_location
+        self._control_point_location = control_point_location
+
+        ##TODO:
+        self._bridle_line_system = bridle_line_system
+        self.cd_cable = 1.1
+        self.cf_cable = 0.01
+
+        # Build the initial panel list from the wing geometry.
+        self._build_panels()
+
+        # Other initializations
+        self._va = None
+        self._gamma_distribution = None
+        self._alpha_uncorrected = None
+        self._alpha_corrected = None
+
+    def _build_panels(self):
+        """Helper method to build the panel list from the current wing geometry."""
         panels = []
-        for i, wing_instance in enumerate(wings):
-            section_list = wing_instance.refine_aerodynamic_mesh()
+        for wing in self.wings:
+            section_list = wing.refine_aerodynamic_mesh()
             n_panels_per_wing = len(section_list) - 1
+
+            # Calculate the panel properties
             (
                 aerodynamic_center_list,
                 control_point_list,
@@ -64,8 +84,8 @@ class BodyAerodynamics:
             ) = self.calculate_panel_properties(
                 section_list,
                 n_panels_per_wing,
-                aerodynamic_center_location,
-                control_point_location,
+                self._aerodynamic_center_location,
+                self._control_point_location,
             )
             for j in range(n_panels_per_wing):
                 panels.append(
@@ -83,29 +103,19 @@ class BodyAerodynamics:
                 )
         self._panels = panels
         self._n_panels = len(panels)
-        self._va = None
-        self._gamma_distribution = None
-        self._alpha_uncorrected = None
-        self._alpha_corrected = None
-        # self._stall_angle_list = self.calculate_stall_angle_list()
 
-        ##TODO:
-        self._bridle_line_system = bridle_line_system
-        self.cd_cable = 1.1
-        self.cf_cable = 0.01
-
-    ###########################
+    ####################
     ## CLASS METHODS ###
-    ########################
+    ####################
     @classmethod
     def from_file(
         cls,
         wing_instance,
         file_path,
         is_with_corrected_polar=False,
-        path_polar_data_dir="",
+        polar_data_dir="",
         is_with_bridles=False,
-        path_bridle_data=None,
+        bridle_data_path=None,
     ):
         """Instantiate a BodyAerodynamics object with or without bridles
 
@@ -146,7 +156,7 @@ class BodyAerodynamics:
             LE, TE, airfoil_data = rib
             if is_with_corrected_polar:
                 df_polar = pd.read_csv(
-                    Path(path_polar_data_dir) / f"corrected_polar_{i}.csv"
+                    Path(polar_data_dir) / f"corrected_polar_{i}.csv"
                 )
                 # Create polar data with (N, 4) format: each row is [alpha, cl, cd, cm]
                 polar_data = [
@@ -166,7 +176,7 @@ class BodyAerodynamics:
 
         # Instantiate BodyAerodynamics with or without bridles
         if is_with_bridles:
-            df_bridle = pd.read_csv(path_bridle_data)
+            df_bridle = pd.read_csv(bridle_data_path)
             bridle_lines = [
                 [
                     np.array([row["p1_x"], row["p1_y"], row["p1_z"]]),
@@ -178,6 +188,25 @@ class BodyAerodynamics:
             return cls([wing_instance], bridle_lines)
         else:
             return cls([wing_instance])
+
+    ###########################
+    ## UPDATE FUNCTION
+    ###########################
+    def update_from_points(
+        self,
+        le_arr: np.ndarray,
+        te_arr: np.ndarray,
+        d_tube_arr: np.ndarray,
+        y_camber_arr: np.ndarray,
+        aero_input_type: str = "lei_airfoil_breukels",
+    ):
+        # Update each wing with the new points.
+        for wing in self.wings:
+            wing.update_wing_from_points(
+                le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
+            )
+        # Rebuild the panels based on the updated geometry.
+        self._build_panels()
 
     ###########################
     ## GETTER FUNCTIONS

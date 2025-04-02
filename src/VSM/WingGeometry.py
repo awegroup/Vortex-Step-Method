@@ -45,6 +45,41 @@ class Wing:
     spanwise_direction: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     sections: List["Section"] = field(default_factory=list)  # child-class
 
+    def update_wing_from_points(
+        self,
+        le_arr: np.ndarray,
+        te_arr: np.ndarray,
+        d_tube_arr: np.ndarray,
+        y_camber_arr: np.ndarray,
+        aero_input_type: str = "lei_airfoil_breukels",
+    ):
+        """Update the wing geometry from points
+        Args:
+            le_arr (np.ndarray): Array of leading edge points
+            te_arr (np.ndarray): Array of trailing edge points
+            d_tube_arr (np.ndarray): Array of tube diameters
+            y_camber_arr (np.ndarray): Array of camber heights
+            aero_input_type (str): Aerodynamic input type, options:
+                - "lei_airfoil_breukels": LEI airfoil with Breukels parameters
+        Returns:
+            None
+        """
+        # Clear current sections.
+        self.sections.clear()
+
+        if aero_input_type == "lei_airfoil_breukels":
+            for le, te, d_tube, y_camber in zip(
+                le_arr, te_arr, d_tube_arr, y_camber_arr
+            ):
+                self.add_section(le, te, ["lei_airfoil_breukels", [d_tube, y_camber]])
+
+            # Recalculate the refined aerodynamic mesh.
+            self.sections = self.refine_aerodynamic_mesh()
+        else:
+            raise ValueError(
+                f"Unsupported aero model: {aero_input_type}. Supported: lei_airfoil_breukels"
+            )
+
     def add_section(self, LE_point: np.array, TE_point: np.array, aero_input: str):
         """
         Add a section to the wing
