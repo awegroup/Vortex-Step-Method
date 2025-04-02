@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 # Unstructured
 
+- changing input format alpha, CL, CD, CM and in 2D alpha, Cl, Cd, Cm
+- updating doscstrings
+- changing tutorial, sensivitiy, convergence
+- etc.
+
 # dealing with Simonet Stall Model
 - [x] plotting.py: inside the generate_3D_polar_data, 
 feeding in gamma_distribution `results = solver.solve(body_aero,gamma_distrbution=gamma)`, also changed the way the legends are plotted: is now below the graphs in distribution and polars.
