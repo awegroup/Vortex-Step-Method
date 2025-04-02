@@ -1,8 +1,6 @@
 import numpy as np
 import logging
 from . import jit_cross
-from scipy.optimize import newton_krylov, broyden1, broyden2
-
 
 # Maurits-tips :)
 # call the methods of child-classes, inhereted or composed of
@@ -133,6 +131,7 @@ class Solver:
             dict: Results of the aerodynamic model"""
 
         if body_aero.va is None:
+        if body_aero.va is None:
             raise ValueError("Inflow conditions are not set")
 
         # Initialize variables here, outside the loop
@@ -188,6 +187,7 @@ class Solver:
             gamma_initial = np.zeros(self.n_panels)
         elif self.gamma_initial_distribution_type == "elliptical":
             gamma_initial = (
+                body_aero.calculate_circulation_distribution_elliptical_wing()
                 body_aero.calculate_circulation_distribution_elliptical_wing()
             )
         elif self.gamma_initial_distribution_type == "cosine":
@@ -250,6 +250,7 @@ class Solver:
             else:
                 raise ValueError(f"Invalid gamma_loop_type")
         # Calculating results (incl. updating angle of attack for VSM)
+        results = body_aero.calculate_results(
         results = body_aero.calculate_results(
             gamma_new,
             self.density,

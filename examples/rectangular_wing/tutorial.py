@@ -89,7 +89,7 @@ wing.add_section([0, -span / 2, 0], [1, -span / 2, 0], ["inviscid"])
 # The setter function takes 1 or 2 inputs
 # - the v_a itself: np.array([x,y,z])
 # - the yaw_rate: np.array (default = 0)
-#
+
 
 # Initialize wing aerodynamics
 body_aero = BodyAerodynamics([wing])

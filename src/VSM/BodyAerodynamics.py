@@ -964,7 +964,9 @@ class BodyAerodynamics:
             M_local_3D = moment[i] * moment_axis_global * panel_i.width
 
             # (3) Vector from panel AC to the chosen reference point:
-            r_vector = panel_ac_global - reference_point  # e.g. CG, wing root, etc.
+            r_vector = (
+                panel_ac_global - moment_reference_point
+            )  # e.g. CG, wing root, etc.
 
             # (4) Cross product to shift the force from panel AC to ref. point:
             force_global_3D = np.array([fx_global_3D, fy_global_3D, fz_global_3D])

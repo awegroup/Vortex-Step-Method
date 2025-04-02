@@ -92,8 +92,11 @@ dependencies = [
   "plotly",
   "nbformat",
   "pandas",
+<<<<<<< HEAD
   "neuralfoil",
   "PyYAML",
+=======
+>>>>>>> 08138c40cc2f5120d29d46f2ae6b65745976ac87
 ]
 
 
