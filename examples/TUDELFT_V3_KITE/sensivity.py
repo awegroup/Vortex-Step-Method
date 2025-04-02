@@ -7,23 +7,15 @@ from VSM.sensitivity_analysis import (
     testing_all_solver_settings,
 )
 
-if __name__ == "__main__":
-    # Example usage
-    PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
-    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
-    polar_data_dir = (
-        Path(PROJECT_DIR)
-        / "examples"
-        / "TUDELFT_V3_KITE"
-        / "polar_engineering"
-        / "csv_files"
-    )
-    sensitivity_results_dir = (
-        Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "sensitivity_analysis"
-    )
+
+def main():
+    PROJECT_DIR = Path(__file__).resolve().parents[2]
+    print(f"PROJECT_DIR: {PROJECT_DIR}")
 
     # literature results
-    path_to_lit = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "literature_results"
+    path_to_lit = (
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "3D_polars_literature"
+    )
     literature_path_list_alpha = [
         Path(path_to_lit) / "CFD_V3_CL_CD_RANS_Vire2020_Rey_5e5.csv",
         Path(path_to_lit) / "CFD_V3_CL_CD_RANS_Vire2022_Rey_10e5.csv",
@@ -39,22 +31,17 @@ if __name__ == "__main__":
         "RANS CFD Re = 10e5 (Vire et al. 2022)",
     ]
 
-    ### Testing version
-    sensitivity_results_dir = (
-        Path(PROJECT_DIR)
-        / "results"
-        / "TUDELFT_V3_KITE"
-        / "sensitivity_analysis_testing"
-    )
+    # kite geometry
     geometry_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
     is_with_corrected_polar = True
     polar_data_dir = (
-        Path(PROJECT_DIR)
-        / "examples"
-        / "TUDELFT_V3_KITE"
-        / "polar_engineering"
-        / "csv_files"
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
     )
+    # sensitivity results
+    sensitivity_results_dir = (
+        Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "sensitivity_analysis"
+    )
+
     testing_all_solver_settings(
         sensitivity_results_dir=sensitivity_results_dir,
         geometry_path=geometry_path,
@@ -86,3 +73,7 @@ if __name__ == "__main__":
         # literature_path_list_beta=literature_path_list_beta,
         # literature_label_list_beta=literature_label_list_beta,
     )
+
+
+if __name__ == "__main__":
+    main()

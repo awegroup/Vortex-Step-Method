@@ -1,9 +1,9 @@
 import numpy as np
 import logging
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
+from VSM.WingGeometry import Wing
 from VSM.Panel import Panel
 import VSM.Wake as Wake
 from . import jit_cross, jit_norm, jit_dot
@@ -115,29 +115,37 @@ class BodyAerodynamics:
     @classmethod
     def from_file(
         cls,
-        wing_instance,
-        file_path,
-        is_with_corrected_polar=False,
-        polar_data_dir="",
-        is_with_bridles=False,
-        bridle_data_path=None,
+        file_path: str,
+        n_panels: int,
+        spanwise_panel_distribution: str,
+        is_with_corrected_polar: bool = False,
+        polar_data_dir: str = "",
+        is_with_bridles: bool = False,
+        bridle_data_path: str = None,
     ):
-        """Instantiate a BodyAerodynamics object with or without bridles
+        """Instantiate a BodyAerodynamics object from wing geometry and optional polar/bridle data.
 
         Args:
-            wing_instance (Wing): Wing instance
-            file_path (str): Path to the wing geometry file
-                a .csv structured with columns: LE_x,LE_y,LE_z,TE_x,TE_y,TE_z,d_tube,camber
-            is_with_corrected_polar (bool, optional): Whether to use corrected polar data. Defaults to False.
-            path_polar_data_dir (str, optional): Path to the corrected polar data directory. Defaults to "".
-                a .csv structured with columsn: alpha,cl,cd,cm
-            is_with_bridles (bool, optional): Whether to include bridles. Defaults to False.
-            path_bridle_data (str, optional): Path to the bridle data file. Defaults to None.
-                a .csv structured with columsn: p1_x,p1_y,p1_z,p2_x,p2_y,p2_z,diameter
+            file_path (str): Path to the wing geometry CSV file. The file should contain the columns:
+            LE_x, LE_y, LE_z, TE_x, TE_y, TE_z, d_tube, camber.
+            n_panels (int): Number of panels to discretize the wing.
+            spanwise_panel_distribution (str): Method for distributing the panels along the wing span.
+            is_with_corrected_polar (bool, optional): If True, use corrected polar data from CSV files.
+            Defaults to False.
+            polar_data_dir (str, optional): Directory path where corrected polar CSV files are stored.
+            Each file should contain columns: alpha, cl, cd, cm. Defaults to "".
+            is_with_bridles (bool, optional): If True, incorporate bridles into the aerodynamic model.
+            Defaults to False.
+            bridle_data_path (str, optional): Path to the bridle data CSV file. The file should have columns:
+            p1_x, p1_y, p1_z, p2_x, p2_y, p2_z, diameter. Defaults to None.
 
         Returns:
-            BodyAerodynamics: BodyAerodynamics instance
+            BodyAerodynamics: An instance of BodyAerodynamics built using the provided geometry and data.
         """
+        # Initialize wing
+        wing_instance = Wing(
+            n_panels=n_panels, spanwise_panel_distribution=spanwise_panel_distribution
+        )
         # Read wing geometry and airfoil parameters from file
         df = pd.read_csv(file_path)
 
@@ -152,7 +160,7 @@ class BodyAerodynamics:
                     (df["TE_x"].values, df["TE_y"].values, df["TE_z"].values), axis=-1
                 ),
                 df["d_tube"].values,
-                df["camber"].values,
+                df["y_camber"].values,
             )
         ]
 
@@ -160,18 +168,16 @@ class BodyAerodynamics:
         for i, rib in enumerate(ribs):
             LE, TE, airfoil_data = rib
             if is_with_corrected_polar:
-                df_polar = pd.read_csv(
-                    Path(polar_data_dir) / f"corrected_polar_{i}.csv"
-                )
+                df_polar = pd.read_csv(Path(polar_data_dir) / f"{i}.csv")
                 # Create polar data with (N, 4) format: each row is [alpha, cl, cd, cm]
                 polar_data = [
                     "polar_data",
                     np.column_stack(
                         (
-                            df_polar["alpha"].values,
-                            df_polar["cl"].values,
-                            df_polar["cd"].values,
-                            df_polar["cm"].values,
+                            np.deg2rad(df_polar["alpha"].values),
+                            df_polar["Cl"].values,
+                            df_polar["Cd"].values,
+                            df_polar["Cm"].values,
                         )
                     ),
                 ]

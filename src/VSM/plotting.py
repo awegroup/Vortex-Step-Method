@@ -356,7 +356,7 @@ def plot_geometry(
         plt.close()
 
     # showing plot
-    if is_show:
+    if is_show and not is_save:
         fig = creating_geometry_plot(
             body_aero,
             title=title,
@@ -364,6 +364,10 @@ def plot_geometry(
             view_azimuth=-120,
         )
         plt.show()
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def plot_distribution(
@@ -570,8 +574,12 @@ def plot_distribution(
     if is_save:
         save_plot(fig, save_path, title, data_type)
 
-    if is_show:
+    if is_show and not is_save:
         show_plot(fig)
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def generate_3D_polar_data(
@@ -751,16 +759,35 @@ def plot_polars(
     if literature_path_list is not None:
         if angle_type == "angle_of_attack":
             for literature_path in literature_path_list:
-                CL, CD, aoa = np.loadtxt(
-                    literature_path, delimiter=",", skiprows=1, unpack=True
+                df = pd.read_csv(literature_path)
+                if not all(key in df.columns.values for key in ["alpha", "CL", "CD"]):
+                    raise ValueError(
+                        "The literature data should contain columns: 'alpha' (in deg), 'CL', 'CD'"
+                    )
+                polar_data_list.append(
+                    [df["alpha"].values, df["CL"].values, df["CD"].values]
                 )
-                polar_data_list.append([aoa, CL, CD])
         elif angle_type == "side_slip":
             for literature_path in literature_path_list:
-                CL, CD, CS, beta = np.loadtxt(
-                    literature_path, delimiter=",", skiprows=1, unpack=True
+                df = pd.read_csv(literature_path)
+                if not all(
+                    key in df.columns.values for key in ["beta", "CL", "CD", "CS"]
+                ):
+                    raise ValueError(
+                        "The literature data should contain columns: 'beta' (in deg), 'CL', 'CD', 'CS'"
+                    )
+                polar_data_list.append(
+                    [
+                        df["beta"].values,
+                        df["CL"].values,
+                        df["CD"].values,
+                        df["CS"].values,
+                    ]
                 )
-                polar_data_list.append([beta, CL, CD, CS])
+        else:
+            raise ValueError(
+                "angle_type should be either 'angle_of_attack' or 'side_slip'"
+            )
 
     # Initializing plot
     fig, axs = plt.subplots(2, 3, figsize=(15, 10))
@@ -939,10 +966,15 @@ def plot_polars(
     # saving plot
     if is_save:
         save_plot(fig, save_path, title, data_type)
+        plt.close()
 
     # showing plot
-    if is_show:
+    if is_show and not is_save:
         show_plot(fig)
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def plot_panel_coefficients(
@@ -1023,8 +1055,12 @@ def plot_panel_coefficients(
         save_plot(fig, save_path, title, data_type)
 
     # showing plot
-    if is_show:
+    if is_show and not is_save:
         show_plot(fig)
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def process_panel_coefficients_panel_i(body_aero, panel_index, PROJECT_DIR, n_panels):

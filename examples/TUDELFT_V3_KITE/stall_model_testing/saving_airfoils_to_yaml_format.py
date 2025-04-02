@@ -5,7 +5,7 @@ import yaml
 from collections import OrderedDict
 import re
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 # Read the wing geometry CSV file.
 wing_geometry_path = (

@@ -31,12 +31,9 @@ def generate_n_panel_sensivitity_df(
 
     results_list = []
     for n_panels in n_panels_list:
-        # Create a Wing instance for the current n_panels value.
-        wing = Wing(
-            n_panels=n_panels, spanwise_panel_distribution=spanwise_panel_distribution
-        )
         body_aero = BodyAerodynamics.from_file(
-            wing,
+            n_panels=n_panels,
+            spanwise_panel_distribution=spanwise_panel_distribution,
             file_path=geometry_path,
             is_with_corrected_polar=is_with_corrected_polar,
             polar_data_dir=polar_data_dir,
@@ -70,7 +67,7 @@ def generate_n_panel_sensivitity_df(
 
 
 def generate_csv_files(
-    convergence_results_dir,
+    convergence_analysis_dir,
     geometry_path,
     is_with_corrected_polar,
     polar_data_dir,
@@ -91,8 +88,6 @@ def generate_csv_files(
     polar_data_dir_list=None,
     spanwise_panel_distribution_list=None,
 ):
-    if not convergence_results_dir.exists():
-        convergence_results_dir.mkdir(parents=True, exist_ok=True)
 
     parameter_list = [
         "aerodynamic_model_type",
@@ -118,6 +113,18 @@ def generate_csv_files(
         polar_data_dir_list,
         spanwise_panel_distribution_list,
     ]
+    # Write a custom dir for the parameter setup
+    dir_name = ""
+    for parameter, value_list in zip(parameter_list, value_list_list):
+        if value_list is None:
+            continue
+        if len(dir_name) > 1:
+            dir_name += "_"
+        dir_name += f"{parameter}_(" + "_".join([str(v) for v in value_list]) + ")"
+    convergence_results_dir = Path(convergence_analysis_dir, dir_name)
+    # create the directory if it does not exist
+    if not convergence_results_dir.exists():
+        convergence_results_dir.mkdir(parents=True, exist_ok=True)
 
     for parameter, value_list in zip(parameter_list, value_list_list):
         if value_list is None:
@@ -153,6 +160,7 @@ def generate_csv_files(
             df.to_csv(
                 Path(convergence_results_dir, f"{parameter}_{value}.csv"), index=False
             )
+    return convergence_results_dir
 
 
 def plot_convergence(convergence_results_dir, name, plot_type="pdf"):

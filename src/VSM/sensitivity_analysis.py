@@ -128,6 +128,7 @@ def testing_n_panels_effect(
     file_path,
     is_with_corrected_polar,
     polar_data_dir,
+    spanwise_panel_distribution,
     n_panels_list,
     solver,
     alpha_range,
@@ -154,9 +155,9 @@ def testing_n_panels_effect(
     y_coords_list = []
 
     for n_panels in n_panels_list:
-        wing = Wing(n_panels=n_panels, spanwise_panel_distribution="uniform")
         body_aero = BodyAerodynamics.from_file(
-            wing,
+            n_panels=n_panels,
+            spanwise_panel_distribution=spanwise_panel_distribution,
             file_path=file_path,
             is_with_corrected_polar=is_with_corrected_polar,
             polar_data_dir=polar_data_dir,
@@ -297,13 +298,9 @@ def testing_all_solver_settings(
         n_panels_list,
         relaxation_factor_list,
     ]
-
-    ## instantia a wing
-    wing_instance = Wing(
-        n_panels=n_panels, spanwise_panel_distribution=spanwise_panel_distribution
-    )
     body_aero = BodyAerodynamics.from_file(
-        wing_instance,
+        n_panels=n_panels,
+        spanwise_panel_distribution=spanwise_panel_distribution,
         file_path=geometry_path,
         is_with_corrected_polar=is_with_corrected_polar,
         polar_data_dir=polar_data_dir,
@@ -322,6 +319,7 @@ def testing_all_solver_settings(
                 geometry_path,
                 is_with_corrected_polar,
                 polar_data_dir,
+                spanwise_panel_distribution,
                 n_panels_list,
                 solver,
                 alpha_range,
