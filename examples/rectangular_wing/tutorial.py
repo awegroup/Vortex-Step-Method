@@ -64,7 +64,7 @@ from VSM.interactive import interactive_plot
 #
 
 # Create a wing object with specific properties, accepting the standard default spanwise direction
-wing = Wing(n_panels=20, spanwise_panel_distribution="linear")
+wing = Wing(n_panels=20, spanwise_panel_distribution="uniform")
 
 # Add sections to the wing, here only the tip-sections are specified and and an "inviscid" airfoil model is chosen
 span = 20
@@ -92,7 +92,7 @@ wing.add_section([0, -span / 2, 0], [1, -span / 2, 0], ["inviscid"])
 #
 
 # Initialize wing aerodynamics
-wing_aero = BodyAerodynamics([wing])
+body_aero = BodyAerodynamics([wing])
 
 # Define inflow conditions
 Umag = 20  # Magnitude of the inflow velocity
@@ -100,17 +100,17 @@ aoa = 30  # Angle of attack in degrees
 aoa = np.deg2rad(aoa)  # Convert angle of attack to radians
 vel_app = np.array([np.cos(aoa), 0, np.sin(aoa)]) * Umag  # Define the inflow vector
 yaw_rate = 0
-wing_aero.va = vel_app, yaw_rate  # Set the inflow conditions
+body_aero.va = vel_app, yaw_rate  # Set the inflow conditions
 
 # one can also set the inflow condition without specifying the yaw rate
-wing_aero.va = vel_app
+body_aero.va = vel_app
 
 # ## 4. Plotting the geometry
 #
 # Using the `plot_geometry` function, one can easily plot the geometry and inspect the geometry, va, wake, direction of the filaments, location of the aerodynamic center/control point, distribution of the panels, etc.
 #
 # The `plot_geometry` function has the following inputs:
-# - `wing_aero`: BodyAerodynamics object
+# - `body_aero`: BodyAerodynamics object
 # - `title`: title of the plot
 # - `data_type`: type of the data to be saved | default: ".pdf"
 # - `save_path`: path to save the plot | default: None
@@ -122,7 +122,7 @@ wing_aero.va = vel_app
 
 # MATPLOTLIB Plot the wing geometry
 plotting.plot_geometry(
-    wing_aero,
+    body_aero,
     title="rectangular_wing_geometry",
     data_type=".pdf",
     save_path=".",
@@ -132,7 +132,7 @@ plotting.plot_geometry(
 
 # Plotly In the browser plot
 interactive_plot(
-    wing_aero,
+    body_aero,
     vel=Umag,
     angle_of_attack=aoa,
     side_slip=0,
@@ -168,7 +168,7 @@ VSM = Solver(aerodynamic_model_type="VSM")
 # ## 6. Running a simulation
 #
 # Running a simulation is done through the Solver's `.solve` method, which takes the following arguments:
-# - `wing_aero` (BodyAerodynamics): BodyAerodynamics object
+# - `body_aero` (BodyAerodynamics): BodyAerodynamics object
 # - `gamma_distribution` (np.array): Initial gamma distribution (default: None)
 #
 # Inside this method, it first calculates the auto-induction matrices, it then iteratively solves for the correct circulation (gamma) distribution, corrects the angle of attack and calculates the output result from the circulation, e.g. the lift-coefficient.
@@ -233,8 +233,8 @@ VSM = Solver(aerodynamic_model_type="VSM")
 #
 
 # Solving
-results_LLT = LLT.solve(wing_aero)
-results_VSM = VSM.solve(wing_aero)
+results_LLT = LLT.solve(body_aero)
+results_VSM = VSM.solve(body_aero)
 
 print(f"\nresult_LLT: {results_LLT.keys()}")
 print(f'lift: {results_LLT["lift"]}')
@@ -258,9 +258,9 @@ print(f'projected_area: {results_VSM["projected_area"]}')
 # - `is_save`: boolean to save the plot | default: True
 # - `is_show`: boolean to show the plot | default: True
 #
-# We are first extracting the y_coordinates, from the wing_aero,panels, using the 1st index (corresponding to the y-coordinate) of the aerodynamic_center.
+# We are first extracting the y_coordinates, from the body_aero,panels, using the 1st index (corresponding to the y-coordinate) of the aerodynamic_center.
 
-y_coordinates = [panels.aerodynamic_center[1] for panels in wing_aero.panels]
+y_coordinates = [panels.aerodynamic_center[1] for panels in body_aero.panels]
 plotting.plot_distribution(
     y_coordinates_list=[y_coordinates, y_coordinates],
     results_list=[results_VSM, results_LLT],
@@ -279,7 +279,7 @@ plotting.plot_distribution(
 #
 # To automate this process one can make use of the `plot_polars` function, that takes the following arguments:
 # - `solver_list`: list of solver objects
-# - `wing_aero_list`: list of wing_aero objects
+# - `body_aero_list`: list of body_aero objects
 # - `label_list`: list of labels for the results
 # - `literature_path_list`: list of paths to literature data | default: None
 # - `angle_range`: range of angles to be considered | default: np.linspace(0, 20, 2)
@@ -299,7 +299,7 @@ plotting.plot_distribution(
 
 plotting.plot_polars(
     solver_list=[LLT, VSM],
-    wing_aero_list=[wing_aero, wing_aero],
+    body_aero_list=[body_aero, body_aero],
     label_list=["LLT", "VSM"],
     literature_path_list=[],
     angle_range=np.linspace(0, 20, 20),

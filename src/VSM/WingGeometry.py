@@ -9,37 +9,48 @@ logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class Wing:
-    """Class to define a wing object, to store the geometry
+    """Class to define a wing object for aerodynamic analysis.
 
-    The Wing class is used to define a wing object, which is a collection of sections.
+    The Wing class represents a wing geometry composed of multiple sections and provides methods
+    to update, refine, and analyze the aerodynamic mesh as well as compute geometric properties.
 
-    Args:
-        - n_panels (int): Number of panels to be used in the aerodynamic mesh
-        - spanwise_panel_distribution (str): Spanwise panel distribution type, options:
-            - "uniform": Linear distribution
-            - "cosine": Cosine distribution
-            - "cosine_van_Garrel": Cosine distribution based on van Garrel method
-            - "split_provided": Split the provided sections into the desired number of panels
-            - "unchanged": Keep the provided sections unchanged
-        - spanwise_direction (np.ndarray): Spanwise direction of the wing (default [0, 1, 0])
-        - sections (List[Section]): List of Section objects that define the wing geometry
-
-    Returns:
-        - Wing object
+    Attributes:
+        n_panels (int): Number of panels used in the aerodynamic mesh (the number of sections is n_panels + 1).
+        spanwise_panel_distribution (str): Spanwise panel distribution type. Options include:
+            - "uniform": Linear spacing.
+            - "cosine": Cosine spacing.
+            - "cosine_van_Garrel": Cosine spacing based on the van Garrel method.
+            - "split_provided": Split provided sections to achieve the desired number of panels.
+            - "unchanged": Keep the provided sections unchanged.
+        spanwise_direction (np.ndarray): Unit vector representing the wing's spanwise direction.
+        sections (List[Section]): List of Section objects that define the wing geometry.
 
     Methods:
-        - add_section(LE_point, TE_point, aero_input): Add a section to the wing
-        - refine_aerodynamic_mesh(): Refine the aerodynamic mesh of the wing
-        - span(): Calculate the span of the wing along a given vector axis
-        - calculate_projected_area(z_plane_vector): Calculate the projected area of the wing onto a specified plane
-        - calculate_cosine_van_Garrel(new_sections): Calculate the van Garrel cosine distribution of sections
-        - calculate_new_aero_input(aero_input, section_index, left_weight, right_weight): Interpolates the aero_input of two sections
-        - refine_mesh_for_linear_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, aero_input): Refine the aerodynamic mesh of the wing based on linear or cosine spacing
-        - refine_mesh_by_splitting_provided_sections(): Refine the aerodynamic mesh of the wing by splitting the provided sections
-        - flip_created_coord_in_pairs_if_needed(coord): Ensure the coordinates are ordered from positive to negative along the y-axis
-
+        update_wing_from_points(le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type):
+            Updates the wing geometry using arrays of leading edge points, trailing edge points,
+            tube diameters, and camber heights.
+        add_section(LE_point, TE_point, aero_input):
+            Adds a new section to the wing with the given leading edge, trailing edge, and aerodynamic input.
+        find_farthest_point_and_sort(sections):
+            Determines a starting section and sorts all sections based on proximity for mesh refinement.
+        refine_aerodynamic_mesh():
+            Refines the wing's aerodynamic mesh according to the selected spanwise panel distribution.
+        refine_mesh_for_uniform_or_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, aero_input):
+            Refines the mesh using linear or cosine spacing by interpolating leading/trailing edge points
+            and aerodynamic input.
+        calculate_new_aero_input(aero_input, section_index, left_weight, right_weight):
+            Interpolates aerodynamic input data between adjacent sections.
+        refine_mesh_by_splitting_provided_sections():
+            Splits the provided sections into additional sections to match the desired number of panels.
+        calculate_cosine_van_Garrel(new_sections):
+            Applies the van Garrel cosine distribution correction to the sections.
+        span (property):
+            Computes the wing span along the specified spanwise direction.
+        calculate_projected_area(z_plane_vector):
+            Calculates the projected area of the wing onto a plane defined by the given normal vector.
     """
 
+    # this creates self.n_panels and so on
     n_panels: int
     spanwise_panel_distribution: str = "uniform"
     spanwise_direction: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
@@ -168,6 +179,17 @@ class Wing:
         #     self.sections, key=lambda section: section.LE_point[1], reverse=True
         # )
 
+        if self.spanwise_panel_distribution not in [
+            "uniform",
+            "cosine",
+            "cosine_van_Garrel",
+            "split_provided",
+            "unchanged",
+        ]:
+            raise ValueError(
+                f"Unsupported spanwise panel distribution: {self.spanwise_panel_distribution}, choose: uniform, unchanged, cosine, cosine_van_Garrel"
+            )
+
         # Perform additional sorting
         self.sections = self.find_farthest_point_and_sort(self.sections)
 
@@ -188,14 +210,21 @@ class Wing:
             TE[i] = section.TE_point
             aero_input.append(section.aero_input)
 
-        # Handling wrong input
-        if len(LE) != len(TE) or len(LE) != len(aero_input):
+        if (
+            self.spanwise_panel_distribution == "uniform"
+            or "cosine"
+            or "cosine_van_Garrel"
+        ):
+            return self.refine_mesh_for_uniform_or_cosine_distribution(
+                self.spanwise_panel_distribution, n_sections, LE, TE, aero_input
+            )
+        elif len(LE) != len(TE) or len(LE) != len(aero_input):
             raise ValueError("LE, TE, and aero_input must have the same length")
         elif (self.spanwise_panel_distribution == "unchanged") or (
             len(self.sections) == n_sections
         ):
             return self.sections
-        elif n_sections == 2:
+        elif n_sections == 2 and self.spanwise_panel_distribution == "uniform":
             new_sections = [
                 Section(LE[0], TE[0], aero_input[0]),
                 Section(LE[-1], TE[-1], aero_input[-1]),
@@ -203,20 +232,13 @@ class Wing:
             return new_sections
         elif self.spanwise_panel_distribution == "split_provided":
             return self.refine_mesh_by_splitting_provided_sections()
-        elif (
-            self.spanwise_panel_distribution == "uniform"
-            or "cosine"
-            or "cosine_van_Garrel"
-        ):
-            return self.refine_mesh_for_linear_cosine_distribution(
-                self.spanwise_panel_distribution, n_sections, LE, TE, aero_input
-            )
+
         else:
             raise ValueError(
-                "Unsupported spanwise panel distribution, choose: uniform, unchanged, cosine, cosine_van_Garrel"
+                f"Unsupported spanwise panel distribution: {self.spanwise_panel_distribution}, choose: uniform, unchanged, cosine, cosine_van_Garrel"
             )
 
-    def refine_mesh_for_linear_cosine_distribution(
+    def refine_mesh_for_uniform_or_cosine_distribution(
         self, spanwise_panel_distribution, n_sections, LE, TE, aero_input
     ):
         """Refine the aerodynamic mesh of the wing based on linear or cosine spacing
@@ -475,7 +497,7 @@ class Wing:
 
             # Generate the new sections for this pair
             if num_new_sections_this_pair > 0:
-                new_splitted_sections = self.refine_mesh_for_linear_cosine_distribution(
+                new_splitted_sections = self.refine_mesh_for_uniform_or_cosine_distribution(
                     "uniform",
                     num_new_sections_this_pair
                     + 2,  # +2 because refine_mesh expects total sections, including endpoints

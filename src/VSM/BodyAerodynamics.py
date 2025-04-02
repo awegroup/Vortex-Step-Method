@@ -12,32 +12,37 @@ from . import jit_cross, jit_norm, jit_dot
 class BodyAerodynamics:
     """BodyAerodynamics class
 
-    This class is used to calculate the aerodynamic properties of a wing.
+    This class calculates the aerodynamic properties of a wing system, including the generation
+    of panels, evaluation of circulatory distributions, and computation of aerodynamic forces,
+    moments, and induced velocities. It supports both standard wing and bridled configurations.
 
     Args:
-        - wings (list): List of objects
-        - aerodynamic_center_location (float): The location of the aerodynamic center (default is 0.25)
-        - control_point_location (float): The location of the control point (default is 0.75)
-
-    Returns:
-        - BodyAerodynamics object
+        wings (list): List of Wing object instances.
+        bridle_line_system (list, optional): List of bridles, each defined as [p1, p2, diameter]. Defaults to None.
+        aerodynamic_center_location (float, optional): The location factor for the aerodynamic center (default is 0.25).
+        control_point_location (float, optional): The location factor for the control point (default is 0.75).
 
     Properties:
-        - panels: The list of Panel object instances
-        - n_panels: The number of panels
-        - va: The velocity array
-        - gamma_distribution: The circulation distribution
-        - wings: The list of Wing object instances
-
+        panels (list): List of Panel object instances constructed from the wing geometry.
+        n_panels (int): Number of panels.
+        va (np.ndarray): The apparent velocity vector used in calculations.
+        gamma_distribution (np.ndarray): Distribution of circulation along the panels.
+        wings (list): List of Wing object instances.
 
     Methods:
-        - calculate_panel_properties: Calculates the properties of the panels
-        - calculate_AIC_matrices: Calculates the AIC matrices
-        - calculate_circulation_distribution_elliptical_wing: Calculates the circulation distribution for an elliptical wing
-        - calculate_stall_angle_list: Calculates the stall angle list
-        - calculate_results: Calculates the results
-        - update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack if VSM
-        - calculate_stall_angle_list: Calculates the stall angle list
+        __init__: Initializes the BodyAerodynamics instance and builds the panel list.
+        _build_panels: Constructs panels from the current wing geometry.
+        from_file: Class method to instantiate an object by reading wing geometry and optional polar/bridle data from files.
+        update_from_points: Updates the wing geometry from new LE, TE, tube diameter, and camber points.
+        calculate_panel_properties: Computes the aerodynamic and geometric properties for each panel.
+        calculate_AIC_matrices: Calculates the Aerodynamic Influence Coefficient matrices based on the specified aerodynamic model.
+        calculate_circulation_distribution_elliptical_wing: Returns the circulation distribution for an elliptical wing.
+        calculate_circulation_distribution_cosine: Returns the circulation distribution based on a cosine profile.
+        calculate_results: Computes aerodynamic forces, moments, and other metrics based on the current state.
+        va_initialize: Initializes the apparent velocity vector (va) and yaw rate.
+        update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack for VSM using induced velocities.
+        calculate_line_aerodynamic_force: Computes the aerodynamic force on a line element (used for bridles).
+
     """
 
     def __init__(

@@ -15,32 +15,42 @@ from scipy.optimize import newton_krylov, broyden1, broyden2
 
 # make abstract class
 class Solver:
-    """Solver class is used to solve the aerodynamic model
+    """Solver class for solving the aerodynamic model.
 
-    It is used to solve the circulation distribution of the wing,
-    and calculate the aerodynamic forces
+    This class computes the circulation distribution over a wing and calculates
+    the resulting aerodynamic forces. It supports several iterative methods for
+    solving the nonlinear system associated with the aerodynamic model.
 
-    Args:
-        aerodynamic_model_type (str): Type of aerodynamic model to use, either 'VSM' or 'LLT' (default: 'VSM')
-        density (float): Air density (default: 1.225)
-        max_iterations (int): Maximum number of iterations (default: 1500)
-        allowed_error (float): Allowed error for convergence (default: 1e-5)
-        relaxation_factor (float): Relaxation factor for convergence (default: 0.01)
-        is_with_artificial_damping (bool): Whether to apply artificial damping (default: False)
-        artificial_damping (dict): Artificial damping parameters (default: {"k2": 0.1, "k4": 0.0})
-        gamma_initial_distribution_type (str): Type of initial gamma distribution (default: "elliptic")
-        core_radius_fraction (float): Core radius fraction (default: 1e-20)
-        mu (float): Dynamic viscosity (default: 1.81e-5)
-        is_only_f_and_gamma_output (bool): Whether to only output f and gamma (default: False)
-
-    Returns:
-        dict: Results of the aerodynamic model
+    Attributes:
+        aerodynamic_model_type (str): Type of aerodynamic model to use ('VSM' or 'LLT', default: 'VSM').
+        max_iterations (int): Maximum number of iterations for convergence (default: 5000).
+        allowed_error (float): Allowed normalized error for convergence (default: 1e-6).
+        relaxation_factor (float): Base relaxation factor for iterative updates (default: 0.01).
+        core_radius_fraction (float): Fraction of core radius used in induced velocity calculations (default: 1e-20).
+        gamma_loop_type (str): Type of iterative loop to use ('base', 'non_linear', or stall-related methods; default: 'base').
+        gamma_initial_distribution_type (str): Type of initial gamma distribution ('previous', 'elliptical', 'cosine', or 'zero'; default: 'elliptical').
+        is_only_f_and_gamma_output (bool): If True, only output force and gamma values (default: False).
+        reference_point (list): Reference point in space for aerodynamic calculations (default: [-0.17, 0.00, 9.25]).
+        mu (float): Dynamic viscosity of the fluid (default: 1.81e-5).
+        density (float): Fluid density (default: 1.225).
+        is_smooth_circulation (bool): If True, applies smoothing to the circulation distribution (default: False).
+        smoothness_factor (float): Smoothing factor for circulation (default: 0.08).
+        is_artificial_damping (bool): Defines if artificial damping is applied for stall modeling (default: False).
+        artificial_damping (dict): Parameters for artificial damping (default: {"k2": 0.1, "k4": 0.0}).
+        is_with_simonet_artificial_viscosity (bool): If True, uses Simonet's artificial viscosity model (default: False).
+        _simonet_artificial_viscosity_fva (float): Parameter for Simonet's artificial viscosity (default: None).
 
     Methods:
-        solve: Solve the aerodynamic model
-        gamma_loop: Loop to calculate the circulation distribution
-        calculate_artificial_damping: Calculate the artificial damping
-        smooth_circulation: Smooth the circulation
+        solve(body_aero, gamma_distribution=None):
+            Solves the aerodynamic model by computing the circulation distribution and
+            resulting forces.
+        compute_aerodynamic_quantities(gamma):
+            Computes aerodynamic quantities such as angle of attack, relative velocity,
+            and lift coefficient based on a given circulation distribution.
+        gamma_loop(gamma_initial, extra_relaxation_factor=1.0):
+            Iterative solver for updating the circulation distribution using a relaxation scheme.
+        gamma_loop_non_linear(gamma_initial):
+            Nonlinear solver that applies robust methods (Broyden) to compute the circulation distribution.
     """
 
     def __init__(
