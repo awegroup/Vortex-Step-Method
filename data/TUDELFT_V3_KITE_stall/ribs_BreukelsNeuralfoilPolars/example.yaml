@@ -1,0 +1,18 @@
+  kite_name: !!str ""
+  rib_number: !!int 0
+  is_strut: !!bool false
+  d_tube: !!float 0.0
+  x_camber: !!float 0.0
+  y_camber: !!float 0.0
+  delta_te_angle: !!float 0.0
+  airfoil_2D:
+    x_2D: !!seq []
+    y_2D: !!seq []
+  leading_edge_3D: !!seq [!!float 0.0, !!float 0.0, !!float 0.0]
+  trailing_edge_3D: !!seq [!!float 0.0, !!float 0.0, !!float 0.0]
+  normal_vector: !!seq [!!float 0.0, !!float 0.0, !!float 0.0]
+  polar_data:
+    alpha: !!seq []
+    cl:    !!seq []
+    cd:    !!seq []
+    cm:    !!seq []
