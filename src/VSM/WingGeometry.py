@@ -9,66 +9,122 @@ logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class Wing:
-    """Class to define a wing object, to store the geometry
+    """Class to define a wing object for aerodynamic analysis.
 
-    The Wing class is used to define a wing object, which is a collection of sections.
+    The Wing class represents a wing geometry composed of multiple sections and provides methods
+    to update, refine, and analyze the aerodynamic mesh as well as compute geometric properties.
 
-    Args:
-        - n_panels (int): Number of panels to be used in the aerodynamic mesh
-        - spanwise_panel_distribution (str): Spanwise panel distribution type, options:
-            - "linear": Linear distribution
-            - "cosine": Cosine distribution
-            - "cosine_van_Garrel": Cosine distribution based on van Garrel method
-            - "split_provided": Split the provided sections into the desired number of panels
-            - "unchanged": Keep the provided sections unchanged
-        - spanwise_direction (np.ndarray): Spanwise direction of the wing (default [0, 1, 0])
-        - sections (List[Section]): List of Section objects that define the wing geometry
-
-    Returns:
-        - Wing object
+    Attributes:
+        n_panels (int): Number of panels used in the aerodynamic mesh (the number of sections is n_panels + 1).
+        spanwise_panel_distribution (str): Spanwise panel distribution type. Options include:
+            - "uniform": Linear spacing.
+            - "cosine": Cosine spacing.
+            - "cosine_van_Garrel": Cosine spacing based on the van Garrel method.
+            - "split_provided": Split provided sections to achieve the desired number of panels.
+            - "unchanged": Keep the provided sections unchanged.
+        spanwise_direction (np.ndarray): Unit vector representing the wing's spanwise direction.
+        sections (List[Section]): List of Section objects that define the wing geometry.
 
     Methods:
-        - add_section(LE_point, TE_point, aero_input): Add a section to the wing
-        - refine_aerodynamic_mesh(): Refine the aerodynamic mesh of the wing
-        - span(): Calculate the span of the wing along a given vector axis
-        - calculate_projected_area(z_plane_vector): Calculate the projected area of the wing onto a specified plane
-        - calculate_cosine_van_Garrel(new_sections): Calculate the van Garrel cosine distribution of sections
-        - calculate_new_aero_input(aero_input, section_index, left_weight, right_weight): Interpolates the aero_input of two sections
-        - refine_mesh_for_linear_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, aero_input): Refine the aerodynamic mesh of the wing based on linear or cosine spacing
-        - refine_mesh_by_splitting_provided_sections(): Refine the aerodynamic mesh of the wing by splitting the provided sections
-        - flip_created_coord_in_pairs_if_needed(coord): Ensure the coordinates are ordered from positive to negative along the y-axis
-
+        update_wing_from_points(le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type):
+            Updates the wing geometry using arrays of leading edge points, trailing edge points,
+            tube diameters, and camber heights.
+        add_section(LE_point, TE_point, aero_input):
+            Adds a new section to the wing with the given leading edge, trailing edge, and aerodynamic input.
+        find_farthest_point_and_sort(sections):
+            Determines a starting section and sorts all sections based on proximity for mesh refinement.
+        refine_aerodynamic_mesh():
+            Refines the wing's aerodynamic mesh according to the selected spanwise panel distribution.
+        refine_mesh_for_uniform_or_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, aero_input):
+            Refines the mesh using linear or cosine spacing by interpolating leading/trailing edge points
+            and aerodynamic input.
+        calculate_new_aero_input(aero_input, section_index, left_weight, right_weight):
+            Interpolates aerodynamic input data between adjacent sections.
+        refine_mesh_by_splitting_provided_sections():
+            Splits the provided sections into additional sections to match the desired number of panels.
+        calculate_cosine_van_Garrel(new_sections):
+            Applies the van Garrel cosine distribution correction to the sections.
+        span (property):
+            Computes the wing span along the specified spanwise direction.
+        calculate_projected_area(z_plane_vector):
+            Calculates the projected area of the wing onto a plane defined by the given normal vector.
     """
 
+    # this creates self.n_panels and so on
     n_panels: int
-    spanwise_panel_distribution: str = "linear"
+    spanwise_panel_distribution: str = "uniform"
     spanwise_direction: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     sections: List["Section"] = field(default_factory=list)  # child-class
 
-    def add_section(self, LE_point: np.array, TE_point: np.array, aero_input: str):
+    def update_wing_from_points(
+        self,
+        le_arr: np.ndarray,
+        te_arr: np.ndarray,
+        d_tube_arr: np.ndarray,
+        y_camber_arr: np.ndarray,
+        aero_input_type: str = "lei_airfoil_breukels",
+    ):
+        """Update the wing geometry from points
+        Args:
+            le_arr (np.ndarray): Array of leading edge points
+            te_arr (np.ndarray): Array of trailing edge points
+            d_tube_arr (np.ndarray): Array of tube diameters
+            y_camber_arr (np.ndarray): Array of camber heights
+            aero_input_type (str): Aerodynamic input type, options:
+                - "lei_airfoil_breukels": LEI airfoil with Breukels parameters
+        Returns:
+            None
+        Example:
+            wing.update_wing_from_points(
+                le_arr=np.array([[0, 0, 0], [1, 0, 0]]),
+                te_arr=np.array([[1, 0, 0], [2, 0, 0]]),
+                d_tube_arr=np.array([0.1, 0.2]),
+                y_camber_arr=np.array([0.05, 0.1]),
+                aero_input_type="lei_airfoil_breukels",
+            )
         """
-        Add a section to the wing
+        # Clear current sections.
+        self.sections.clear()
 
+        if aero_input_type == "lei_airfoil_breukels":
+            for le, te, d_tube, y_camber in zip(
+                le_arr, te_arr, d_tube_arr, y_camber_arr
+            ):
+                self.add_section(le, te, ["lei_airfoil_breukels", [d_tube, y_camber]])
+
+            # Recalculate the refined aerodynamic mesh.
+            self.sections = self.refine_aerodynamic_mesh()
+        else:
+            raise ValueError(
+                f"Unsupported aero model: {aero_input_type}. Supported: lei_airfoil_breukels"
+            )
+
+    def add_section(self, LE_point: np.array, TE_point: np.array, aero_input: List):
+        """Add a section to the wing
         Args:
             LE_point (np.array): Leading edge point of the section
             TE_point (np.array): Trailing edge point of the section
-            aero_input (str): Aerodynamic input for the section, options:
-                - ["inviscid"]: Inviscid aerodynamics
-                - ["polar_data",[alpha,CL,CD,CM]]: Polar data aerodynamics
-                    Where alpha, CL, CD, and CM are arrays of the same length
-                        - alpha: Angle of attack in radians
-                        - CL: Lift coefficient
-                        - CD: Drag coefficient
-                        - CM: Moment coefficient
-                - ["lei_airfoil_breukels",[d_tube,camber]]: LEI airfoil with Breukels parameters
-                    - d_tube: Diameter of the tube, non-dimensionalized by the chord (distance from the leading edge to the trailing edge)
-                    - camber: Camber height, non-dimensionalized by the chord (distance from the leading edge to the trailing edge)
+            aero_input (list): Aerodynamic input for the section
         Returns:
             None
+        Example:
+            wing.add_section(
+                LE_point=np.array([0, 0, 0]),
+                TE_point=np.array([1, 0, 0]),
+                aero_input=["lei_airfoil_breukels", [0.1, 0.05]],
+            )
         """
         self.sections.append(Section(LE_point, TE_point, aero_input))
 
     def find_farthest_point_and_sort(self, sections):
+        """Sorts the sections based on their proximity to each other
+        Args:
+            sections (list): List of Section objects to be sorted
+        Returns:
+            sorted_sections (list): Sorted list of Section objects
+        Example:
+            sorted_sections = wing.find_farthest_point_and_sort(sections)
+        """
 
         # Helper function to calculate radial distance
         def radial_distance(point1, point2):
@@ -115,25 +171,29 @@ class Wing:
         return sorted_sections
 
     def refine_aerodynamic_mesh(self):
-        """Refine the aerodynamic mesh of the wing
-
-            Based on user input sections and desired spanwise panel distribution
-            refines the aerodynamic mesh of the wing, giving out new_sections
-            that can be used to make panels out of.
-
+        """Refine the aerodynamic mesh of the wing based on the specified spanwise panel distribution
         Args:
             None
-
         Returns:
             new_sections (list): List of Section objects with refined aerodynamic mesh
+        Example:
+            new_sections = wing.refine_aerodynamic_mesh()
         """
-
+        if self.spanwise_panel_distribution not in [
+            "uniform",
+            "cosine",
+            "cosine_van_Garrel",
+            "split_provided",
+            "unchanged",
+        ]:
+            raise ValueError(
+                f"Unsupported spanwise panel distribution: {self.spanwise_panel_distribution}, choose: uniform, unchanged, cosine, cosine_van_Garrel"
+            )
         # # Ensure that the sections are declared from left to right
         # self.sections = sorted(
         #     self.sections, key=lambda section: section.LE_point[1], reverse=True
         # )
-
-        # Perform additional sorting on z
+        # Perform additional sorting
         self.sections = self.find_farthest_point_and_sort(self.sections)
 
         # Ensure we get 1 section more than the desired number of panels
@@ -153,56 +213,48 @@ class Wing:
             TE[i] = section.TE_point
             aero_input.append(section.aero_input)
 
-        # Handling wrong input
-        if len(LE) != len(TE) or len(LE) != len(aero_input):
-            raise ValueError("LE, TE, and aero_input must have the same length")
-
-        # If "unchanged" OR the provided section is equal to number of desired
-        if (self.spanwise_panel_distribution == "unchanged") or (
+        # refine the mesh
+        if self.spanwise_panel_distribution in [
+            "uniform",
+            "cosine",
+            "cosine_van_Garrel",
+        ]:
+            return self.refine_mesh_for_uniform_or_cosine_distribution(
+                self.spanwise_panel_distribution, n_sections, LE, TE, aero_input
+            )
+        elif (self.spanwise_panel_distribution == "unchanged") or (
             len(self.sections) == n_sections
         ):
             return self.sections
+        elif self.spanwise_panel_distribution == "split_provided":
+            return self.refine_mesh_by_splitting_provided_sections()
+        else:
+            raise ValueError(
+                f"Unsupported spanwise panel distribution: {self.spanwise_panel_distribution}, choose: uniform, unchanged, cosine, cosine_van_Garrel"
+            )
 
-        # If only two sections are DESIRED, return them directly
+    def refine_mesh_for_uniform_or_cosine_distribution(
+        self, spanwise_panel_distribution, n_sections, LE, TE, aero_input
+    ):
+        """Refine the aerodynamic mesh of the wing based on uniform or cosine spacing
+        Args:
+            spanwise_panel_distribution (str): Spanwise panel distribution type
+            n_sections (int): Number of sections to create
+            LE (np.ndarray): Leading edge points
+            TE (np.ndarray): Trailing edge points
+            aero_input (list): Aerodynamic input for each section
+        Returns:
+            new_sections (list): List of Section objects with refined aerodynamic mesh
+        Example:
+            new_sections = wing.refine_mesh_for_uniform_or_cosine_distribution(
+                "uniform", 5, LE, TE, aero_input
+            )
+        """
         if n_sections == 2:
-            new_sections = [
+            return [
                 Section(LE[0], TE[0], aero_input[0]),
                 Section(LE[-1], TE[-1], aero_input[-1]),
             ]
-            return new_sections
-
-        # spacing based on the provided splits
-        if self.spanwise_panel_distribution == "split_provided":
-            return self.refine_mesh_by_splitting_provided_sections()
-
-        # Linear or cosine spacing
-        if (
-            self.spanwise_panel_distribution == "linear"
-            or "cosine"
-            or "cosine_van_Garrel"
-        ):
-            return self.refine_mesh_for_linear_cosine_distribution(
-                self.spanwise_panel_distribution, n_sections, LE, TE, aero_input
-            )
-
-    def refine_mesh_for_linear_cosine_distribution(
-        self, spanwise_panel_distribution, n_sections, LE, TE, aero_input
-    ):
-        """Refine the aerodynamic mesh of the wing based on linear or cosine spacing
-
-        Args:
-            - spanwise_panel_distribution (str): Spanwise panel distribution type, options:
-                - "linear": Linear distribution
-                - "cosine": Cosine distribution
-                - "cosine_van_Garrel": Cosine distribution based on van Garrel method
-            - n_sections (int): Number of sections to be used in the aerodynamic mesh
-            - LE (np.ndarray): Leading edge points of the sections
-            - TE (np.ndarray): Trailing edge points of the sections
-            - aero_input (list): Aerodynamic input for each section
-
-        Returns:
-            - new_sections (list): List of Section objects with refined aerodynamic mesh
-        """
 
         # 1. Compute the 1/4 chord line
         quarter_chord = LE + 0.25 * (TE - LE)
@@ -215,9 +267,9 @@ class Wing:
         qc_cum_length = np.concatenate(([0], np.cumsum(qc_lengths)))
 
         # 2. Define target lengths based on desired spacing
-        if spanwise_panel_distribution == "linear":
+        if spanwise_panel_distribution == "uniform":
             target_lengths = np.linspace(0, qc_total_length, n_sections)
-        elif spanwise_panel_distribution == "cosine" or "cosine_van_Garrel":
+        elif spanwise_panel_distribution in ["cosine", "cosine_van_Garrel"]:
             theta = np.linspace(0, np.pi, n_sections)
             target_lengths = qc_total_length * (1 - np.cos(theta)) / 2
         else:
@@ -285,7 +337,10 @@ class Wing:
             new_sections.append(Section(new_LE[i], new_TE[i], new_aero_input[i]))
 
             if self.spanwise_panel_distribution == "cosine_van_Garrel":
-                new_sections = self.calculate_cosine_van_Garrel(new_sections)
+                raise NotImplementedError(
+                    "Cosine van Garrel distribution is not yet implemented"
+                )
+                # new_sections = self.calculate_cosine_van_Garrel(new_sections)
 
         return new_sections
 
@@ -301,15 +356,17 @@ class Wing:
         self, aero_input, section_index, left_weight, right_weight
     ):
         """Interpolates the aero_input of two sections
-
         Args:
-            - aero_input (list): List of aero_input for each section
-            - section_index (int): Index of the current LEFT section,
-                                 assuming that next RIGHT has section_index+1
-            - left_weight (float): Weight of the left section
-            - right_weight (float): Weight of the right section
-
+            aero_input (list): List of aerodynamic input data
+            section_index (int): Index of the section to interpolate
+            left_weight (float): Weight for the left section
+            right_weight (float): Weight for the right section
         Returns:
+            new_aero_input (list): Interpolated aerodynamic input data
+        Example:
+            new_aero_input = wing.calculate_new_aero_input(
+                aero_input, section_index, left_weight, right_weight
+            )
         """
         if aero_input[section_index][0] != aero_input[section_index + 1][0]:
             raise NotImplementedError(
@@ -385,12 +442,12 @@ class Wing:
 
     def refine_mesh_by_splitting_provided_sections(self):
         """Refine the aerodynamic mesh of the wing by splitting the provided sections
-
         Args:
-            - None
-
+            None
         Returns:
-            - new_sections (list): List of Section objects with refined aerodynamic mesh
+            new_sections (list): List of Section objects with refined aerodynamic mesh
+        Example:
+            new_sections = wing.refine_mesh_by_splitting_provided_sections()
         """
 
         n_sections_provided = len(self.sections)
@@ -444,8 +501,8 @@ class Wing:
 
             # Generate the new sections for this pair
             if num_new_sections_this_pair > 0:
-                new_splitted_sections = self.refine_mesh_for_linear_cosine_distribution(
-                    "linear",
+                new_splitted_sections = self.refine_mesh_for_uniform_or_cosine_distribution(
+                    "uniform",
                     num_new_sections_this_pair
                     + 2,  # +2 because refine_mesh expects total sections, including endpoints
                     LE_pair_list,
@@ -473,89 +530,92 @@ class Wing:
 
         return new_sections
 
-    def calculate_cosine_van_Garrel(self, new_sections):
-        """Calculate the van Garrel cosine distribution of sections
-        URL: http://dx.doi.org/10.13140/RG.2.1.2773.8000
+    # def calculate_cosine_van_Garrel(self, new_sections):
+    #     """Calculate the van Garrel cosine distribution of sections
+    #     URL: http://dx.doi.org/10.13140/RG.2.1.2773.8000
 
-        Args:
-            - new_sections (list): List of Section objects
+    #     Args:
+    #         - new_sections (list): List of Section objects
 
-        Returns:
-            - new_sections_van_Garrel (list): List of Section objects with van Garrel cosine distribution
-        """
-        n = len(new_sections)
-        control_points = np.zeros((n, 3))
+    #     Returns:
+    #         - new_sections_van_Garrel (list): List of Section objects with van Garrel cosine distribution
+    #     """
+    #     n = len(new_sections)
+    #     control_points = np.zeros((n, 3))
 
-        # Calculate chords and quarter chords
-        chords = []
-        quarter_chords = []
-        for section in new_sections:
-            chord = section.TE_point - section.LE_point
-            chords.append(chord)
-            quarter_chords.append(section.LE_point + 0.25 * chord)
+    #     # Calculate chords and quarter chords
+    #     chords = []
+    #     quarter_chords = []
+    #     for section in new_sections:
+    #         chord = section.TE_point - section.LE_point
+    #         chords.append(chord)
+    #         quarter_chords.append(section.LE_point + 0.25 * chord)
 
-        # Calculate widths
-        widths = np.zeros(n - 1)
-        for i in range(n - 1):
-            widths[i] = jit_norm(quarter_chords[i + 1] - quarter_chords[i])
+    #     # Calculate widths
+    #     widths = np.zeros(n - 1)
+    #     for i in range(n - 1):
+    #         widths[i] = jit_norm(quarter_chords[i + 1] - quarter_chords[i])
 
-        # Calculate correction eta_cp
-        eta_cp = np.zeros(n - 1)
+    #     # Calculate correction eta_cp
+    #     eta_cp = np.zeros(n - 1)
 
-        # First panel
-        eta_cp[0] = widths[0] / (widths[0] + widths[1])
+    #     # First panel
+    #     eta_cp[0] = widths[0] / (widths[0] + widths[1])
 
-        # Internal panels
-        for j in range(1, n - 2):
-            eta_cp[j] = 0.25 * (
-                widths[j - 1] / (widths[j - 1] + widths[j])
-                + widths[j] / (widths[j] + widths[j + 1])
-                + 1
-            )
-            control_points[j] = quarter_chords[j] + eta_cp[j] * (
-                quarter_chords[j + 1] - quarter_chords[j]
-            )
-        # Last panel
-        eta_cp[-1] = widths[-2] / (widths[-2] + widths[-1])
+    #     # Internal panels
+    #     for j in range(1, n - 2):
+    #         eta_cp[j] = 0.25 * (
+    #             widths[j - 1] / (widths[j - 1] + widths[j])
+    #             + widths[j] / (widths[j] + widths[j + 1])
+    #             + 1
+    #         )
+    #         control_points[j] = quarter_chords[j] + eta_cp[j] * (
+    #             quarter_chords[j + 1] - quarter_chords[j]
+    #         )
+    #     # Last panel
+    #     eta_cp[-1] = widths[-2] / (widths[-2] + widths[-1])
 
-        logging.debug(f"eta_cp: {eta_cp}")
+    #     logging.debug(f"eta_cp: {eta_cp}")
 
-        # Calculate control points
-        control_points = []
-        for i, eta_cp_i in enumerate(eta_cp):
-            control_points.append(
-                quarter_chords[i]
-                + eta_cp_i * (quarter_chords[i + 1] - quarter_chords[i])
-            )
+    #     # Calculate control points
+    #     control_points = []
+    #     for i, eta_cp_i in enumerate(eta_cp):
+    #         control_points.append(
+    #             quarter_chords[i]
+    #             + eta_cp_i * (quarter_chords[i + 1] - quarter_chords[i])
+    #         )
 
-        # Calculate new_sections_van_Garrel
-        new_sections_van_Garrel = []
+    #     # Calculate new_sections_van_Garrel
+    #     new_sections_van_Garrel = []
 
-        for i, control_point_i in enumerate(control_points):
-            # Use the original chord length
-            chord = chords[i]
-            new_LE_point = control_point_i - 0.25 * chord
-            new_TE_point = control_point_i + 0.75 * chord
+    #     for i, control_point_i in enumerate(control_points):
+    #         # Use the original chord length
+    #         chord = chords[i]
+    #         new_LE_point = control_point_i - 0.25 * chord
+    #         new_TE_point = control_point_i + 0.75 * chord
 
-            # Keep the original aero_input
-            aero_input_i = new_sections[i].aero_input
+    #         # Keep the original aero_input
+    #         aero_input_i = new_sections[i].aero_input
 
-            new_sections_van_Garrel.append(
-                Section(new_LE_point, new_TE_point, aero_input_i)
-            )
+    #         new_sections_van_Garrel.append(
+    #             Section(new_LE_point, new_TE_point, aero_input_i)
+    #         )
 
-        return new_sections_van_Garrel
+    #     return new_sections_van_Garrel
 
     # TODO: add test here, assessing for example the types of the inputs
     @property
     def span(self):
-        """Calculates the span of the wing along a given vector axis
-
+        """Calculates the span of the wing along the specified spanwise direction.
+        The span is defined as the distance between the leading edge points of the first and last sections
+        projected onto the spanwise direction.
         Args:
-            - None
-
+            None
         Returns:
-            - span (float): The span of the wing along the given vector axis"""
+            - span (float): The span of the wing along the specified spanwise direction.
+        Example:
+            span = wing.span
+        """
         # Normalize the vector_axis to ensure it's a unit vector
         vector_axis = self.spanwise_direction / np.linalg.norm(self.spanwise_direction)
 
@@ -573,15 +633,14 @@ class Wing:
 
     def calculate_projected_area(self, z_plane_vector=np.array([0, 0, 1])):
         """Calculates the projected area of the wing onto a specified plane.
-
-        The projected area is calculated based on the leading and trailing edge points of each section
-        projected onto a plane defined by a normal vector (default is z-plane).
-
+        The plane is defined by a normal vector (z_plane_vector).
         Args:
-            - z_plane_vector (np.ndarray): Normal vector defining the projection plane (default is [0, 0, 1]).
-
+            z_plane_vector (np.ndarray): Normal vector defining the plane onto which the area is projected.
+                Default is the z-axis [0, 0, 1].
         Returns:
-            - projected_area (float): The projected area of the wing.
+            - projected_area (float): The projected area of the wing onto the specified plane.
+        Example:
+            projected_area = wing.calculate_projected_area()
         """
         # Normalize the z_plane_vector
         z_plane_vector = z_plane_vector / jit_norm(z_plane_vector)
@@ -620,25 +679,24 @@ class Wing:
 
 @dataclass
 class Section:
-    """Class to define a section object, to store the geometry of a wing section
+    """Section class representing the geometry of a wing section.
 
-    Args:
-        - LE_point (np.ndarray): Leading edge point of the section
-        - TE_point (np.ndarray): Trailing edge point of the section
-        - aero_input (list): Aerodynamic input for the section, options:
-            - ["inviscid"]: Inviscid aerodynamics
-            - ["polar_data",[alpha,CL,CD,CM]]: Polar data aerodynamics
-                Where alpha, CL, CD, and CM are arrays of the same length
-                    - alpha: Angle of attack in radians
-                    - CL: Lift coefficient
-                    - CD: Drag coefficient
-                    - CM: Moment coefficient
-            - ["lei_airfoil_breukels",[d_tube,camber]]: LEI airfoil with Breukels parameters
-                - d_tube: Diameter of the tube, non-dimensionalized by the chord (distance from the leading edge to the trailing edge)
-                - camber: Camber height, non-dimensionalized by the chord (distance from the leading edge to the trailing edge)
+    Parameters:
+        LE_point (np.ndarray): The leading edge coordinate.
+        TE_point (np.ndarray): The trailing edge coordinate.
+        aero_input (list): The aerodynamic input data, which can be one of:
+            - ["inviscid"]: for inviscid aerodynamics.
+            - ["polar_data", [alpha, CL, CD, CM]]:
+                * alpha: Array of angles of attack (in radians).
+                * CL: Array of lift coefficients.
+                * CD: Array of drag coefficients.
+                * CM: Array of moment coefficients.
+            - ["lei_airfoil_breukels", [d_tube, camber]]:
+                * d_tube: Non-dimensional tube diameter.
+                * camber: Non-dimensional camber height.
 
     Returns:
-        - Section object
+        Section: An instance representing the wing section.
     """
 
     LE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
@@ -646,25 +704,25 @@ class Section:
     aero_input: list = field(default_factory=list)
 
 
-def flip_created_coord_in_pairs_if_needed(coord):
-    """
-    Ensure the coordinates are ordered from positive to negative along the y-axis.
+# def flip_created_coord_in_pairs_if_needed(coord):
+#     """
+#     Ensure the coordinates are ordered from positive to negative along the y-axis.
 
-    Args:
-        - coord (np.ndarray): Array of coordinates
+#     Args:
+#         - coord (np.ndarray): Array of coordinates
 
-    Returns:
-        - np.ndarray: Array of coordinates with the y-axis ordered from positive to negative
-    """
-    # Reshape the array into pairs
-    reshaped = coord.reshape(-1, 2, coord.shape[1])
+#     Returns:
+#         - np.ndarray: Array of coordinates with the y-axis ordered from positive to negative
+#     """
+#     # Reshape the array into pairs
+#     reshaped = coord.reshape(-1, 2, coord.shape[1])
 
-    # Check the overall y-axis order
-    overall_y = reshaped[:, 0, 1]  # Take the y values of the leading edge coordinates
-    if not np.all(
-        overall_y[:-1] >= overall_y[1:]
-    ):  # Check if y values are in descending order
-        reshaped = np.flip(reshaped, axis=0)
+#     # Check the overall y-axis order
+#     overall_y = reshaped[:, 0, 1]  # Take the y values of the leading edge coordinates
+#     if not np.all(
+#         overall_y[:-1] >= overall_y[1:]
+#     ):  # Check if y values are in descending order
+#         reshaped = np.flip(reshaped, axis=0)
 
-    # Flatten back to the original shape
-    return reshaped.reshape(-1, coord.shape[1])
+#     # Flatten back to the original shape
+#     return reshaped.reshape(-1, coord.shape[1])

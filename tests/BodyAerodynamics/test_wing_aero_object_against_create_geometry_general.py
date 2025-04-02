@@ -55,6 +55,9 @@ def creating_tests(wing_aero, coord, Uinf, model):
             evaluation_point = panel.control_point
         elif model == "LLT":
             evaluation_point = panel.aerodynamic_center
+        else:
+            raise ValueError("Invalid model")
+        logging.debug(f"evaluation_point: {evaluation_point}")
 
         assert np.allclose(
             evaluation_point, expected_controlpoints[i]["coordinates"], atol=1e-4

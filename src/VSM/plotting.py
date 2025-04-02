@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import time as time
 from pathlib import Path
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -356,7 +356,7 @@ def plot_geometry(
         plt.close()
 
     # showing plot
-    if is_show:
+    if is_show and not is_save:
         fig = creating_geometry_plot(
             body_aero,
             title=title,
@@ -364,6 +364,10 @@ def plot_geometry(
             view_azimuth=-120,
         )
         plt.show()
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def plot_distribution(
@@ -375,6 +379,7 @@ def plot_distribution(
     save_path=None,
     is_save=True,
     is_show=True,
+    run_time_list=None,
 ):
     """
     Plots a 3x3 spanwise distribution:
@@ -401,14 +406,13 @@ def plot_distribution(
     """
     set_plot_style()
 
-    if len(results_list) != len(label_list):
+    if len(y_coordinates_list) != len(results_list) != len(label_list):
         raise ValueError(
-            f"The number of results and labels should match. "
-            f"Got {len(results_list)} results and {len(label_list)} labels."
+            f"The number of y_coordinates = number of results = number of labels. "
+            f"Got {len(y_coordinates_list)} y_coordinates, {len(results_list)} results, {len(label_list)} labels."
         )
-
     # Create figure and axes: 3 rows x 3 columns
-    fig, axs = plt.subplots(3, 3, figsize=(20, 15))
+    fig, axs = plt.subplots(3, 3, figsize=(27, 15))
     # fig.suptitle(title)
 
     # --- Row 1: CD, CL, CS ---------------------------------------------------
@@ -417,7 +421,7 @@ def plot_distribution(
         axs[0, 0].plot(
             y_coords,
             result["cd_distribution"],
-            label=label + rf" $C_D$: {result['cd']:.2f}",
+            label=rf"$C_D$: {result['cd']:.2f}",
         )
     axs[0, 0].set_ylabel(r"$C_D$ Distribution")
     axs[0, 0].tick_params(labelbottom=False)
@@ -428,7 +432,7 @@ def plot_distribution(
         axs[0, 1].plot(
             y_coords,
             result["cl_distribution"],
-            label=label + rf" $C_L$: {result['cl']:.2f}",
+            label=rf"$C_L$: {result['cl']:.2f}",
         )
     axs[0, 1].set_ylabel(r"$C_L$ Distribution")
     axs[0, 1].tick_params(labelbottom=False)
@@ -439,7 +443,7 @@ def plot_distribution(
         axs[0, 2].plot(
             y_coords,
             result["cs_distribution"],
-            label=label + rf" $C_S$: {result['cs']:.2f}",
+            label=rf"$C_S$: {result['cs']:.2f}",
         )
     axs[0, 2].set_ylabel(r"$C_S$ Distribution")
     axs[0, 2].tick_params(labelbottom=False)
@@ -451,7 +455,7 @@ def plot_distribution(
         axs[1, 0].plot(
             y_coords,
             result["cmx_distribution"],
-            label=label + rf" $C_{{mx}}$: {result['cmx']:.2f}",
+            label=rf"$C_{{mx}}$: {result['cmx']:.2f}",
         )
     axs[1, 0].set_ylabel(r"$C_{mx}$ Distribution")
     axs[1, 0].tick_params(labelbottom=False)
@@ -462,7 +466,7 @@ def plot_distribution(
         axs[1, 1].plot(
             y_coords,
             result["cmy_distribution"],
-            label=label + rf" $C_{{my}}$: {result['cmy']:.2f}",
+            label=rf"$C_{{my}}$: {result['cmy']:.2f}",
         )
     axs[1, 1].set_ylabel(r"$C_{my}$ Distribution")
     axs[1, 1].tick_params(labelbottom=False)
@@ -473,7 +477,7 @@ def plot_distribution(
         axs[1, 2].plot(
             y_coords,
             result["cmz_distribution"],
-            label=label + rf" $C_{{mz}}$: {result['cmz']:.2f}",
+            label=rf"$C_{{mz}}$: {result['cmz']:.2f}",
         )
     axs[1, 2].set_ylabel(r"$C_{mz}$ Distribution")
     axs[1, 2].tick_params(labelbottom=False)
@@ -489,7 +493,7 @@ def plot_distribution(
         )
     axs[2, 0].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 0].set_ylabel(r"Gamma")
-    axs[2, 0].legend()
+    # axs[2, 0].legend()
 
     # Column 2: Gamma distribution
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
@@ -500,18 +504,18 @@ def plot_distribution(
         )
     axs[2, 1].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 1].set_ylabel(r"Geometric $\alpha$ (deg)")
-    axs[2, 1].legend()
+    # axs[2, 1].legend()
 
     # Column 3: alpha (corrected to aerodynamic center)
     for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
         axs[2, 2].plot(
             y_coords,
             np.rad2deg(result["alpha_at_ac"]),
-            label=label,
+            # label=label,
         )
     axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
     axs[2, 2].set_ylabel(r"Corrected $\alpha$ (deg)")
-    axs[2, 2].legend()
+    # axs[2, 2].legend()
 
     # --- Adjust y-limits intelligently --------------------------------------
     # We'll define allowed ranges per subplot index:
@@ -551,14 +555,31 @@ def plot_distribution(
             # If no data is within the range, fall back to a default
             ax.set_ylim(y_min_allowed, y_max_allowed)
 
-    plt.tight_layout()
+    # Place the legend below the axes
+    labels = []
+    for i, label in enumerate(results_list):
+        label = label_list[i]
+        if run_time_list is not None:
+            labels.append(label + f" t: {run_time_list[i]:.3f}s")
+        else:
+            labels.append(label)
+    # labels = [label for label in label_list]
+    handles = [axs[0, 0].get_lines()[i] for i in range(len(y_coordinates_list))]
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
+
+    # Manually increase the bottom margin to make room for the legend
+    fig.subplots_adjust(bottom=0.2)
 
     # Save or show plot
     if is_save:
         save_plot(fig, save_path, title, data_type)
 
-    if is_show:
+    if is_show and not is_save:
         show_plot(fig)
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def generate_3D_polar_data(
@@ -600,6 +621,7 @@ def generate_3D_polar_data(
     cd_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
     cs_distribution = np.zeros((len(angle_range), len(body_aero.panels)))
     reynolds_number = np.zeros(len(angle_range))
+    run_time = np.zeros(len(angle_range))
     # initialize the gamma with None
     gamma = None
     for i, angle_i in enumerate(angle_range):
@@ -612,9 +634,10 @@ def generate_3D_polar_data(
                 "angle_type should be either 'angle_of_attack' or 'side_slip'"
             )
 
-        # Set the inflow conditions
-
-        results = solver.solve(body_aero)
+        begin_time = time.time()
+        results = solver.solve(body_aero, gamma_distribution=gamma)
+        run_time[i] = time.time() - begin_time
+        print(f"Angle: {angle_i:.1f}deg. Time: {run_time[i]:.4f}s")
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
@@ -641,6 +664,7 @@ def generate_3D_polar_data(
         cd_distribution,
         cs_distribution,
         reynolds_number,
+        run_time,
     ]
     reynolds_number = results["Rey"]
 
@@ -713,7 +737,10 @@ def plot_polars(
 
     # generating polar data
     polar_data_list = []
-    for i, (solver, body_aero) in enumerate(zip(solver_list, body_aero_list)):
+    for i, (solver, body_aero, label) in enumerate(
+        zip(solver_list, body_aero_list, label_list)
+    ):
+        print(f"\n=== label: {label} ===")
         polar_data, reynolds_number = generate_3D_polar_data(
             solver=solver,
             body_aero=body_aero,
@@ -726,15 +753,41 @@ def plot_polars(
         )
         polar_data_list.append(polar_data)
         # Appending Reynolds numbers to the labels of the solvers
-        label_list[i] += f" Re = {1e-5*reynolds_number:.1f}e5"
+        label_list[i] += f" (Re = {1e-5*reynolds_number:.1f}e5)"
 
     # Grabbing additional data from literature
     if literature_path_list is not None:
-        for literature_path in literature_path_list:
-            CL, CD, angle = np.loadtxt(
-                literature_path, delimiter=",", skiprows=1, unpack=True
+        if angle_type == "angle_of_attack":
+            for literature_path in literature_path_list:
+                df = pd.read_csv(literature_path)
+                if not all(key in df.columns.values for key in ["alpha", "CL", "CD"]):
+                    raise ValueError(
+                        "The literature data should contain columns: 'alpha' (in deg), 'CL', 'CD'"
+                    )
+                polar_data_list.append(
+                    [df["alpha"].values, df["CL"].values, df["CD"].values]
+                )
+        elif angle_type == "side_slip":
+            for literature_path in literature_path_list:
+                df = pd.read_csv(literature_path)
+                if not all(
+                    key in df.columns.values for key in ["beta", "CL", "CD", "CS"]
+                ):
+                    raise ValueError(
+                        "The literature data should contain columns: 'beta' (in deg), 'CL', 'CD', 'CS'"
+                    )
+                polar_data_list.append(
+                    [
+                        df["beta"].values,
+                        df["CL"].values,
+                        df["CD"].values,
+                        df["CS"].values,
+                    ]
+                )
+        else:
+            raise ValueError(
+                "angle_type should be either 'angle_of_attack' or 'side_slip'"
             )
-            polar_data_list.append([angle, CL, CD])
 
     # Initializing plot
     fig, axs = plt.subplots(2, 3, figsize=(15, 10))
@@ -785,7 +838,6 @@ def plot_polars(
         if max(polar_data[2]) > 10:
             axs[0, 1].set_ylim([-0.2, 0.5])
     axs[0, 1].set_ylabel(r"$C_{\mathrm{D}}$")
-    axs[0, 1].legend(loc="best")
 
     # CL-CD plot
     if angle_type == "angle_of_attack":
@@ -898,16 +950,31 @@ def plot_polars(
             # If no data is within the range, you might choose to set default limits or skip
             pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
 
+    # Place the legend below the axes
+    labels = []
+    for label, polar_data in zip(label_list, polar_data):
+        labels.append(label)  # + f" t: {polar_data[-1]:.3f}s")
+    handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
+
+    # Manually increase the bottom margin to make room for the legend
+    fig.subplots_adjust(bottom=0.2)
+
     # Ensure the figure is fully rendered
     fig.canvas.draw()
 
     # saving plot
     if is_save:
         save_plot(fig, save_path, title, data_type)
+        plt.close()
 
     # showing plot
-    if is_show:
+    if is_show and not is_save:
         show_plot(fig)
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
 
 
 def plot_panel_coefficients(
@@ -988,5 +1055,516 @@ def plot_panel_coefficients(
         save_plot(fig, save_path, title, data_type)
 
     # showing plot
-    if is_show:
+    if is_show and not is_save:
         show_plot(fig)
+    elif is_show and is_save:
+        raise ValueError(
+            "is_show and is_save are both True. Please set one of them to False."
+        )
+
+
+def process_panel_coefficients_panel_i(body_aero, panel_index, PROJECT_DIR, n_panels):
+    """
+    Plot Cl, Cd, and Cm coefficients for a specific panel across a range of angles of attack.
+
+    Args:
+        body_aero (object): Wing aerodynamic object containing panels
+        panel_index (int): Index of the panel to plot
+        alpha_range (tuple, optional): Range of angles of attack in radians.
+                                       Defaults to (-0.5, 0.5) radians.
+    """
+
+    def run_neuralfoil(alpha_array_deg, panel_index):
+        """
+        Run neuralfoil with a specific panel index.
+
+        Parameters:
+            PROJECT_DIR (str or Path): The base project directory.
+            panel_index (int): An integer between 0 and 34.
+
+        Returns:
+            DataFrame: A pandas DataFrame containing alpha, CL, CD, and CM.
+        """
+        import neuralfoil as nf
+
+        # Validate the panel_index
+        if not (0 <= panel_index <= 34):
+            raise ValueError("panel_index must be between 0 and 34.")
+
+        # Compute the distance from the symmetry panel (panel 17)
+        d = abs(panel_index - 17)
+
+        # Map the distance d to the profile number using a dictionary.
+        profile_mapping = {
+            0: 1,
+            1: 2,
+            2: 2,
+            3: 3,
+            4: 3,
+            5: 4,
+            6: 4,
+            7: 5,
+            8: 6,
+            9: 7,
+            10: 8,
+            11: 9,
+            12: 9,
+            13: 10,
+            14: 10,
+            15: 11,
+            16: 11,
+            17: 12,
+        }
+        profile_num = profile_mapping.get(d)
+        if profile_num is None:
+            raise ValueError(
+                f"Unexpected value for d = {d} from panel_index = {panel_index}."
+            )
+
+        # Build the file path based on the profile number.
+        dat_file_path = Path(
+            PROJECT_DIR,
+            "examples",
+            "TUDELFT_V3_LEI_KITE",
+            "polar_engineering",
+            "profiles",
+            "surfplan",
+            f"prof_{profile_num}.dat",
+        )
+
+        # Define the operating parameters.
+        Re = 5.6e5
+        model_size = "xxlarge"
+
+        # Compute the aerodynamic coefficients.
+        aero = nf.get_aero_from_dat_file(
+            filename=dat_file_path,
+            alpha=alpha_array_deg,
+            Re=Re,
+            model_size=model_size,
+        )
+
+        # Package the results into a DataFrame.
+        df_neuralfoil = pd.DataFrame(
+            {
+                "alpha": alpha_array_deg,
+                "cl": aero["CL"],
+                "cd": aero["CD"],
+                "cm": aero["CM"],
+            }
+        )
+
+        return df_neuralfoil
+
+    # Select the specified panel
+    panel = body_aero.panels[panel_index]
+
+    # Create an array of angles of attack
+    alpha_array_deg = np.linspace(-60, 60, 121)
+    # Breukels Coefficients
+    cl_br = np.array(
+        [panel.calculate_cl(alpha) for alpha in np.deg2rad(alpha_array_deg)]
+    )
+    cd_br = np.array(
+        [panel.calculate_cd_cm(alpha)[0] for alpha in np.deg2rad(alpha_array_deg)]
+    )
+    cm_br = np.array(
+        [panel.calculate_cd_cm(alpha)[1] for alpha in np.deg2rad(alpha_array_deg)]
+    )
+
+    # Neuralfoil Coefficients
+    df_neuralfoil = run_neuralfoil(alpha_array_deg, panel_index)
+    alpha = df_neuralfoil["alpha"].values
+    cl_nf = df_neuralfoil["cl"].values
+    cd_nf = df_neuralfoil["cd"].values
+    cm_nf = df_neuralfoil["cm"].values
+
+    def get_value_at_alpha(alpha_array, data_array, alpha_value):
+        """
+        Given alpha_array (sorted) and data_array of the same length,
+        return the data value at alpha_value by linear interpolation if
+        alpha_value is between two existing alpha_array entries, or exact
+        if alpha_value matches an entry.
+
+        If alpha_value is below alpha_array[0], return data_array[0].
+        If alpha_value is above alpha_array[-1], return data_array[-1].
+        """
+        if alpha_value <= alpha_array[0]:
+            return data_array[0]
+        if alpha_value >= alpha_array[-1]:
+            return data_array[-1]
+
+        # Find the insertion index
+        i = np.searchsorted(alpha_array, alpha_value)
+
+        # If it's an exact match, just return it.
+        if i < len(alpha_array) and alpha_array[i] == alpha_value:
+            return data_array[i]
+
+        # Otherwise, linear interpolation between i-1 and i
+        a1 = alpha_array[i - 1]
+        a2 = alpha_array[i]
+        d1 = data_array[i - 1]
+        d2 = data_array[i]
+        frac = (alpha_value - a1) / (a2 - a1)
+        return d1 * (1 - frac) + d2 * frac
+
+    # -------------------------------------------------
+    # Suppose we have two sets of alpha boundaries and transitions:
+    #   For CL
+    cl_low_alpha = 0
+    cl_high_alpha = 18
+    cl_delta_trans_low = 15
+    cl_delta_trans_high = 10
+
+    #   For CD
+    cd_low_alpha = -10
+    cd_high_alpha = 18
+    cd_delta_trans_low = 10
+    cd_delta_trans_high = 15
+
+    # alpha, cl_nf, cl_br, cd_nf, cd_br, etc. must be arrays of equal length
+    # and alpha must be sorted ascending for the interpolation to work properly.
+    # We'll assume you already have them in that form.
+    # -------------------------------------------------
+
+    # 1) Compute the "edge" values for CL transitions
+    cl_nf_lower_edge = get_value_at_alpha(
+        alpha_array_deg, cl_nf, cl_low_alpha - cl_delta_trans_low
+    )
+    cl_br_lower_edge = get_value_at_alpha(alpha_array_deg, cl_br, cl_low_alpha)
+
+    cl_br_upper_edge = get_value_at_alpha(alpha_array_deg, cl_br, cl_high_alpha)
+    cl_nf_upper_edge = get_value_at_alpha(
+        alpha_array_deg, cl_nf, cl_high_alpha + cl_delta_trans_high
+    )
+
+    # 2) Compute the "edge" values for CD transitions
+    cd_nf_lower_edge = get_value_at_alpha(
+        alpha_array_deg, cd_nf, cd_low_alpha - cd_delta_trans_low
+    )
+    cd_br_lower_edge = get_value_at_alpha(alpha_array_deg, cd_br, cd_low_alpha)
+
+    cd_br_upper_edge = get_value_at_alpha(alpha_array_deg, cd_br, cd_high_alpha)
+    cd_nf_upper_edge = get_value_at_alpha(
+        alpha_array_deg, cd_nf, cd_high_alpha + cd_delta_trans_high
+    )
+
+    cl_new, cd_new, cm_new = [], [], []
+
+    for alpha_i, cl_nf_i, cd_nf_i, cm_nf_i, cl_br_i, cd_br_i in zip(
+        alpha, cl_nf, cd_nf, cm_nf, cl_br, cd_br
+    ):
+        #
+        # --------------------- CL LOGIC ---------------------
+        #
+        # Lower edge region => NF
+        if alpha_i <= (cl_low_alpha - cl_delta_trans_low):
+            cl = cl_nf_i
+
+        # Lower transition zone => Interpolate from NF-edge to BR-edge
+        elif (cl_low_alpha - cl_delta_trans_low) <= alpha_i < cl_low_alpha:
+            # fraction from 0 at left edge to 1 at right edge
+            denom = float(cl_delta_trans_low)  # in case it's an int
+            frac = (alpha_i - (cl_low_alpha - cl_delta_trans_low)) / denom
+
+            # Edge-based interpolation
+            #   frac=0 => cl_nf_lower_edge
+            #   frac=1 => cl_br_lower_edge
+            cl = (1 - frac) * cl_nf_lower_edge + frac * cl_br_lower_edge
+
+        # Between low_alpha and high_alpha => use BR
+        elif cl_low_alpha <= alpha_i < cl_high_alpha:
+            cl = cl_br_i
+
+        # Upper transition zone => Interpolate from BR-edge back to NF-edge
+        elif cl_high_alpha <= alpha_i < (cl_high_alpha + cl_delta_trans_high):
+            denom = float(cl_delta_trans_high)
+            frac = (alpha_i - cl_high_alpha) / denom
+
+            #   frac=0 => cl_br_upper_edge
+            #   frac=1 => cl_nf_upper_edge
+            cl = (1 - frac) * cl_br_upper_edge + frac * cl_nf_upper_edge
+
+        # Above high_alpha + delta_trans => NF
+        elif (cl_high_alpha + cl_delta_trans_high) <= alpha_i:
+            cl = cl_nf_i
+        else:
+            raise ValueError(
+                "No condition met for CL; something is off in the algorithm."
+            )
+
+        #
+        # --------------------- CD LOGIC ---------------------
+        #
+        # Lower edge region => NF
+        if alpha_i <= (cd_low_alpha - cd_delta_trans_low):
+            cd = cd_nf_i
+
+        # Lower transition zone => Interpolate from NF-edge to BR-edge
+        elif (cd_low_alpha - cd_delta_trans_low) <= alpha_i < cd_low_alpha:
+            denom = float(cd_delta_trans_low)
+            frac = (alpha_i - (cd_low_alpha - cd_delta_trans_low)) / denom
+            #   frac=0 => cd_nf_lower_edge
+            #   frac=1 => cd_br_lower_edge
+            cd = (1 - frac) * cd_nf_lower_edge + frac * cd_br_lower_edge
+
+        # Between cd_low_alpha and cd_high_alpha => BR
+        elif cd_low_alpha <= alpha_i < cd_high_alpha:
+            cd = cd_br_i
+
+        # Upper transition zone => BR-edge back to NF-edge
+        elif cd_high_alpha <= alpha_i < (cd_high_alpha + cd_delta_trans_high):
+            denom = float(cd_delta_trans_high)
+            frac = (alpha_i - cd_high_alpha) / denom
+            #   frac=0 => cd_br_upper_edge
+            #   frac=1 => cd_nf_upper_edge
+            cd = (1 - frac) * cd_br_upper_edge + frac * cd_nf_upper_edge
+
+        # Above cd_high_alpha + cd_delta_trans => NF
+        elif (cd_high_alpha + cd_delta_trans_high) <= alpha_i:
+            cd = cd_nf_i
+        else:
+            raise ValueError(
+                "No condition met for CD; something is off in the algorithm."
+            )
+
+        #
+        # --------------------- CM LOGIC ---------------------
+        #
+        # If you always take NF for cm, do so:
+        cm = cm_nf_i
+        # Or create your own boundary-based transitions similarly if needed.
+
+        cl_new.append(cl)
+        cd_new.append(cd)
+        cm_new.append(cm)
+
+    def smooth_values(alpha, y, window_size=7):
+        """
+        Smooths y-values by applying a moving average filter over a sorted alpha.
+
+        Parameters
+        ----------
+        alpha : array-like
+            The x-axis array (e.g., angle of attack).
+        y : array-like
+            The corresponding y-values (e.g., coefficients).
+        window_size : int, optional
+            The size of the smoothing window. Defaults to 5.
+
+        Returns
+        -------
+        alpha_sorted : np.ndarray
+            The sorted array of alpha values.
+        y_smoothed : np.ndarray
+            The y-values after applying the moving average smoothing.
+        """
+
+        # Ensure alpha and y are numpy arrays
+        alpha = np.array(alpha)
+        y = np.array(y)
+
+        # Basic check for length mismatch
+        if len(alpha) != len(y):
+            raise ValueError(
+                f"alpha and y must be the same length, got {len(alpha)} vs {len(y)}"
+            )
+
+        # Sort by alpha (in case it's not already monotonic)
+        sort_idx = np.argsort(alpha)
+        alpha_sorted = alpha[sort_idx]
+        y_sorted = y[sort_idx]
+
+        # Simple moving-average smoothing
+        # 'same' mode ensures the output has the same length as the input
+        kernel = np.ones(window_size) / window_size
+        y_smoothed = np.convolve(y_sorted, kernel, mode="same")
+
+        return y_smoothed
+
+    cl_smooth = smooth_values(alpha_array_deg, cl_new)
+    cd_smooth = smooth_values(alpha_array_deg, cd_new)
+    cm_smooth = np.copy(cm_new)
+
+    # taken only the smoothened values outside the defined ranges
+    cl_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cl_low_alpha + 1),
+            alpha_array_deg > (cl_high_alpha - 1),
+        ),
+        cl_smooth,
+        cl_new,
+    )
+    cd_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cd_low_alpha + 1),
+            alpha_array_deg > (cd_high_alpha - 1),
+        ),
+        cd_smooth,
+        cd_new,
+    )
+
+    ## a second smoothening loop
+    cl_smooth = smooth_values(alpha_array_deg, cl_new)
+    cd_smooth = smooth_values(alpha_array_deg, cd_new)
+    cm_smooth = np.copy(cm_new)
+
+    # taken only the smoothened values outside the defined ranges
+    cl_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cl_low_alpha + 1),
+            alpha_array_deg > (cl_high_alpha - 1),
+        ),
+        cl_smooth,
+        cl_new,
+    )
+    cd_smooth = np.where(
+        np.logical_or(
+            alpha_array_deg < (cd_low_alpha + 1),
+            alpha_array_deg > (cd_high_alpha - 1),
+        ),
+        cd_smooth,
+        cd_new,
+    )
+
+    # create a mask such that only alpha values between -40 and 40 remain
+    mask = (alpha_array_deg >= -40) & (alpha <= 40)
+    alpha_array_deg = alpha_array_deg[mask]
+    cl_smooth = cl_smooth[mask]
+    cd_smooth = cd_smooth[mask]
+    cm_smooth = cm_smooth[mask]
+    cl_new = np.array(cl_new)[mask]
+    cd_new = np.array(cd_new)[mask]
+    cm_new = np.array(cm_new)[mask]
+    cl_br = cl_br[mask]
+    cd_br = cd_br[mask]
+    cm_br = cm_br[mask]
+    cl_nf = cl_nf[mask]
+    cd_nf = cd_nf[mask]
+    cm_nf = cm_nf[mask]
+
+    # Create a 1x3 subplot
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 5))
+
+    ax1.plot(alpha_array_deg, cl_smooth, label="$C_l$ Smooth", color="blue")
+    ax1.plot(alpha_array_deg, cl_new, label="$C_l$ Corrected", color="pink")
+    ax1.plot(alpha_array_deg, cl_br, label="$C_l$ Breukels", color="black")
+    ax1.plot(alpha_array_deg, cl_nf, label="$C_l$ NeuralFoil", color="red")
+    ax1.set_xlabel(r"$\alpha$ [°]")
+    ax1.set_ylabel(r"$C_{\mathrm{l}}$")
+    ax1.grid(True)
+    ax1.legend()
+
+    # Cd vs Alpha plot
+    ax2.plot(alpha_array_deg, cd_smooth, label="$C_d$ Smooth", color="blue")
+    ax2.plot(alpha_array_deg, cd_new, label="$C_d$ Corrected", color="pink")
+    ax2.plot(alpha_array_deg, cd_br, label="$C_d$ Breukels", color="black")
+    ax2.plot(alpha_array_deg, cd_nf, label="$C_d$ NeuralFoil", color="red")
+    ax2.set_xlabel(r"$\alpha$ [°]")
+    ax2.set_ylabel(r"$C_{\mathrm{d}}$")
+    ax2.grid(True)
+
+    # Cm vs Alpha plot
+    ax3.plot(alpha_array_deg, cm_smooth, label="$C_m$ Smooth", color="blue")
+    ax3.plot(alpha_array_deg, cm_new, label="$C_m$ Corrected", color="pink")
+    ax3.plot(alpha_array_deg, cm_br, label="$C_m$ Breukels", color="black")
+    ax3.plot(alpha_array_deg, cm_nf, label="$C_m$ NeuralFoil", color="red")
+    ax3.set_xlabel(r"$\alpha$ [°]")
+    ax3.set_ylabel(r"$C_{\mathrm{m}}$")
+    ax3.grid(True)
+
+    # Adjust layout and display
+    ax1.set_xlim(-40, 40)
+    ax2.set_xlim(-40, 40)
+    ax3.set_xlim(-40, 40)
+    plt.tight_layout()
+    # plt.show()
+    polar_folder_path = Path(
+        PROJECT_DIR, "examples", "TUDELFT_V3_LEI_KITE", "polar_engineering"
+    )
+
+    figure_path = Path(
+        polar_folder_path,
+        "figures",
+        f"2D_polars_breukels_and_engineering_{panel_index}.pdf",
+    )
+    plt.savefig(figure_path)
+    plt.close()
+
+    df = pd.DataFrame(
+        {
+            "alpha": np.deg2rad(alpha_array_deg),
+            "cl": cl_smooth,
+            "cd": cd_smooth,
+            "cm": cm_smooth,
+            "cl_new": cl_new,
+            "cd_new": cd_new,
+            "cm_new": cm_new,
+            "cl_breukels": cl_br,
+            "cd_breukels": cd_br,
+            "cm_breukels": cm_br,
+            "cl_neuralfoil": cl_nf,
+            "cd_neuralfoil": cd_nf,
+            "cm_neuralfoil": cm_nf,
+        }
+    )
+    df.to_csv(
+        Path(polar_folder_path, "csv_files", f"polar_engineering_{panel_index}.csv"),
+        index=False,
+    )
+    ### make sure first and last are added
+    if panel_index == 0:
+        df.to_csv(
+            Path(polar_folder_path, "csv_files", f"corrected_polar_0.csv"), index=False
+        )
+    elif panel_index == (n_panels - 1):
+        df.to_csv(
+            Path(polar_folder_path, "csv_files", f"polar_engineering_{n_panels-1}.csv"),
+            index=False,
+        )
+        df.to_csv(
+            Path(polar_folder_path, "csv_files", f"corrected_polar_{n_panels}.csv"),
+            index=False,
+        )
+
+
+def process_panel_coefficients(
+    body_aero,
+    PROJECT_DIR,
+    n_panels,
+    polar_folder_path,
+):
+
+    for i in range(n_panels):
+        process_panel_coefficients_panel_i(
+            body_aero=body_aero,
+            panel_index=i,
+            PROJECT_DIR=PROJECT_DIR,
+            n_panels=n_panels,
+        )
+
+    # take the average for each panel of the side panels
+    for i in np.arange(1, n_panels, 1):
+        path_to_csv_i = Path(
+            polar_folder_path,
+            "csv_files",
+            f"polar_engineering_{i-1}.csv",
+        )
+        df_polar_data_i = pd.read_csv(path_to_csv_i)
+
+        path_to_csv_i_p1 = Path(
+            polar_folder_path,
+            "csv_files",
+            f"polar_engineering_{i}.csv",
+        )
+        df_polar_data_i_p1 = pd.read_csv(path_to_csv_i_p1)
+
+        # Compute the average for all columns with matching names
+        df_polar_average = (df_polar_data_i + df_polar_data_i_p1) / 2
+
+        # Save the averaged DataFrame
+        df_polar_average.to_csv(
+            Path(polar_folder_path, "csv_files", f"corrected_polar_{i}.csv"),
+            index=False,
+        )

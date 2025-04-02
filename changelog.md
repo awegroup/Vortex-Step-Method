@@ -6,6 +6,58 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - 2025-03-03
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+# Unstructured
+
+- changing input format alpha, CL, CD, CM and in 2D alpha, Cl, Cd, Cm
+- updating doscstrings
+- changing tutorial, sensivitiy, convergence
+- etc.
+
+# dealing with Simonet Stall Model
+- [x] plotting.py: inside the generate_3D_polar_data, 
+feeding in gamma_distribution `results = solver.solve(body_aero,gamma_distrbution=gamma)`, also changed the way the legends are plotted: is now below the graphs in distribution and polars.
+- [x] BodyAerodynamics, changed `calculate_circulation_distribution_elliptical_wing` and added `calculate_circulation_distribution_cosine`
+- [x] Solver, changed _init_ statement, added artificial viscosity as property and setter, change gamma_initialisation inside solver function, added the gamma_loop types, and added the non_linear gamma loop functions. Also updated the artificial viscosity stall model, changed elliptic to elliptical, rewriting some of the variables inside solver, to become self. to make them callable from anywhere within the class, added min_relaxation_error, adding a compute_aerodynamic_quantities function, further adjusting the simonet functions
+removed: min_relaxation_error
+removed: is_new_vector_definition
+
+moving everything from Solver to solver_functions, that is related to stall models
+
+changing TUDELFT_V3_LEI_KITE, to TUDELFT_V3_KITE
+
+-Panel: added panel_polar_data property, added "cl_is_pisinalpha" to the _panel_aero_model options
+
+Added a test function under folder elliptical_wing_planform, from ch 4.1 of Simonet.
+
+Added a rectangular wing test function
+
+Changed spanwise panel distribution to uniform
+
+Removed 'using_previous gamma' option, and added it to the 'initial_gamma_distribution function'
+
+### Bodyaerodynamics
+- Changing hardcoded 0.25 and 0.75 in calculate_panel_properties, to ac and cp.
+
+### solver setting testing
+- "aerodynamic_model_type": LTT (1/4chord evaluation) vs VSM (3/4chord including the angle correction)
+- "allowed_error"
+- "core_radius_fraction"
+- "gamma_initial_distribution_type": "elliptical","cosine","zero"
+- "gamma_loop_type": "base","non_linear"
+- "is_with_gamma_feedback": True or False
+- "max_iterations"
+- "relaxation_factor"
+
+### other
+- adding a sensitivity_analysis.py file
+- git_ignoring results/
+
+=======
+>>>>>>> 08138c40cc2f5120d29d46f2ae6b65745976ac87
+=======
+>>>>>>> develop
 ### Added
 - **Interactive Visualization:** Introduced an interactive Plotly environment for data visualization.
 - **Moment Calculations:** Added moment calculations and plotting functionality (#89).

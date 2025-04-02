@@ -1,9 +1,9 @@
 import numpy as np
 import logging
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
+from VSM.WingGeometry import Wing
 from VSM.Panel import Panel
 import VSM.Wake as Wake
 from . import jit_cross, jit_norm, jit_dot
@@ -12,32 +12,37 @@ from . import jit_cross, jit_norm, jit_dot
 class BodyAerodynamics:
     """BodyAerodynamics class
 
-    This class is used to calculate the aerodynamic properties of a wing.
+    This class calculates the aerodynamic properties of a wing system, including the generation
+    of panels, evaluation of circulatory distributions, and computation of aerodynamic forces,
+    moments, and induced velocities. It supports both standard wing and bridled configurations.
 
     Args:
-        - wings (list): List of objects
-        - aerodynamic_center_location (float): The location of the aerodynamic center (default is 0.25)
-        - control_point_location (float): The location of the control point (default is 0.75)
-
-    Returns:
-        - BodyAerodynamics object
+        wings (list): List of Wing object instances.
+        bridle_line_system (list, optional): List of bridles, each defined as [p1, p2, diameter]. Defaults to None.
+        aerodynamic_center_location (float, optional): The location factor for the aerodynamic center (default is 0.25).
+        control_point_location (float, optional): The location factor for the control point (default is 0.75).
 
     Properties:
-        - panels: The list of Panel object instances
-        - n_panels: The number of panels
-        - va: The velocity array
-        - gamma_distribution: The circulation distribution
-        - wings: The list of Wing object instances
-
+        panels (list): List of Panel object instances constructed from the wing geometry.
+        n_panels (int): Number of panels.
+        va (np.ndarray): The apparent velocity vector used in calculations.
+        gamma_distribution (np.ndarray): Distribution of circulation along the panels.
+        wings (list): List of Wing object instances.
 
     Methods:
-        - calculate_panel_properties: Calculates the properties of the panels
-        - calculate_AIC_matrices: Calculates the AIC matrices
-        - calculate_circulation_distribution_elliptical_wing: Calculates the circulation distribution for an elliptical wing
-        - calculate_stall_angle_list: Calculates the stall angle list
-        - calculate_results: Calculates the results
-        - update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack if VSM
-        - calculate_stall_angle_list: Calculates the stall angle list
+        __init__: Initializes the BodyAerodynamics instance and builds the panel list.
+        _build_panels: Constructs panels from the current wing geometry.
+        from_file: Class method to instantiate an object by reading wing geometry and optional polar/bridle data from files.
+        update_from_points: Updates the wing geometry from new LE, TE, tube diameter, and camber points.
+        calculate_panel_properties: Computes the aerodynamic and geometric properties for each panel.
+        calculate_AIC_matrices: Calculates the Aerodynamic Influence Coefficient matrices based on the specified aerodynamic model.
+        calculate_circulation_distribution_elliptical_wing: Returns the circulation distribution for an elliptical wing.
+        calculate_circulation_distribution_cosine: Returns the circulation distribution based on a cosine profile.
+        calculate_results: Computes aerodynamic forces, moments, and other metrics based on the current state.
+        va_initialize: Initializes the apparent velocity vector (va) and yaw rate.
+        update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack for VSM using induced velocities.
+        calculate_line_aerodynamic_force: Computes the aerodynamic force on a line element (used for bridles).
+
     """
 
     def __init__(
@@ -48,11 +53,31 @@ class BodyAerodynamics:
         control_point_location: float = 0.75,
     ):
         self._wings = wings
-        # Defining the panels by refining the aerodynamic mesh
+        self._aerodynamic_center_location = aerodynamic_center_location
+        self._control_point_location = control_point_location
+
+        ##TODO:
+        self._bridle_line_system = bridle_line_system
+        self.cd_cable = 1.1
+        self.cf_cable = 0.01
+
+        # Build the initial panel list from the wing geometry.
+        self._build_panels()
+
+        # Other initializations
+        self._va = None
+        self._gamma_distribution = None
+        self._alpha_uncorrected = None
+        self._alpha_corrected = None
+
+    def _build_panels(self):
+        """Helper method to build the panel list from the current wing geometry."""
         panels = []
-        for i, wing_instance in enumerate(wings):
-            section_list = wing_instance.refine_aerodynamic_mesh()
+        for wing in self.wings:
+            section_list = wing.refine_aerodynamic_mesh()
             n_panels_per_wing = len(section_list) - 1
+
+            # Calculate the panel properties
             (
                 aerodynamic_center_list,
                 control_point_list,
@@ -64,8 +89,8 @@ class BodyAerodynamics:
             ) = self.calculate_panel_properties(
                 section_list,
                 n_panels_per_wing,
-                aerodynamic_center_location,
-                control_point_location,
+                self._aerodynamic_center_location,
+                self._control_point_location,
             )
             for j in range(n_panels_per_wing):
                 panels.append(
@@ -83,46 +108,44 @@ class BodyAerodynamics:
                 )
         self._panels = panels
         self._n_panels = len(panels)
-        self._va = None
-        self._gamma_distribution = None
-        self._alpha_uncorrected = None
-        self._alpha_corrected = None
-        # self._stall_angle_list = self.calculate_stall_angle_list()
 
-        ##TODO:
-        self._bridle_line_system = bridle_line_system
-        self.cd_cable = 1.1
-        self.cf_cable = 0.01
-
-    ###########################
+    ####################
     ## CLASS METHODS ###
-    ########################
+    ####################
     @classmethod
     def from_file(
         cls,
-        wing_instance,
-        file_path,
-        is_with_corrected_polar=False,
-        path_polar_data_dir="",
-        is_with_bridles=False,
-        path_bridle_data=None,
+        file_path: str,
+        n_panels: int,
+        spanwise_panel_distribution: str,
+        is_with_corrected_polar: bool = False,
+        polar_data_dir: str = "",
+        is_with_bridles: bool = False,
+        bridle_data_path: str = None,
     ):
-        """Instantiate a BodyAerodynamics object with or without bridles
+        """Instantiate a BodyAerodynamics object from wing geometry and optional polar/bridle data.
 
         Args:
-            wing_instance (Wing): Wing instance
-            file_path (str): Path to the wing geometry file
-                a .csv structured with columns: LE_x,LE_y,LE_z,TE_x,TE_y,TE_z,d_tube,camber
-            is_with_corrected_polar (bool, optional): Whether to use corrected polar data. Defaults to False.
-            path_polar_data_dir (str, optional): Path to the corrected polar data directory. Defaults to "".
-                a .csv structured with columsn: alpha,cl,cd,cm
-            is_with_bridles (bool, optional): Whether to include bridles. Defaults to False.
-            path_bridle_data (str, optional): Path to the bridle data file. Defaults to None.
-                a .csv structured with columsn: p1_x,p1_y,p1_z,p2_x,p2_y,p2_z,diameter
+            file_path (str): Path to the wing geometry CSV file. The file should contain the columns:
+            LE_x, LE_y, LE_z, TE_x, TE_y, TE_z, d_tube, camber.
+            n_panels (int): Number of panels to discretize the wing.
+            spanwise_panel_distribution (str): Method for distributing the panels along the wing span.
+            is_with_corrected_polar (bool, optional): If True, use corrected polar data from CSV files.
+            Defaults to False.
+            polar_data_dir (str, optional): Directory path where corrected polar CSV files are stored.
+            Each file should contain columns: alpha, cl, cd, cm. Defaults to "".
+            is_with_bridles (bool, optional): If True, incorporate bridles into the aerodynamic model.
+            Defaults to False.
+            bridle_data_path (str, optional): Path to the bridle data CSV file. The file should have columns:
+            p1_x, p1_y, p1_z, p2_x, p2_y, p2_z, diameter. Defaults to None.
 
         Returns:
-            BodyAerodynamics: BodyAerodynamics instance
+            BodyAerodynamics: An instance of BodyAerodynamics built using the provided geometry and data.
         """
+        # Initialize wing
+        wing_instance = Wing(
+            n_panels=n_panels, spanwise_panel_distribution=spanwise_panel_distribution
+        )
         # Read wing geometry and airfoil parameters from file
         df = pd.read_csv(file_path)
 
@@ -137,7 +160,7 @@ class BodyAerodynamics:
                     (df["TE_x"].values, df["TE_y"].values, df["TE_z"].values), axis=-1
                 ),
                 df["d_tube"].values,
-                df["camber"].values,
+                df["y_camber"].values,
             )
         ]
 
@@ -145,18 +168,16 @@ class BodyAerodynamics:
         for i, rib in enumerate(ribs):
             LE, TE, airfoil_data = rib
             if is_with_corrected_polar:
-                df_polar = pd.read_csv(
-                    Path(path_polar_data_dir) / f"corrected_polar_{i}.csv"
-                )
+                df_polar = pd.read_csv(Path(polar_data_dir) / f"{i}.csv")
                 # Create polar data with (N, 4) format: each row is [alpha, cl, cd, cm]
                 polar_data = [
                     "polar_data",
                     np.column_stack(
                         (
-                            df_polar["alpha"].values,
-                            df_polar["cl"].values,
-                            df_polar["cd"].values,
-                            df_polar["cm"].values,
+                            np.deg2rad(df_polar["alpha"].values),
+                            df_polar["Cl"].values,
+                            df_polar["Cd"].values,
+                            df_polar["Cm"].values,
                         )
                     ),
                 ]
@@ -166,7 +187,7 @@ class BodyAerodynamics:
 
         # Instantiate BodyAerodynamics with or without bridles
         if is_with_bridles:
-            df_bridle = pd.read_csv(path_bridle_data)
+            df_bridle = pd.read_csv(bridle_data_path)
             bridle_lines = [
                 [
                     np.array([row["p1_x"], row["p1_y"], row["p1_z"]]),
@@ -178,6 +199,25 @@ class BodyAerodynamics:
             return cls([wing_instance], bridle_lines)
         else:
             return cls([wing_instance])
+
+    ###########################
+    ## UPDATE FUNCTION
+    ###########################
+    def update_from_points(
+        self,
+        le_arr: np.ndarray,
+        te_arr: np.ndarray,
+        d_tube_arr: np.ndarray,
+        y_camber_arr: np.ndarray,
+        aero_input_type: str = "lei_airfoil_breukels",
+    ):
+        # Update each wing with the new points.
+        for wing in self.wings:
+            wing.update_wing_from_points(
+                le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
+            )
+        # Rebuild the panels based on the updated geometry.
+        self._build_panels()
 
     ###########################
     ## GETTER FUNCTIONS
@@ -268,6 +308,136 @@ class BodyAerodynamics:
     ## CALCULATE FUNCTIONS
     ###########################
 
+    # def calculate_panel_properties(
+    #     self,
+    #     section_list,
+    #     n_panels,
+    #     aerodynamic_center_location,
+    #     control_point_location,
+    # ):
+
+    #     # Initialize lists
+    #     aerodynamic_center_list = []
+    #     control_point_list = []
+    #     bound_point_1_list = []
+    #     bound_point_2_list = []
+    #     x_airf_list = []
+    #     y_airf_list = []
+    #     z_airf_list = []
+
+    #     # defining coordinates
+    #     coordinates = np.zeros((2 * (n_panels + 1), 3))
+    #     logging.debug(f"shape of coordinates: {coordinates.shape}")
+    #     for i in range(n_panels):
+    #         coordinates[2 * i] = section_list[i].LE_point
+    #         coordinates[2 * i + 1] = section_list[i].TE_point
+    #         coordinates[2 * i + 2] = section_list[i + 1].LE_point
+    #         coordinates[2 * i + 3] = section_list[i + 1].TE_point
+
+    #     logging.debug(f"coordinates: {coordinates}")
+
+    #     for i in range(n_panels):
+    #         # Identify points defining the panel
+    #         section = {
+    #             "p1": coordinates[2 * i, :],  # p1 = LE_1
+    #             "p2": coordinates[2 * i + 2, :],  # p2 = LE_2
+    #             "p3": coordinates[2 * i + 3, :],  # p3 = TE_2
+    #             "p4": coordinates[2 * i + 1, :],  # p4 = TE_1
+    #         }
+
+    #         di = jit_norm(
+    #             coordinates[2 * i, :] * 0.75
+    #             + coordinates[2 * i + 1, :] * 0.25
+    #             - (coordinates[2 * i + 2, :] * 0.75 + coordinates[2 * i + 3, :] * 0.25)
+    #         )
+    #         if i == 0:
+    #             diplus = jit_norm(
+    #                 coordinates[2 * (i + 1), :] * 0.75
+    #                 + coordinates[2 * (i + 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i + 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i + 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             ncp = di / (di + diplus)
+    #         elif i == n_panels - 1:
+    #             dimin = jit_norm(
+    #                 coordinates[2 * (i - 1), :] * 0.75
+    #                 + coordinates[2 * (i - 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i - 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i - 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             ncp = dimin / (dimin + di)
+    #         else:
+    #             dimin = jit_norm(
+    #                 coordinates[2 * (i - 1), :] * 0.75
+    #                 + coordinates[2 * (i - 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i - 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i - 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             diplus = jit_norm(
+    #                 coordinates[2 * (i + 1), :] * 0.75
+    #                 + coordinates[2 * (i + 1) + 1, :] * 0.25
+    #                 - (
+    #                     coordinates[2 * (i + 1) + 2, :] * 0.75
+    #                     + coordinates[2 * (i + 1) + 3, :] * 0.25
+    #                 )
+    #             )
+    #             ncp = 0.25 * (dimin / (dimin + di) + di / (di + diplus) + 1)
+
+    #         ncp = 1 - ncp
+
+    #         # aerodynamic center at 1/4c
+    #         LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 3 / 4 + (
+    #             section["p3"] * (1 - ncp) + section["p4"] * ncp
+    #         ) * 1 / 4
+    #         # control point at 3/4c
+    #         VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 1 / 4 + (
+    #             section["p3"] * (1 - ncp) + section["p4"] * ncp
+    #         ) * 3 / 4
+
+    #         # Calculating the bound
+    #         bound_1 = section["p1"] * 3 / 4 + section["p4"] * 1 / 4
+    #         bound_2 = section["p2"] * 3 / 4 + section["p3"] * 1 / 4
+
+    #         ### Calculate the local reference frame, below are all unit_vectors
+    #         # NORMAL x_airf defined upwards from the chord-line, perpendicular to the panel
+    #         # used to be: p2 - p1
+    #         x_airf = jit_cross(VSMpoint - LLpoint, section["p1"] - section["p2"])
+    #         x_airf = x_airf / jit_norm(x_airf)
+
+    #         # TANGENTIAL y_airf defined parallel to the chord-line, from LE-to-TE
+    #         y_airf = VSMpoint - LLpoint
+    #         y_airf = y_airf / jit_norm(y_airf)
+
+    #         # SPAN z_airf along the LE, in plane (towards left tip, along span) from the airfoil perspective
+    #         # used to be bound_2 - bound_1
+    #         z_airf = bound_1 - bound_2
+    #         z_airf = z_airf / jit_norm(z_airf)
+
+    #         # Appending
+    #         aerodynamic_center_list.append(LLpoint)
+    #         control_point_list.append(VSMpoint)
+    #         bound_point_1_list.append(bound_1)
+    #         bound_point_2_list.append(bound_2)
+    #         x_airf_list.append(x_airf)
+    #         y_airf_list.append(y_airf)
+    #         z_airf_list.append(z_airf)
+
+    #     return (
+    #         aerodynamic_center_list,
+    #         control_point_list,
+    #         bound_point_1_list,
+    #         bound_point_2_list,
+    #         x_airf_list,
+    #         y_airf_list,
+    #         z_airf_list,
+    #     )
+
     def calculate_panel_properties(
         self,
         section_list,
@@ -275,6 +445,9 @@ class BodyAerodynamics:
         aerodynamic_center_location,
         control_point_location,
     ):
+        ac = aerodynamic_center_location
+        cp = control_point_location
+
         # Initialize lists
         aerodynamic_center_list = []
         control_point_list = []
@@ -305,63 +478,63 @@ class BodyAerodynamics:
             }
 
             di = jit_norm(
-                coordinates[2 * i, :] * 0.75
-                + coordinates[2 * i + 1, :] * 0.25
-                - (coordinates[2 * i + 2, :] * 0.75 + coordinates[2 * i + 3, :] * 0.25)
+                coordinates[2 * i, :] * cp
+                + coordinates[2 * i + 1, :] * ac
+                - (coordinates[2 * i + 2, :] * cp + coordinates[2 * i + 3, :] * ac)
             )
             if i == 0:
                 diplus = jit_norm(
-                    coordinates[2 * (i + 1), :] * 0.75
-                    + coordinates[2 * (i + 1) + 1, :] * 0.25
+                    coordinates[2 * (i + 1), :] * cp
+                    + coordinates[2 * (i + 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i + 1) + 2, :] * 0.75
-                        + coordinates[2 * (i + 1) + 3, :] * 0.25
+                        coordinates[2 * (i + 1) + 2, :] * cp
+                        + coordinates[2 * (i + 1) + 3, :] * ac
                     )
                 )
                 ncp = di / (di + diplus)
             elif i == n_panels - 1:
                 dimin = jit_norm(
-                    coordinates[2 * (i - 1), :] * 0.75
-                    + coordinates[2 * (i - 1) + 1, :] * 0.25
+                    coordinates[2 * (i - 1), :] * cp
+                    + coordinates[2 * (i - 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i - 1) + 2, :] * 0.75
-                        + coordinates[2 * (i - 1) + 3, :] * 0.25
+                        coordinates[2 * (i - 1) + 2, :] * cp
+                        + coordinates[2 * (i - 1) + 3, :] * ac
                     )
                 )
                 ncp = dimin / (dimin + di)
             else:
                 dimin = jit_norm(
-                    coordinates[2 * (i - 1), :] * 0.75
-                    + coordinates[2 * (i - 1) + 1, :] * 0.25
+                    coordinates[2 * (i - 1), :] * cp
+                    + coordinates[2 * (i - 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i - 1) + 2, :] * 0.75
-                        + coordinates[2 * (i - 1) + 3, :] * 0.25
+                        coordinates[2 * (i - 1) + 2, :] * cp
+                        + coordinates[2 * (i - 1) + 3, :] * ac
                     )
                 )
                 diplus = jit_norm(
-                    coordinates[2 * (i + 1), :] * 0.75
-                    + coordinates[2 * (i + 1) + 1, :] * 0.25
+                    coordinates[2 * (i + 1), :] * cp
+                    + coordinates[2 * (i + 1) + 1, :] * ac
                     - (
-                        coordinates[2 * (i + 1) + 2, :] * 0.75
-                        + coordinates[2 * (i + 1) + 3, :] * 0.25
+                        coordinates[2 * (i + 1) + 2, :] * cp
+                        + coordinates[2 * (i + 1) + 3, :] * ac
                     )
                 )
-                ncp = 0.25 * (dimin / (dimin + di) + di / (di + diplus) + 1)
+                ncp = ac * (dimin / (dimin + di) + di / (di + diplus) + 1)
 
             ncp = 1 - ncp
 
             # aerodynamic center at 1/4c
-            LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 3 / 4 + (
+            LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * cp + (
                 section["p3"] * (1 - ncp) + section["p4"] * ncp
-            ) * 1 / 4
+            ) * ac
             # control point at 3/4c
-            VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 1 / 4 + (
+            VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * ac + (
                 section["p3"] * (1 - ncp) + section["p4"] * ncp
-            ) * 3 / 4
+            ) * cp
 
             # Calculating the bound
-            bound_1 = section["p1"] * 3 / 4 + section["p4"] * 1 / 4
-            bound_2 = section["p2"] * 3 / 4 + section["p3"] * 1 / 4
+            bound_1 = section["p1"] * cp + section["p4"] * ac
+            bound_2 = section["p2"] * cp + section["p3"] * ac
 
             ### Calculate the local reference frame, below are all unit_vectors
             # NORMAL x_airf defined upwards from the chord-line, perpendicular to the panel
@@ -398,22 +571,24 @@ class BodyAerodynamics:
         )
 
     def calculate_AIC_matrices(
-        self, model, core_radius_fraction, va_norm_array, va_unit_array
+        self, aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
     ):
         """Calculates the AIC matrices for the given aerodynamic model
 
         Args:
-            model (str): The aerodynamic model to be used, either VSM or LLT
+            aerodynamic_model_type (str): The aerodynamic model to be used, either VSM or LLT
             core_radius_fraction (float): The core radius fraction for the vortex model
 
         Returns:
             Tuple[np.array, np.array, np.array]: The x, y, and z components of the AIC matrix
         """
-        if model not in ["VSM", "LLT"]:
+        if aerodynamic_model_type not in ["VSM", "LLT"]:
             raise ValueError("Invalid aerodynamic model type, should be VSM or LLT")
 
-        evaluation_point = "control_point" if model == "VSM" else "aerodynamic_center"
-        evaluation_point_on_bound = model == "LLT"
+        evaluation_point = (
+            "control_point" if aerodynamic_model_type == "VSM" else "aerodynamic_center"
+        )
+        evaluation_point_on_bound = aerodynamic_model_type == "LLT"
 
         AIC = np.empty((3, self.n_panels, self.n_panels))
 
@@ -432,7 +607,7 @@ class BodyAerodynamics:
                 )
                 AIC[:, icp, jring] = velocity_induced
 
-                if icp == jring and model == "VSM":
+                if icp == jring and aerodynamic_model_type == "VSM":
                     U_2D = panel_jring.calculate_velocity_induced_bound_2D(ep)
                     AIC[:, icp, jring] -= U_2D
 
@@ -442,29 +617,55 @@ class BodyAerodynamics:
         """
         Calculates the circulation distribution for an elliptical wing.
 
+        Assumes that the wing's span is defined in self.wings[0].span and that the
+        y-coordinates of the control points (from self.panels) are measured relative
+        to the wing center, ranging from -wing_span/2 to wing_span/2.
+
         Args:
-            wings (list): List of wing instances
-            gamma_0 (float): The circulation at the wing root
+            gamma_0 (float): The circulation at the wing root.
 
         Returns:
-            np.array: The circulation distribution
+            np.array: The circulation distribution following an elliptical profile.
         """
-        gamma_i = np.array([])
         if len(self.wings) > 1:
             raise NotImplementedError("Multiple wings not yet implemented")
 
         wing_span = self.wings[0].span
-
         logging.debug(f"wing_span: {wing_span}")
 
+        # Get the y-coordinate for each panel's control point.
         y = np.array([panel.control_point[1] for panel in self.panels])
-        gamma_i_wing = gamma_0 * np.sqrt(1 - (2 * y / wing_span) ** 2)
-        gamma_i = np.append(gamma_i, gamma_i_wing)
 
-        logging.debug(
-            f"inside calculate_circulation_distribution_elliptical_wing, gamma_i: {gamma_i}"
-        )
+        # Compute the elliptical circulation distribution.
+        gamma_i = gamma_0 * np.sqrt(1 - (2 * y / wing_span) ** 2)
 
+        logging.debug(f"Calculated elliptical gamma distribution: {gamma_i}")
+        return gamma_i
+
+    def calculate_circulation_distribution_cosine(self, gamma_0=1):
+        """
+        Calculates the circulation distribution based on a cosine profile,
+        i.e. f(x) = 1 - cos(x), where x is remapped over [0, π].
+
+        This function assumes that the number of panels defines the resolution
+        of the distribution. The distribution is scaled such that its maximum
+        (at x = π) is gamma_0.
+
+        Args:
+            gamma_0 (float): Scaling factor (or the circulation value at x = π).
+
+        Returns:
+            np.array: The circulation distribution based on the cosine function.
+        """
+        import numpy as np
+
+        # Create a set of x-values uniformly distributed between 0 and π.
+        x = np.linspace(0, np.pi, len(self.panels))
+
+        # Compute the distribution: f(x) = 1 - cos(x).
+        gamma_i = gamma_0 * (1 - np.cos(x))
+
+        logging.debug(f"Calculated cosine gamma distribution: {gamma_i}")
         return gamma_i
 
     # def calculate_stall_angle_list(
@@ -531,7 +732,7 @@ class BodyAerodynamics:
         va_unit_array,
         panels,
         is_only_f_and_gamma_output,
-        moment_reference_point,
+        reference_point,
     ):
 
         cl_array, cd_array, cm_array = (
@@ -659,7 +860,6 @@ class BodyAerodynamics:
                 drag_induced_va, va_unit
             )
 
-            # if is_new_vector_definition:
             dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
             side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
                 drag_induced_va, dir_side
@@ -792,8 +992,11 @@ class BodyAerodynamics:
 
         # Calculating projected_area, wing_span, aspect_ratio
         projected_area = 0
-        for i, wing in enumerate(self.wings):
-            projected_area += wing.calculate_projected_area()
+        if len(self.wings) > 1:
+            raise ValueError("more than 1 wing functions have not been implemented yet")
+
+        wing = self.wings[0]
+        projected_area = wing.calculate_projected_area()
         wing_span = wing.span
         aspect_ratio_projected = wing_span**2 / projected_area
 
