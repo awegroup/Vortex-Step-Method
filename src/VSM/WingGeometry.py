@@ -182,7 +182,7 @@ class Wing:
         if self.spanwise_panel_distribution not in [
             "uniform",
             "cosine",
-            "cosine_van_Garrel",
+            # "cosine_van_Garrel",
             "split_provided",
             "unchanged",
         ]:
@@ -530,79 +530,6 @@ class Wing:
 
         return new_sections
 
-    # def calculate_cosine_van_Garrel(self, new_sections):
-    #     """Calculate the van Garrel cosine distribution of sections
-    #     URL: http://dx.doi.org/10.13140/RG.2.1.2773.8000
-
-    #     Args:
-    #         - new_sections (list): List of Section objects
-
-    #     Returns:
-    #         - new_sections_van_Garrel (list): List of Section objects with van Garrel cosine distribution
-    #     """
-    #     n = len(new_sections)
-    #     control_points = np.zeros((n, 3))
-
-    #     # Calculate chords and quarter chords
-    #     chords = []
-    #     quarter_chords = []
-    #     for section in new_sections:
-    #         chord = section.TE_point - section.LE_point
-    #         chords.append(chord)
-    #         quarter_chords.append(section.LE_point + 0.25 * chord)
-
-    #     # Calculate widths
-    #     widths = np.zeros(n - 1)
-    #     for i in range(n - 1):
-    #         widths[i] = jit_norm(quarter_chords[i + 1] - quarter_chords[i])
-
-    #     # Calculate correction eta_cp
-    #     eta_cp = np.zeros(n - 1)
-
-    #     # First panel
-    #     eta_cp[0] = widths[0] / (widths[0] + widths[1])
-
-    #     # Internal panels
-    #     for j in range(1, n - 2):
-    #         eta_cp[j] = 0.25 * (
-    #             widths[j - 1] / (widths[j - 1] + widths[j])
-    #             + widths[j] / (widths[j] + widths[j + 1])
-    #             + 1
-    #         )
-    #         control_points[j] = quarter_chords[j] + eta_cp[j] * (
-    #             quarter_chords[j + 1] - quarter_chords[j]
-    #         )
-    #     # Last panel
-    #     eta_cp[-1] = widths[-2] / (widths[-2] + widths[-1])
-
-    #     logging.debug(f"eta_cp: {eta_cp}")
-
-    #     # Calculate control points
-    #     control_points = []
-    #     for i, eta_cp_i in enumerate(eta_cp):
-    #         control_points.append(
-    #             quarter_chords[i]
-    #             + eta_cp_i * (quarter_chords[i + 1] - quarter_chords[i])
-    #         )
-
-    #     # Calculate new_sections_van_Garrel
-    #     new_sections_van_Garrel = []
-
-    #     for i, control_point_i in enumerate(control_points):
-    #         # Use the original chord length
-    #         chord = chords[i]
-    #         new_LE_point = control_point_i - 0.25 * chord
-    #         new_TE_point = control_point_i + 0.75 * chord
-
-    #         # Keep the original aero_input
-    #         aero_input_i = new_sections[i].aero_input
-
-    #         new_sections_van_Garrel.append(
-    #             Section(new_LE_point, new_TE_point, aero_input_i)
-    #         )
-
-    #     return new_sections_van_Garrel
-
     # TODO: add test here, assessing for example the types of the inputs
     @property
     def span(self):
@@ -702,27 +629,3 @@ class Section:
     LE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     TE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     aero_input: list = field(default_factory=list)
-
-
-# def flip_created_coord_in_pairs_if_needed(coord):
-#     """
-#     Ensure the coordinates are ordered from positive to negative along the y-axis.
-
-#     Args:
-#         - coord (np.ndarray): Array of coordinates
-
-#     Returns:
-#         - np.ndarray: Array of coordinates with the y-axis ordered from positive to negative
-#     """
-#     # Reshape the array into pairs
-#     reshaped = coord.reshape(-1, 2, coord.shape[1])
-
-#     # Check the overall y-axis order
-#     overall_y = reshaped[:, 0, 1]  # Take the y values of the leading edge coordinates
-#     if not np.all(
-#         overall_y[:-1] >= overall_y[1:]
-#     ):  # Check if y values are in descending order
-#         reshaped = np.flip(reshaped, axis=0)
-
-#     # Flatten back to the original shape
-#     return reshaped.reshape(-1, coord.shape[1])

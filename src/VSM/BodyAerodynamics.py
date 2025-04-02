@@ -199,26 +199,7 @@ class BodyAerodynamics:
             return cls([wing_instance], bridle_lines)
         else:
             return cls([wing_instance])
-
-    ###########################
-    ## UPDATE FUNCTION
-    ###########################
-    def update_from_points(
-        self,
-        le_arr: np.ndarray,
-        te_arr: np.ndarray,
-        d_tube_arr: np.ndarray,
-        y_camber_arr: np.ndarray,
-        aero_input_type: str = "lei_airfoil_breukels",
-    ):
-        # Update each wing with the new points.
-        for wing in self.wings:
-            wing.update_wing_from_points(
-                le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
-            )
-        # Rebuild the panels based on the updated geometry.
-        self._build_panels()
-
+        
     ###########################
     ## GETTER FUNCTIONS
     ###########################
@@ -307,136 +288,6 @@ class BodyAerodynamics:
     ###########################
     ## CALCULATE FUNCTIONS
     ###########################
-
-    # def calculate_panel_properties(
-    #     self,
-    #     section_list,
-    #     n_panels,
-    #     aerodynamic_center_location,
-    #     control_point_location,
-    # ):
-
-    #     # Initialize lists
-    #     aerodynamic_center_list = []
-    #     control_point_list = []
-    #     bound_point_1_list = []
-    #     bound_point_2_list = []
-    #     x_airf_list = []
-    #     y_airf_list = []
-    #     z_airf_list = []
-
-    #     # defining coordinates
-    #     coordinates = np.zeros((2 * (n_panels + 1), 3))
-    #     logging.debug(f"shape of coordinates: {coordinates.shape}")
-    #     for i in range(n_panels):
-    #         coordinates[2 * i] = section_list[i].LE_point
-    #         coordinates[2 * i + 1] = section_list[i].TE_point
-    #         coordinates[2 * i + 2] = section_list[i + 1].LE_point
-    #         coordinates[2 * i + 3] = section_list[i + 1].TE_point
-
-    #     logging.debug(f"coordinates: {coordinates}")
-
-    #     for i in range(n_panels):
-    #         # Identify points defining the panel
-    #         section = {
-    #             "p1": coordinates[2 * i, :],  # p1 = LE_1
-    #             "p2": coordinates[2 * i + 2, :],  # p2 = LE_2
-    #             "p3": coordinates[2 * i + 3, :],  # p3 = TE_2
-    #             "p4": coordinates[2 * i + 1, :],  # p4 = TE_1
-    #         }
-
-    #         di = jit_norm(
-    #             coordinates[2 * i, :] * 0.75
-    #             + coordinates[2 * i + 1, :] * 0.25
-    #             - (coordinates[2 * i + 2, :] * 0.75 + coordinates[2 * i + 3, :] * 0.25)
-    #         )
-    #         if i == 0:
-    #             diplus = jit_norm(
-    #                 coordinates[2 * (i + 1), :] * 0.75
-    #                 + coordinates[2 * (i + 1) + 1, :] * 0.25
-    #                 - (
-    #                     coordinates[2 * (i + 1) + 2, :] * 0.75
-    #                     + coordinates[2 * (i + 1) + 3, :] * 0.25
-    #                 )
-    #             )
-    #             ncp = di / (di + diplus)
-    #         elif i == n_panels - 1:
-    #             dimin = jit_norm(
-    #                 coordinates[2 * (i - 1), :] * 0.75
-    #                 + coordinates[2 * (i - 1) + 1, :] * 0.25
-    #                 - (
-    #                     coordinates[2 * (i - 1) + 2, :] * 0.75
-    #                     + coordinates[2 * (i - 1) + 3, :] * 0.25
-    #                 )
-    #             )
-    #             ncp = dimin / (dimin + di)
-    #         else:
-    #             dimin = jit_norm(
-    #                 coordinates[2 * (i - 1), :] * 0.75
-    #                 + coordinates[2 * (i - 1) + 1, :] * 0.25
-    #                 - (
-    #                     coordinates[2 * (i - 1) + 2, :] * 0.75
-    #                     + coordinates[2 * (i - 1) + 3, :] * 0.25
-    #                 )
-    #             )
-    #             diplus = jit_norm(
-    #                 coordinates[2 * (i + 1), :] * 0.75
-    #                 + coordinates[2 * (i + 1) + 1, :] * 0.25
-    #                 - (
-    #                     coordinates[2 * (i + 1) + 2, :] * 0.75
-    #                     + coordinates[2 * (i + 1) + 3, :] * 0.25
-    #                 )
-    #             )
-    #             ncp = 0.25 * (dimin / (dimin + di) + di / (di + diplus) + 1)
-
-    #         ncp = 1 - ncp
-
-    #         # aerodynamic center at 1/4c
-    #         LLpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 3 / 4 + (
-    #             section["p3"] * (1 - ncp) + section["p4"] * ncp
-    #         ) * 1 / 4
-    #         # control point at 3/4c
-    #         VSMpoint = (section["p2"] * (1 - ncp) + section["p1"] * ncp) * 1 / 4 + (
-    #             section["p3"] * (1 - ncp) + section["p4"] * ncp
-    #         ) * 3 / 4
-
-    #         # Calculating the bound
-    #         bound_1 = section["p1"] * 3 / 4 + section["p4"] * 1 / 4
-    #         bound_2 = section["p2"] * 3 / 4 + section["p3"] * 1 / 4
-
-    #         ### Calculate the local reference frame, below are all unit_vectors
-    #         # NORMAL x_airf defined upwards from the chord-line, perpendicular to the panel
-    #         # used to be: p2 - p1
-    #         x_airf = jit_cross(VSMpoint - LLpoint, section["p1"] - section["p2"])
-    #         x_airf = x_airf / jit_norm(x_airf)
-
-    #         # TANGENTIAL y_airf defined parallel to the chord-line, from LE-to-TE
-    #         y_airf = VSMpoint - LLpoint
-    #         y_airf = y_airf / jit_norm(y_airf)
-
-    #         # SPAN z_airf along the LE, in plane (towards left tip, along span) from the airfoil perspective
-    #         # used to be bound_2 - bound_1
-    #         z_airf = bound_1 - bound_2
-    #         z_airf = z_airf / jit_norm(z_airf)
-
-    #         # Appending
-    #         aerodynamic_center_list.append(LLpoint)
-    #         control_point_list.append(VSMpoint)
-    #         bound_point_1_list.append(bound_1)
-    #         bound_point_2_list.append(bound_2)
-    #         x_airf_list.append(x_airf)
-    #         y_airf_list.append(y_airf)
-    #         z_airf_list.append(z_airf)
-
-    #     return (
-    #         aerodynamic_center_list,
-    #         control_point_list,
-    #         bound_point_1_list,
-    #         bound_point_2_list,
-    #         x_airf_list,
-    #         y_airf_list,
-    #         z_airf_list,
-    #     )
 
     def calculate_panel_properties(
         self,
@@ -668,50 +519,7 @@ class BodyAerodynamics:
         logging.debug(f"Calculated cosine gamma distribution: {gamma_i}")
         return gamma_i
 
-    # def calculate_stall_angle_list(
-    #     self,
-    #     begin_aoa: float = 9,
-    #     end_aoa: float = 22,
-    #     step_aoa: float = 1,
-    #     stall_angle_if_none_detected: float = 50,
-    #     cl_initial: float = -10,
-    # ):
-    #     """Calculates the stall angle list for each panel
-
-    #     Args:
-    #         begin_aoa (float): The beginning angle of attack
-    #         end_aoa (float): The end angle of attack
-    #         step_aoa (float): The step angle of attack
-    #         stall_angle_if_none_detected (float): The stall angle if none is detected
-    #         cl_initial (float): The initial lift coefficient
-
-    #     Returns:
-    #         np.array: The stall angle list"""
-
-    #     aoa_range_over_which_stall_is_expected = np.deg2rad(
-    #         np.arange(
-    #             begin_aoa,
-    #             end_aoa,
-    #             step_aoa,
-    #         )
-    #     )
-    #     stall_angle_list = []
-    #     for panel in self.panels:
-    #         # initialising a value, for when no stall is found
-    #         panel_aoa_stall = stall_angle_if_none_detected
-
-    #         # starting with a very small cl value
-    #         cl_old = cl_initial
-    #         for aoa in aoa_range_over_which_stall_is_expected:
-    #             cl = panel.calculate_cl(aoa)
-    #             if cl < cl_old:
-    #                 panel_aoa_stall = aoa
-    #                 break
-    #             cl_old = cl
-    #         stall_angle_list.append(panel_aoa_stall)
-    #     return np.array(stall_angle_list)
-
-    ##TODO: add thissss
+    ##TODO: add this
     # def calculate_kcu(model_type: cylinder, area, location, va)
 
     def calculate_results(
@@ -965,7 +773,7 @@ class BodyAerodynamics:
 
             # (3) Vector from panel AC to the chosen reference point:
             r_vector = (
-                panel_ac_global - moment_reference_point
+                panel_ac_global - reference_point
             )  # e.g. CG, wing root, etc.
 
             # (4) Cross product to shift the force from panel AC to ref. point:
@@ -1251,3 +1059,19 @@ class BodyAerodynamics:
         drag_j = dynamic_pressure_area * cd_t * dir_D
 
         return lift_j + drag_j
+
+    def update_from_points(
+        self,
+        le_arr: np.ndarray,
+        te_arr: np.ndarray,
+        d_tube_arr: np.ndarray,
+        y_camber_arr: np.ndarray,
+        aero_input_type: str = "lei_airfoil_breukels",
+    ):
+        # Update each wing with the new points.
+        for wing in self.wings:
+            wing.update_wing_from_points(
+                le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
+            )
+        # Rebuild the panels based on the updated geometry.
+        self._build_panels()

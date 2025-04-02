@@ -88,6 +88,51 @@ def generate_csv_files(
     polar_data_dir_list=None,
     spanwise_panel_distribution_list=None,
 ):
+    """
+    Generate CSV files for convergence analysis of the aerodynamic solver.
+
+    This function performs a sensitivity analysis by varying both the number of panels and several solver parameters.
+    It runs the aerodynamic solver for each combination of a particular parameter value and number of panels, collects
+    the resulting aerodynamic coefficients and runtime data, and saves the results as CSV files. This allows the user
+    to investigate how convergence is affected by changes in model settings and discretization resolution.
+
+    Possible options for solver parameters include:
+        - aerodynamic_model_type (default: "VSM"): e.g., "VSM", "LLT", indicating the aerodynamic model to use.
+        - allowed_error (default: 1e-6): e.g., 1e-6, representing the normalized error tolerance for convergence.
+        - core_radius_fraction (default: 1e-20): e.g., 1e-20, a small fraction to prevent singularities in vortex core calculations.
+        - gamma_initial_distribution_type (default: "elliptical"): e.g., "previous", "elliptical", "cosine", "zero",
+          which sets the initial distribution of circulation.
+        - gamma_loop_type (default: "base"): e.g., "base", "non_linear", or other methods for stall-related adjustments.
+        - max_iterations (default: 5000): e.g., 5000, the maximum number of iterations allowed for solver convergence.
+        - relaxation_factor (default: 0.01): e.g., 0.01, the factor by which the solution is relaxed in each iteration.
+    
+    Args:
+        convergence_analysis_dir (str): Directory to save the CSV files for convergence analysis.
+        geometry_path (str): Path to the geometry file defining the body.
+        is_with_corrected_polar (bool): Flag to indicate whether to use corrected polar data.
+        polar_data_dir (str): Directory containing polar data files.
+        spanwise_panel_distribution (str): Type of panel distribution along the span.
+        Umag (float): Magnitude of the freestream velocity (m/s).
+        angle_of_attack (float): Angle of attack (in degrees).
+        side_slip (float): Side slip angle (in degrees).
+        yaw_rate (float): Yaw rate for the body (in appropriate units, e.g., rad/s).
+        n_panels_list (list): List of numbers of panels to test in the convergence analysis.
+        aerodynamic_model_type_list (list): List of aerodynamic model types (e.g., ["VSM", "LLT"]).
+        allowed_error_list (list): List of allowed normalized errors for convergence (e.g., [1e-6]).
+        core_radius_fraction_list (list): List of core radius fractions (e.g., [1e-20]).
+        gamma_initial_distribution_type_list (list): List of initial gamma distribution types (e.g., ["elliptical", "zero", "previous"]).
+        gamma_loop_type_list (list): List of gamma loop types (e.g., ["base", "non_linear"]).
+        max_iterations_list (list): List of maximum iteration counts (e.g., [5000]).
+        relaxation_factor_list (list): List of solver relaxation factors (e.g., [0.01]).
+        is_with_corrected_polar_list (list): List of booleans for the corrected polar flag (e.g., [True, False]).
+        polar_data_dir_list (list): List of directories for alternate polar data files.
+        spanwise_panel_distribution_list (list): List of panel distribution types (e.g., ["uniform", "cosine", "split_provided","unchanged"]).
+
+    Returns:
+        Path: The directory where the convergence analysis CSV files have been saved.
+    """
+
+
 
     parameter_list = [
         "aerodynamic_model_type",
@@ -270,151 +315,3 @@ def plot_convergence(convergence_results_dir, name, plot_type="pdf"):
     save_path = Path(convergence_results_dir, f"{name}.{plot_type}")
     plt.savefig(save_path, bbox_inches="tight")
     print(f"Figure saved to {save_path}")
-
-
-# def testing_spanwise_distribution_effect(
-#     sensitivity_results_dir,
-#     file_path,
-#     polar_data_dir,
-#     spanwise_panel_distribution_list,
-#     n_panels,
-#     solver=None,
-#     alpha_range=np.linspace(0, 25, 20),
-#     alpha_range_distribution=[19, 20, 21, 22, 23],
-#     beta_range=[0, 3, 6, 9, 12],
-#     beta_range_distribution=[0, 3, 6],
-#     Umag=3.15,
-#     angle_of_attack=6.5,
-#     side_slip=0,
-#     yaw_rate=0,
-# ):
-#     """
-#     Test the effects of different spanwise panel distributions on aerodynamic performance.
-
-#     Parameters:
-#     -----------
-#     save_folder : Path or str
-#         Directory to save the results
-#     file_path : Path or str
-#         Path to the wing geometry file
-#     polar_data_dir : Path or str
-#         Directory containing polar data files
-#     spanwise_panel_distribution_list : list
-#         List of spanwise panel distribution types to test
-#     n_panels : int, default=50
-#         Number of panels to use for all distribution tests
-#     solver : Solver, optional
-#         Solver instance to use. If None, a default solver will be created
-#     alpha_range : array-like, default=np.linspace(0, 25, 20)
-#         Range of angles of attack to test
-#     alpha_range_distribution : list, default=[19, 20, 21, 22, 23]
-#         Specific angles of attack to use for distribution plots
-#     beta_range : list, default=[0, 3, 6, 9, 12]
-#         Range of side slip angles to test
-#     beta_range_distribution : list, default=[0, 3, 6]
-#         Specific side slip angles to use for distribution plots
-#     Umag : float, default=3.15
-#         Magnitude of the freestream velocity
-#     angle_of_attack : float, default=6.5
-#         Default angle of attack
-#     side_slip : float, default=0
-#         Default side slip angle
-#     yaw_rate : float, default=0
-#         Default yaw rate
-#     """
-#     save_folder = Path(Path(sensitivity_results_dir) / "spanwise_distribution")
-#     save_folder.mkdir(parents=True, exist_ok=True)
-
-#     # Create default solver if not provided
-#     if solver is None:
-#         solver = Solver()
-
-#     # Process spanwise distribution parameter
-#     body_aero_list = []
-#     label_list = []
-#     y_coords_list = []
-
-#     for distribution in spanwise_panel_distribution_list:
-#         wing = Wing(n_panels=n_panels, spanwise_panel_distribution=distribution)
-#         body_aero = BodyAerodynamics.from_file(
-#             wing,
-#             file_path=file_path,
-#             is_with_corrected_polar=True,
-#             path_polar_data_dir=polar_data_dir,
-#         )
-
-#         body_aero_list.append(body_aero)
-#         label_list.append(f"distribution = {distribution}")
-#         y_coords_list.append([panel.control_point[1] for panel in body_aero.panels])
-
-#     label_list_copy = label_list.copy()
-
-#     # Create a list of solvers (same solver for each wing)
-#     solver_list = [solver] * len(spanwise_panel_distribution_list)
-
-#     # Plotting alpha-polar
-#     plot_polars(
-#         solver_list=solver_list,
-#         body_aero_list=body_aero_list,
-#         label_list=label_list_copy,
-#         literature_path_list=[],
-#         angle_range=alpha_range,
-#         angle_type="angle_of_attack",
-#         angle_of_attack=angle_of_attack,
-#         side_slip=side_slip,
-#         yaw_rate=yaw_rate,
-#         Umag=Umag,
-#         title="alphasweep_spanwise_distribution",
-#         data_type=".pdf",
-#         save_path=save_folder,
-#         is_save=True,
-#         is_show=False,
-#     )
-
-#     # Plotting beta-polar
-#     plot_polars(
-#         solver_list=solver_list,
-#         body_aero_list=body_aero_list,
-#         label_list=label_list_copy,
-#         literature_path_list=[],
-#         angle_range=beta_range,
-#         angle_type="side_slip",
-#         angle_of_attack=angle_of_attack,
-#         side_slip=side_slip,
-#         yaw_rate=yaw_rate,
-#         Umag=Umag,
-#         title="betasweep_spanwise_distribution",
-#         data_type=".pdf",
-#         save_path=save_folder,
-#         is_save=True,
-#         is_show=False,
-#     )
-
-#     # Plotting distributions
-#     for side_slip in beta_range_distribution:
-#         for alpha in alpha_range_distribution:
-#             print(f"\nalpha: {alpha}")
-#             results_list = []
-#             run_time_list = []
-
-#             for i, body_aero in enumerate(body_aero_list):
-#                 print(f"\nspanwise_distribution={spanwise_panel_distribution_list[i]}")
-
-#                 body_aero.va_initialize(Umag, alpha, side_slip, yaw_rate)
-#                 begin_time = time.time()
-#                 results_list.append(solver.solve(body_aero, gamma_distribution=None))
-#                 run_time_list.append(time.time() - begin_time)
-
-#             plot_distribution(
-#                 y_coordinates_list=y_coords_list,
-#                 results_list=results_list,
-#                 label_list=label_list_copy,
-#                 title=f"spanwise_distribution_panel_distribution_beta_{side_slip}_alpha_{alpha}",
-#                 data_type=".pdf",
-#                 save_path=save_folder,
-#                 is_save=True,
-#                 is_show=False,
-#                 run_time_list=run_time_list,
-#             )
-
-#     print("\nSpanwise distribution effect testing completed.")

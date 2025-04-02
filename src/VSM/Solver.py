@@ -122,7 +122,6 @@ class Solver:
             dict: Results of the aerodynamic model"""
 
         if body_aero.va is None:
-        if body_aero.va is None:
             raise ValueError("Inflow conditions are not set")
 
         # Initialize variables here, outside the loop
@@ -178,7 +177,6 @@ class Solver:
             gamma_initial = np.zeros(self.n_panels)
         elif self.gamma_initial_distribution_type == "elliptical":
             gamma_initial = (
-                body_aero.calculate_circulation_distribution_elliptical_wing()
                 body_aero.calculate_circulation_distribution_elliptical_wing()
             )
         elif self.gamma_initial_distribution_type == "cosine":
@@ -241,7 +239,6 @@ class Solver:
             else:
                 raise ValueError(f"Invalid gamma_loop_type")
         # Calculating results (incl. updating angle of attack for VSM)
-        results = body_aero.calculate_results(
         results = body_aero.calculate_results(
             gamma_new,
             self.density,
@@ -359,115 +356,6 @@ class Solver:
         else:
             logging.warning(f"NOT Converged after {self.max_iterations} iterations")
         return converged, gamma_new, alpha_array, Umag_array
-
-    # def gamma_loop(
-    #     self,
-    #     gamma_initial,
-    #     extra_relaxation_factor: float = 1.0,
-    #     tol_threshold: float = 1e-8,
-    #     min_iterations: int = 3,
-    # ):
-    #     """
-    #     An improved solver for the gamma iteration loop with adaptive relaxation,
-    #     early convergence detection, and better numerical stability.
-
-    #     Parameters:
-    #     -----------
-    #     gamma_initial : numpy.ndarray
-    #         Initial guess for gamma values
-    #     extra_relaxation_factor : float, optional
-    #         Additional factor to adjust relaxation (default=1.0)
-    #     tol_threshold : float, optional
-    #         Minimum threshold for reference error (default=1e-8)
-    #     min_iterations : int, optional
-    #         Minimum number of iterations to perform (default=3)
-
-    #     Returns:
-    #     --------
-    #     converged : bool
-    #         Whether the solution converged
-    #     gamma_new : numpy.ndarray
-    #         Final computed gamma values
-    #     alpha_array : numpy.ndarray
-    #         Final alpha values
-    #     Umag_array : numpy.ndarray
-    #         Final magnitude of velocity
-    #     """
-    #     # Initialize variables
-    #     gamma_new = np.copy(gamma_initial)
-    #     converged = False
-
-    #     # Track convergence history for adaptive relaxation
-    #     error_history = []
-    #     adaptive_relaxation = self.relaxation_factor * extra_relaxation_factor
-
-    #     # Main iteration loop
-    #     for i in range(self.max_iterations):
-    #         # Store previous gamma for convergence check
-    #         gamma_prev = np.copy(gamma_new)
-
-    #         # Compute aerodynamic quantities
-    #         alpha_array, Umag_array, cl_array, Umagw_array = (
-    #             self.compute_aerodynamic_quantities(gamma_new)
-    #         )
-
-    #         # Calculate new gamma values
-    #         gamma_raw = (
-    #             0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
-    #         )
-
-    #         # Apply circulation smoothing if enabled
-    #         if hasattr(self, "is_smooth_circulation") and self.is_smooth_circulation:
-    #             damp, is_damping_applied = self.smooth_circulation(
-    #                 circulation=gamma_new,
-    #                 smoothness_factor=self.smoothness_factor,
-    #                 damping_factor=0.5,
-    #             )
-    #             if is_damping_applied:
-    #                 gamma_raw += damp
-
-    #         # Apply relaxation to update gamma
-    #         gamma_new = (
-    #             1 - adaptive_relaxation
-    #         ) * gamma_new + adaptive_relaxation * gamma_raw
-
-    #         # Calculate error metrics
-    #         absolute_error = np.abs(gamma_new - gamma_prev)
-    #         max_error = np.amax(absolute_error)
-    #         reference_error = max(np.amax(np.abs(gamma_new)), tol_threshold)
-    #         normalized_error = max_error / reference_error
-
-    #         # Store error for adaptive relaxation
-    #         error_history.append(normalized_error)
-
-    #         # Adaptive relaxation factor adjustment after a few iterations
-    #         if i >= 3 and i % 2 == 0:
-    #             # If error is increasing, reduce relaxation factor
-    #             if len(error_history) >= 3 and error_history[-1] > error_history[-3]:
-    #                 adaptive_relaxation = max(0.1, adaptive_relaxation * 0.8)
-    #             # If error is decreasing rapidly, gradually increase relaxation
-    #             elif (
-    #                 len(error_history) >= 3
-    #                 and error_history[-1] < 0.5 * error_history[-3]
-    #             ):
-    #                 adaptive_relaxation = min(1.0, adaptive_relaxation * 1.1)
-
-    #         # Check convergence criteria
-    #         if i >= min_iterations and normalized_error < self.allowed_error:
-    #             converged = True
-    #             break
-
-    #     # Log convergence status
-    #     if converged:
-    #         logging.info(
-    #             f"Converged after {i+1} iterations with normalized error: {normalized_error:.6e}"
-    #         )
-    #     else:
-    #         logging.warning(
-    #             f"NOT Converged after {self.max_iterations} iterations. Final error: {normalized_error:.6e}"
-    #         )
-
-    #     return converged, gamma_new, alpha_array, Umag_array
 
     def gamma_loop_non_linear(self, gamma_initial):
         """

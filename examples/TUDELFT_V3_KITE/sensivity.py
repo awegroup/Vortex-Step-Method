@@ -9,6 +9,17 @@ from VSM.sensitivity_analysis import (
 
 
 def main():
+    """
+    This script demonstrates how to perform a sensitivity analysis on the TUDELFT_V3_KITE.
+    It includes the following steps:
+    1. Define and resolve project directories for geometry, polar data, and results storage.
+    2. Load literature CFD data for angle-of-attack sweeps.
+    3. Specify kite geometry and corrected polar data file paths.
+    4. Set aerodynamic parameters such as wind speed, angle of attack, and side slip.
+    5. Execute a sensitivity analysis using various solver settings by calling
+       the 'testing_all_solver_settings' function with multiple configurations.
+    """
+
     PROJECT_DIR = Path(__file__).resolve().parents[2]
     print(f"PROJECT_DIR: {PROJECT_DIR}")
 

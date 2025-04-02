@@ -951,11 +951,8 @@ def plot_polars(
             pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
 
     # Place the legend below the axes
-    labels = []
-    for label, polar_data in zip(label_list, polar_data):
-        labels.append(label)  # + f" t: {polar_data[-1]:.3f}s")
     handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
+    fig.legend(handles, label_list, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
 
     # Manually increase the bottom margin to make room for the legend
     fig.subplots_adjust(bottom=0.2)

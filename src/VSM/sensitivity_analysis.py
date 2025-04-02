@@ -54,12 +54,12 @@ def testing_single_solver_setting(
     label_list_alpha = label_list.copy()
     if len(literature_label_list_alpha) > 0:
         for literature_label in enumerate(literature_label_list_alpha):
-            label_list_alpha.append(literature_label)
+            label_list_alpha.append(literature_label[1])
 
     label_list_beta = label_list.copy()
     if len(literature_label_list_beta) > 0:
         for literature_label in enumerate(literature_label_list_beta):
-            label_list_beta.append(literature_label)
+            label_list_beta.append(literature_label[1])
 
     # plotting alpha-polar
     plot_polars(

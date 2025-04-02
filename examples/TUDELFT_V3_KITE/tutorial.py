@@ -15,6 +15,23 @@ from VSM.interactive import interactive_plot
 
 
 def main():
+    """
+    This script demonstrates how to use the VSM library to perform a 3D aerodynamic analysis of the TUDELFT_V3_KITE.
+    
+    The example covers the following steps:
+    1. Define file paths for the kite geometry, 2D polars, and bridle geometry.
+    2. Load the kite geometry from a CSV file.
+    3. Create three BodyAerodynamics objects:
+       - One using the baseline Breukels input.
+       - One with corrected polar data.
+       - One with corrected polar data and bridles.
+    4. Initialize the aerodynamic model with a specific wind speed, angle of attack, side slip angle, and yaw rate.
+    5. Plot the kite geometry using Matplotlib.
+    6. Generate an interactive plot using Plotly.
+    7. Plot and save polar curves (both angle of attack and side slip sweeps) for different settings, comparing them to literature data.
+    """
+
+    ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
     file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
@@ -24,10 +41,14 @@ def main():
     bridle_data_path = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
     )
+
+    ### 2. defining settings
     n_panels = 40
     spanwise_panel_distribution = "uniform"
     solver_base_version = Solver()
 
+
+    ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
     print(f"\nCreating breukels input")
     body_aero_breukels = BodyAerodynamics.from_file(
         file_path,
@@ -54,6 +75,7 @@ def main():
         bridle_data_path=bridle_data_path,
     )
 
+    ### 4. Setting va
     Umag = 3.15
     angle_of_attack = 6.8
     side_slip = 0
@@ -61,30 +83,32 @@ def main():
     body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
     body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-    #### MATPLOTLIB Plot the wing geometry
-    plot_geometry(
-        body_aero_polar,
-        title="TUDELFT_V3_KITE",
-        data_type=".pdf",
-        save_path=".",
-        is_save=False,
-        is_show=True,
-    )
+    # #### 5. Plotting the kite geometry using Matplotlib
+    # plot_geometry(
+    #     body_aero_polar,
+    #     title="TUDELFT_V3_KITE",
+    #     data_type=".pdf",
+    #     save_path=".",
+    #     is_save=False,
+    #     is_show=True,
+    # )
 
-    #### Plotly INTERACTIVE PLOT
-    interactive_plot(
-        body_aero_breukels,
-        vel=Umag,
-        angle_of_attack=angle_of_attack,
-        side_slip=side_slip,
-        yaw_rate=yaw_rate,
-        is_with_aerodynamic_details=True,
-        title="TUDELFT_V3_KITE",
-    )
+    # #### 6. Creating an interactive plot using Plotly
+    # interactive_plot(
+    #     body_aero_breukels,
+    #     vel=Umag,
+    #     angle_of_attack=angle_of_attack,
+    #     side_slip=side_slip,
+    #     yaw_rate=yaw_rate,
+    #     is_with_aerodynamic_details=True,
+    #     title="TUDELFT_V3_KITE",
+    # )
 
+    ### 7. Plotting the polar curves for different angles of attack and side slip angles
+    # and saving in results with literature
     save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE"
 
-    ## plotting alpha-polar
+    ### plotting alpha-polar
     path_cfd_lebesque = (
         Path(PROJECT_DIR)
         / "data"
