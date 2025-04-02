@@ -2,16 +2,7 @@ import numpy as np
 import logging
 from . import jit_cross
 
-# Maurits-tips :)
-# call the methods of child-classes, inhereted or composed of
-# do not call the attributes of child-classes, call them through getter methods
-# only pass the attributes that you need to pass, not the whole object
-# only use the methods of level higher/lower, not grabbing methods from higher/lower
-# class solve_VSM(Solver)
-# class solve_LLM(Solver)
 
-
-# make abstract class
 class Solver:
     """Solver class for solving the aerodynamic model.
 

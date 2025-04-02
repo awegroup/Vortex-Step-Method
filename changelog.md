@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased] - 2025-03-03
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Unstructured
 
 - changing input format alpha, CL, CD, CM and in 2D alpha, Cl, Cd, Cm
@@ -55,6 +56,8 @@ Removed 'using_previous gamma' option, and added it to the 'initial_gamma_distri
 
 =======
 >>>>>>> 08138c40cc2f5120d29d46f2ae6b65745976ac87
+=======
+>>>>>>> develop
 ### Added
 - **Interactive Visualization:** Introduced an interactive Plotly environment for data visualization.
 - **Moment Calculations:** Added moment calculations and plotting functionality (#89).
