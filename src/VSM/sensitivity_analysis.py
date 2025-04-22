@@ -161,6 +161,7 @@ def testing_n_panels_effect(
             file_path=file_path,
             is_with_corrected_polar=is_with_corrected_polar,
             polar_data_dir=polar_data_dir,
+            is_half_wing=True,
         )
 
         body_aero_list.append(body_aero)
@@ -304,6 +305,7 @@ def testing_all_solver_settings(
         file_path=geometry_path,
         is_with_corrected_polar=is_with_corrected_polar,
         polar_data_dir=polar_data_dir,
+        is_half_wing=True,
     )
 
     for parameter, value_list in zip(parameter_list, value_list_list):

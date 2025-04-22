@@ -37,6 +37,7 @@ def generate_n_panel_sensivitity_df(
             file_path=geometry_path,
             is_with_corrected_polar=is_with_corrected_polar,
             polar_data_dir=polar_data_dir,
+            is_half_wing=True,
         )
         # Initialize the aerodynamic model with the test conditions.
         body_aero.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
@@ -105,7 +106,7 @@ def generate_csv_files(
         - gamma_loop_type (default: "base"): e.g., "base", "non_linear", or other methods for stall-related adjustments.
         - max_iterations (default: 5000): e.g., 5000, the maximum number of iterations allowed for solver convergence.
         - relaxation_factor (default: 0.01): e.g., 0.01, the factor by which the solution is relaxed in each iteration.
-    
+
     Args:
         convergence_analysis_dir (str): Directory to save the CSV files for convergence analysis.
         geometry_path (str): Path to the geometry file defining the body.
@@ -131,8 +132,6 @@ def generate_csv_files(
     Returns:
         Path: The directory where the convergence analysis CSV files have been saved.
     """
-
-
 
     parameter_list = [
         "aerodynamic_model_type",

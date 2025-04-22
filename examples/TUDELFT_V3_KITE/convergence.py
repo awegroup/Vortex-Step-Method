@@ -5,6 +5,7 @@ from VSM.convergence_analysis import (
     plot_convergence,
 )
 
+
 def main():
     """
     Main function for performing convergence analysis of aerodynamic simulations.
@@ -21,15 +22,22 @@ def main():
     - Calls a function to generate CSV files that store convergence analysis results:
         - The analysis is performed using specified aerodynamic models ("VSM" and "LLT") with various configurations.
     - Plots the convergence results to visualize performance and accuracy trends.
-    The function does not return any value, but it produces output files and plots that facilitate the evaluation of simulation convergence as the number of panels changes.   
+    The function does not return any value, but it produces output files and plots that facilitate the evaluation of simulation convergence as the number of panels changes.
     """
 
     # Example usage
     PROJECT_DIR = Path(__file__).resolve().parents[2]
-    geometry_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
-    polar_data_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
+    # geometry_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
+    geometry_path = (
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "wing_geometry_from_CAD_orderded_tip_to_mid.csv"
     )
+    # polar_data_dir = (
+    #     Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
+    # )
+    polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
     convergence_analysis_dir = (
         Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "convergence_analysis"
     )
@@ -77,7 +85,7 @@ def main():
         gamma_loop_type_list=None,
         max_iterations_list=None,
         relaxation_factor_list=None,
-        is_with_corrected_polar_list=[True, False],
+        is_with_corrected_polar_list=None,
         polar_data_dir_list=None,
         spanwise_panel_distribution_list=None,
     )
@@ -101,10 +109,10 @@ def main():
         aerodynamic_model_type_list=None,
         allowed_error_list=[1e-2, 1e-5],
         core_radius_fraction_list=None,
-        gamma_initial_distribution_type_list=["zero", "elliptical","previous"],
+        gamma_initial_distribution_type_list=["zero", "elliptical", "previous"],
         gamma_loop_type_list=None,
         max_iterations_list=[1000, 3000],
-        relaxation_factor_list=[0.01, 0.05,0.1],
+        relaxation_factor_list=[0.01, 0.05, 0.1],
         is_with_corrected_polar_list=None,
         polar_data_dir_list=None,
         spanwise_panel_distribution_list=None,
