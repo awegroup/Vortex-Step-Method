@@ -52,7 +52,7 @@ class Solver:
         gamma_loop_type: str = "base",
         gamma_initial_distribution_type: str = "elliptical",
         is_only_f_and_gamma_output: bool = False,
-        reference_point: list = [-0.17, 0.00, 9.25],  # roughly the cg of V3
+        reference_point: list = [0, 0, 0], 
         # === athmospheric properties ===
         mu: float = 1.81e-5,
         density: float = 1.225,

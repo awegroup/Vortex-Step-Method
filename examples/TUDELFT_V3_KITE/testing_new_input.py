@@ -34,28 +34,17 @@ def main():
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
+    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_CAD_orderded_tip_to_mid.csv"
     polar_data_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
-    )
-    bridle_data_path = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
     )
 
     ### 2. defining settings
     n_panels = 40
     spanwise_panel_distribution = "uniform"
-    solver_base_version = Solver()
+    solver_base_version = Solver(reference_point=[-0.8,0,0])
 
 
-    ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
-    print(f"\nCreating breukels input")
-    body_aero_breukels = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=False,
-    )
     print(f"\nCreating corrected polar input")
     body_aero_polar = BodyAerodynamics.from_file(
         file_path,
@@ -63,16 +52,16 @@ def main():
         spanwise_panel_distribution,
         is_with_corrected_polar=True,
         polar_data_dir=polar_data_dir,
+        is_half_wing=True,
     )
-    print(f"\nCreating corrected polar input with bridles")
-    body_aero_polar_with_bridles = BodyAerodynamics.from_file(
-        file_path,
+
+    body_aero_polar_corrected = BodyAerodynamics.from_file(
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv",
         n_panels,
         spanwise_panel_distribution,
         is_with_corrected_polar=True,
-        polar_data_dir=polar_data_dir,
-        is_with_bridles=True,
-        bridle_data_path=bridle_data_path,
+        polar_data_dir=Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected",
+        is_half_wing=False,
     )
 
     ### 4. Setting va
@@ -80,57 +69,73 @@ def main():
     angle_of_attack = 6.8
     side_slip = 0
     yaw_rate = 0
-    body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    # body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
     body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    body_aero_polar_corrected.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-    #### 5. Plotting the kite geometry using Matplotlib
-    plot_geometry(
-        body_aero_polar,
-        title="TUDELFT_V3_KITE",
-        data_type=".pdf",
-        save_path=".",
-        is_save=False,
-        is_show=True,
-    )
+    # #### 5. Plotting the kite geometry using Matplotlib
+    # plot_geometry(
+    #     body_aero_polar,
+    #     title="TUDELFT_V3_KITE",
+    #     data_type=".pdf",
+    #     save_path=".",
+    #     is_save=False,
+    #     is_show=True,
+    # )
 
-    #### 6. Creating an interactive plot using Plotly
-    interactive_plot(
-        body_aero_breukels,
-        vel=Umag,
-        angle_of_attack=angle_of_attack,
-        side_slip=side_slip,
-        yaw_rate=yaw_rate,
-        is_with_aerodynamic_details=True,
-        title="TUDELFT_V3_KITE",
-    )
+    # #### 6. Creating an interactive plot using Plotly
+    # interactive_plot(
+    #     body_aero_polar,
+    #     vel=Umag,
+    #     angle_of_attack=angle_of_attack,
+    #     side_slip=side_slip,
+    #     yaw_rate=yaw_rate,
+    #     is_with_aerodynamic_details=True,
+    #     title="TUDELFT_V3_KITE",
+    # )
+    # interactive_plot(
+    #     body_aero_polar_corrected,
+    #     vel=Umag,
+    #     angle_of_attack=angle_of_attack,
+    #     side_slip=side_slip,
+    #     yaw_rate=yaw_rate,
+    #     is_with_aerodynamic_details=True,
+    #     title="TUDELFT_V3_KITE",
+    # )
 
     ### 7. Plotting the polar curves for different angles of attack and side slip angles
     # and saving in results with literature
     save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE"
 
     ### plotting alpha-polar
-    path_cfd_lebesque = (
+    path_cfd_lebesque_alpha_sweep = (
         Path(PROJECT_DIR)
         / "data"
         / "TUDELFT_V3_KITE"
         / "3D_polars_literature"
-        / "CFD_V3_CL_CD_RANS_Vire2022_Rey_10e5.csv"
+        / "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0.csv"
+    )
+    path_wt_alpha_sweep = (
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "3D_polars_literature"
+        / "V3_CL_CD_CS_alpha_sweep_for_beta_0_WindTunnel_Poland_2025_Rey_560e4.csv"
     )
     plot_polars(
-        solver_list=[solver_base_version, solver_base_version, solver_base_version],
+        solver_list=[solver_base_version,solver_base_version],
         body_aero_list=[
-            body_aero_breukels,
             body_aero_polar,
-            body_aero_polar_with_bridles,
+            body_aero_polar_corrected,
         ],
         label_list=[
-            "VSM Breukels",
             "VSM Polar",
-            "VSM Polar with Bridles",
-            "CFD_Lebesque Rey 30e5",
+            "VSM Corrected",
+            "CFD Rey 10e5",
+            "WT Rey 560e4",
         ],
-        literature_path_list=[path_cfd_lebesque],
-        angle_range=[5, 15, 20, 25],  # np.linspace(-10, 25, 10),
+        literature_path_list=[path_cfd_lebesque_alpha_sweep, path_wt_alpha_sweep],
+        angle_range=np.linspace(-5, 25, 30),
         angle_type="angle_of_attack",
         angle_of_attack=0,
         side_slip=0,
@@ -143,26 +148,34 @@ def main():
         is_show=False,
     )
     ### plot beta sweep
+    path_cfd_lebesque_beta_sweep = (
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "3D_polars_literature"
+        / "CFD_RANS_Rey_10e5_Poland2025_beta_sweep_alpha_13_02.csv"
+    )
     plot_polars(
         solver_list=[
             solver_base_version,
             solver_base_version,
         ],
         body_aero_list=[
-            body_aero_breukels,
             body_aero_polar,
+            body_aero_polar_corrected,
         ],
         label_list=[
-            "VSM Breukels",
+            "VSM Polar",
             "VSM Corrected",
+            "CFD Rey 10e5",
         ],
-        literature_path_list=[],
-        angle_range=[0, 3, 6, 9, 12],
+        literature_path_list=[path_cfd_lebesque_beta_sweep],
+        angle_range=[0, 4, 8, 12],
         angle_type="side_slip",
-        angle_of_attack=6.8,
+        angle_of_attack=13.02,
         side_slip=0,
         yaw_rate=0,
-        Umag=3.15,
+        Umag=Umag,
         title=f"betasweep",
         data_type=".pdf",
         save_path=Path(save_folder),
