@@ -122,6 +122,7 @@ class BodyAerodynamics:
         polar_data_dir: str = "",
         is_with_bridles: bool = False,
         bridle_data_path: str = None,
+        is_half_wing: bool = False,
     ):
         """Instantiate a BodyAerodynamics object from wing geometry and optional polar/bridle data.
 
@@ -149,27 +150,33 @@ class BodyAerodynamics:
         # Read wing geometry and airfoil parameters from file
         df = pd.read_csv(file_path)
 
-        # Build rib list: each rib is [LE, TE, airfoil data]
-        ribs = [
-            [LE, TE, ["lei_airfoil_breukels", [d, c]]]
-            for LE, TE, d, c in zip(
-                np.stack(
-                    (df["LE_x"].values, df["LE_y"].values, df["LE_z"].values), axis=-1
-                ),
-                np.stack(
-                    (df["TE_x"].values, df["TE_y"].values, df["TE_z"].values), axis=-1
-                ),
-                df["d_tube"].values,
-                df["y_camber"].values,
+        if is_half_wing:
+            # make a copy of df
+            df_orderded_opposite = df.copy()
+            # Remove the last item, as this should be the mid-span slice
+            df_orderded_opposite = df_orderded_opposite.drop(
+                df_orderded_opposite.index[-1]
             )
-        ]
+            # reverse the order of the rows
+            df_orderded_opposite = df_orderded_opposite[::-1]
+            # change sign of y-coordinates
+            df_orderded_opposite["LE_y"] = -df_orderded_opposite["LE_y"]
+            df_orderded_opposite["TE_y"] = -df_orderded_opposite["TE_y"]
+            # add rows to df, mirroring the existing rows to create a full wing
+            df = pd.concat([df, df_orderded_opposite])
 
-        # Add sections to the wing instance using either corrected polar data or default airfoil data
-        for i, rib in enumerate(ribs):
-            LE, TE, airfoil_data = rib
+
+        print(f' len wing_geometry: {len(df)}')
+        # breakpoint()
+
+        for i, row in df.iterrows():
+            # 1) extract leading/trailing‐edge coords
+            LE = np.array([row["LE_x"], row["LE_y"], row["LE_z"]])
+            TE = np.array([row["TE_x"], row["TE_y"], row["TE_z"]])
+
             if is_with_corrected_polar:
+                # 2a) corrected‐polar branch
                 df_polar = pd.read_csv(Path(polar_data_dir) / f"{i}.csv")
-                # Create polar data with (N, 4) format: each row is [alpha, cl, cd, cm]
                 polar_data = [
                     "polar_data",
                     np.column_stack(
@@ -183,7 +190,13 @@ class BodyAerodynamics:
                 ]
                 wing_instance.add_section(LE, TE, polar_data)
             else:
+                # 2b) always fall back to breukels
+                airfoil_data = [
+                    "lei_airfoil_breukels",
+                    [row["d_tube"], row["y_camber"]],
+                ]
                 wing_instance.add_section(LE, TE, airfoil_data)
+
 
         # Instantiate BodyAerodynamics with or without bridles
         if is_with_bridles:

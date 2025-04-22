@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 <<<<<<< HEAD
 # Unstructured
 
+- adding half_wing inputs, for both polars and .csv geometry
+
 - changing input format alpha, CL, CD, CM and in 2D alpha, Cl, Cd, Cm
 - updating doscstrings
 - changing tutorial, sensivitiy, convergence

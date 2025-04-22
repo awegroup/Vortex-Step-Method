@@ -12,6 +12,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.backends.backend_pdf import PdfPages
 from screeninfo import get_monitors
+from matplotlib.lines import Line2D
 from VSM.plot_styling import set_plot_style, plot_on_ax
 
 
@@ -66,43 +67,6 @@ def save_plot(fig, save_path, title, data_type=".pdf"):
             )
             if os.path.exists(full_path):
                 logging.debug(f"Final file size: {os.path.getsize(full_path)} bytes")
-
-
-def show_plot(fig, dpi=130):
-    """
-    Display a matplotlib figure in full screen using the default system PDF viewer.
-
-    :param fig: matplotlib figure object
-    :param dpi: Dots per inch for the figure (default: 100)
-    """
-    # Get the screen resolution
-    monitor = get_monitors()[0]
-    screen_width = monitor.width
-    screen_height = monitor.height
-
-    # Calculate figure size in inches
-    fig_width = screen_width / dpi
-    fig_height = screen_height / dpi
-
-    # Set figure size to match screen resolution
-    fig.set_size_inches(fig_width, fig_height)
-
-    # Save the figure to a temporary file
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
-        fig.savefig(temp_file.name, format="png", dpi=dpi, bbox_inches="tight")
-        temp_file_name = temp_file.name
-
-    # Open the temporary file with the default PDF viewer
-    if sys.platform.startswith("darwin"):  # macOS
-        subprocess.call(("open", temp_file_name))
-    elif os.name == "nt":  # Windows
-        os.startfile(temp_file_name)
-    elif os.name == "posix":  # Linux
-        subprocess.call(("xdg-open", temp_file_name))
-
-    logging.debug(
-        f"Plot opened in full screen with dimensions: {screen_width}x{screen_height} pixels at {dpi} DPI"
-    )
 
 
 def plot_line_segment(ax, segment, color, label, width: float = 3):
@@ -575,7 +539,7 @@ def plot_distribution(
         save_plot(fig, save_path, title, data_type)
 
     if is_show and not is_save:
-        show_plot(fig)
+        plt.show()
     elif is_show and is_save:
         raise ValueError(
             "is_show and is_save are both True. Please set one of them to False."
@@ -670,7 +634,6 @@ def generate_3D_polar_data(
 
     return polar_data, reynolds_number
 
-
 def plot_polars(
     solver_list,
     body_aero_list,
@@ -711,10 +674,14 @@ def plot_polars(
         is_show: boolean to show the plot | default: True
 
     Returns:
-        None
+        fig, axs: figure and axes objects for further customization
     """
     # Set the plot style
     set_plot_style()
+
+    # Initialize literature paths if None
+    if literature_path_list is None:
+        literature_path_list = []
 
     # Checking type and configuring the x_label
     if angle_type == "angle_of_attack":
@@ -724,22 +691,24 @@ def plot_polars(
     else:
         raise ValueError("angle_type should be either 'angle_of_attack' or 'side_slip'")
 
-    if (len(body_aero_list) + len(literature_path_list)) != len(label_list) or len(
-        solver_list
-    ) != len(body_aero_list):
+    # Validate input sizes
+    total_solver_count = len(solver_list)
+    total_data_count = total_solver_count + len(literature_path_list)
+    
+    if total_data_count != len(label_list) or len(solver_list) != len(body_aero_list):
         raise ValueError(
-            "The number of solvers, results and labels should be the same. Got {} solvers and {} results and {} labels".format(
-                (len(solver_list) + len(literature_path_list)),
-                (len(body_aero_list) + len(literature_path_list)),
-                len(label_list),
-            )
+            f"Input count mismatch: {len(solver_list)} solvers, "
+            f"{len(body_aero_list)} body_aero objects, "
+            f"{len(literature_path_list)} literature files, "
+            f"but {len(label_list)} labels provided. These counts must align."
         )
 
-    # generating polar data
+    # Generating polar data
     polar_data_list = []
-    for i, (solver, body_aero, label) in enumerate(
-        zip(solver_list, body_aero_list, label_list)
-    ):
+    formatted_label_list = label_list.copy()  # Create a copy to preserve original labels
+    
+    print("\n=== Generating solver data ===")
+    for i, (solver, body_aero, label) in enumerate(zip(solver_list, body_aero_list, label_list[:len(solver_list)])):
         print(f"\n=== label: {label} ===")
         polar_data, reynolds_number = generate_3D_polar_data(
             solver=solver,
@@ -752,226 +721,98 @@ def plot_polars(
             Umag=Umag,
         )
         polar_data_list.append(polar_data)
-        # Appending Reynolds numbers to the labels of the solvers
-        label_list[i] += f" (Re = {1e-5*reynolds_number:.1f}e5)"
+        # Append Reynolds number to the label
+        formatted_label_list[i] = f"{label} (Re = {1e-5*reynolds_number:.1f}e5)"
 
-    # Grabbing additional data from literature
-    if literature_path_list is not None:
+    # Adding literature data to the polar_data_list
+    for i, literature_path in enumerate(literature_path_list):
+        df = pd.read_csv(literature_path)
+        polar_data = [None, None, None, None, None, None, None]
         if angle_type == "angle_of_attack":
-            for literature_path in literature_path_list:
-                df = pd.read_csv(literature_path)
-                if not all(key in df.columns.values for key in ["alpha", "CL", "CD"]):
-                    raise ValueError(
-                        "The literature data should contain columns: 'alpha' (in deg), 'CL', 'CD'"
-                    )
-                polar_data_list.append(
-                    [df["alpha"].values, df["CL"].values, df["CD"].values]
-                )
+            polar_data[0] = df["alpha"].values
         elif angle_type == "side_slip":
-            for literature_path in literature_path_list:
-                df = pd.read_csv(literature_path)
-                if not all(
-                    key in df.columns.values for key in ["beta", "CL", "CD", "CS"]
-                ):
-                    raise ValueError(
-                        "The literature data should contain columns: 'beta' (in deg), 'CL', 'CD', 'CS'"
-                    )
-                polar_data_list.append(
-                    [
-                        df["beta"].values,
-                        df["CL"].values,
-                        df["CD"].values,
-                        df["CS"].values,
-                    ]
-                )
-        else:
-            raise ValueError(
-                "angle_type should be either 'angle_of_attack' or 'side_slip'"
-            )
+            polar_data[0] = df["beta"].values
+        if "CL" in df.columns:
+            polar_data[1] = df["CL"].values
+        if "CD" in df.columns:
+            polar_data[2] = df["CD"].values
+        if "CS" in df.columns:
+            polar_data[3] = df["CS"].values
+        if "CMx" in df.columns:
+            polar_data[4] = df["CMx"].values
+        if "CMy" in df.columns:
+            polar_data[5] = df["CMy"].values
+        if "CMz" in df.columns:
+            polar_data[6] = df["CMz"].values
+        
+        polar_data_list.append(polar_data)
 
     # Initializing plot
     fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+    axs_flat = axs.flatten()
+    y_label_list = [
+        r"$C_{\mathrm{L}}$",
+        r"$C_{\mathrm{D}}$",
+        r"$C_{\mathrm{L}}/C_{\mathrm{D}}$",
+        r"$C_{mx}$ (Roll)",
+        r"$C_{my}$ (Pitch)",
+        r"$C_{mz}$ (Yaw)",
+    ]
+    if angle_type == "side_slip":
+        y_label_list[2] = r"$C_{\mathrm{S}}$"
 
-    n_solvers = len(solver_list)
-    # CL plot
-    for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-        if i < n_solvers:
-            linestyle = "-"
-            marker = "*"
-            markersize = 7
-        else:
-            linestyle = "-"
-            marker = "."
-            markersize = 5
-        axs[0, 0].plot(
-            polar_data[0],
-            polar_data[1],
-            label=label,
-            linestyle=linestyle,
-            marker=marker,
-            markersize=markersize,
-        )
-        # if CL is greater than 10, limit the yrange
-        if max(polar_data[1]) > 10:
-            axs[0, 0].set_ylim([-0.5, 2])
-    axs[0, 0].set_ylabel(r"$C_{\mathrm{L}}$")
-
-    # CD plot
-    for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-        if i < n_solvers:
-            linestyle = "-"
-            marker = "*"
-            markersize = 7
-        else:
-            linestyle = "-"
-            marker = "."
-            markersize = 5
-        axs[0, 1].plot(
-            polar_data[0],
-            polar_data[2],
-            label=label,
-            linestyle=linestyle,
-            marker=marker,
-            markersize=markersize,
-        )
-        # if CD is greater than 10, limit the range
-        if max(polar_data[2]) > 10:
-            axs[0, 1].set_ylim([-0.2, 0.5])
-    axs[0, 1].set_ylabel(r"$C_{\mathrm{D}}$")
-
-    # CL-CD plot
-    if angle_type == "angle_of_attack":
-        for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-            if i < n_solvers:
-                linestyle = "-"
-                marker = "*"
-                markersize = 7
-            else:
-                linestyle = "-"
-                marker = "."
-                markersize = 5
-            axs[0, 2].plot(
-                polar_data[0],
-                polar_data[1] / polar_data[2],
+    # plotting the actyual data
+    handle_list = []
+    for data_idx, label in enumerate(label_list):
+        for ax_idx,(ax,y_label) in enumerate(zip(axs_flat,y_label_list)):
+            if polar_data_list[data_idx][ax_idx+1] is None:
+                continue
+            y_data = polar_data_list[data_idx][ax_idx+1]
+            if angle_type == "angle_of_attack" and ax_idx == 2:
+                y_data = polar_data_list[data_idx][1] / polar_data_list[data_idx][2]
+            ax.plot(
+                polar_data_list[data_idx][0],
+                y_data,
                 label=label,
-                linestyle=linestyle,
-                marker=marker,
-                markersize=markersize,
+                linestyle="-",
+                marker="*",
+                markersize=7,
             )
-
-        axs[0, 2].set_ylabel(r"$C_{\mathrm{L}}$ / $C_{\mathrm{D}}$")
-
-    elif angle_type == "side_slip":
-        # CS plot
-        for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-            # Build-in a check, since the literature polars might not have the CS coefficient
-            if len(polar_data) > 3:
-                if i < n_solvers:
-                    linestyle = "-"
-                    marker = "*"
-                    markersize = 7
-                else:
-                    linestyle = "-"
-                    marker = "."
-                    markersize = 5
-                axs[0, 2].plot(
-                    polar_data[0],
-                    polar_data[3],
-                    label=label,
-                    linestyle=linestyle,
-                    marker=marker,
-                    markersize=markersize,
-                )
-        axs[0, 2].set_ylabel(r"$C_{\mathrm{S}}$")
-
-    # cmx, cmy,cmz plots
-    for i, (polar_data, label) in enumerate(zip(polar_data_list, label_list)):
-        if i >= len(body_aero_list):
-            continue
-        else:
-            linestyle = "-"
-            marker = "."
-            markersize = 5
-            axs[1, 0].plot(
-                polar_data[0],
-                polar_data[4],
-                label=label + r" $C_{\mathrm{m,x}}$",
-                linestyle=linestyle,
-                marker=marker,
-                markersize=markersize,
-            )
-            axs[1, 0].set_ylabel(r"$C_{\mathrm{m,x}}$")
-            axs[1, 1].plot(
-                polar_data[0],
-                polar_data[5],
-                label=label + r" $C_{\mathrm{m,y}}$",
-                linestyle=linestyle,
-                marker=marker,
-                markersize=markersize,
-            )
-            axs[1, 1].set_ylabel(r"$C_{\mathrm{m,y}}$")
-            axs[1, 2].plot(
-                polar_data[0],
-                polar_data[6],
-                label=label + r" $C_{\mathrm{m,z}}$",
-                linestyle=linestyle,
-                marker=marker,
-                markersize=markersize,
-            )
-            axs[1, 2].set_ylabel(r"$C_{\mathrm{m,z}}$")
-
-    # Add axis labels
-    for ax in axs.flat:
-        ax.set_xlabel(x_label)
-
-    ### Ensuring that a value does not ruin the naturally zooomed in ylim
-    for i, ax in enumerate(axs.flat):
-        if angle_type == "angle_of_attack":
-            if i == 2:  # Cl/Cd
-                y_min_allowed, y_max_allowed = -15, 15
-            elif i == 4:  # CMy
-                y_min_allowed, y_max_allowed = -2, 2
-            else:
-                y_min_allowed, y_max_allowed = -1.5, 1.5
-        elif angle_type == "side_slip":
-            y_min_allowed, y_max_allowed = -1.5, 1.5
-
-        # Collect all y-data from the lines in the current axis
-        y_data = np.concatenate([line.get_ydata() for line in ax.get_lines()])
-
-        # Identify data within the allowed range
-        in_range = y_data[(y_data >= y_min_allowed) & (y_data <= y_max_allowed)]
-
-        if in_range.size > 0:
-            # Optionally add some padding to the y-limits
-            padding = 0.05 * (in_range.max() - in_range.min())
-            ax.set_ylim(in_range.min() - padding, in_range.max() + padding)
-        else:
-            # If no data is within the range, you might choose to set default limits or skip
-            pass  # Or set default limits, e.g., ax.set_ylim(y_min_allowed, y_max_allowed)
-
-    # Place the legend below the axes
-    handles = [axs[0, 0].get_lines()[i] for i in range(len(label_list))]
-    fig.legend(handles, label_list, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
-
-    # Manually increase the bottom margin to make room for the legend
-    fig.subplots_adjust(bottom=0.2)
-
-    # Ensure the figure is fully rendered
+    # Adding one legend
+    handles, labels = axs_flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels,
+            loc="lower center",
+            bbox_to_anchor=(0.5, 0.05),
+            ncol=min(3, len(handles)))
+    fig.subplots_adjust(bottom=0.1)
+    plt.tight_layout(rect=[0, 0.2, 1, 0.95])
     fig.canvas.draw()
+
+    # Making it pretty
+    for ax_idx,(ax,y_label) in enumerate(zip(axs_flat,y_label_list)):
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.grid()
 
     # saving plot
     if is_save:
-        save_plot(fig, save_path, title, data_type)
-        plt.close()
+        if save_path is None:
+            raise ValueError("save_path must be provided if is_save is True.")
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        # Save the plot with the specified title and data type
+        plt.savefig(Path(save_path) / f"{title}{data_type}", bbox_inches='tight')
+        print(f"Plot saved as: {save_path}")
 
     # showing plot
-    if is_show and not is_save:
-        show_plot(fig)
+    if is_show:
+        plt.show()
     elif is_show and is_save:
         raise ValueError(
             "is_show and is_save are both True. Please set one of them to False."
         )
+        
+    return fig, axs
 
 
 def plot_panel_coefficients(
@@ -1053,7 +894,7 @@ def plot_panel_coefficients(
 
     # showing plot
     if is_show and not is_save:
-        show_plot(fig)
+        plt.show()
     elif is_show and is_save:
         raise ValueError(
             "is_show and is_save are both True. Please set one of them to False."
