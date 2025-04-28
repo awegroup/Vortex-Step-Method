@@ -34,7 +34,7 @@ def main():
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry.csv"
+    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_surfplan.csv"
     polar_data_dir = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
     )

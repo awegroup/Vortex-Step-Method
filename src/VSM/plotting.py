@@ -844,13 +844,6 @@ def plot_polars(
         raise ValueError(
             "is_show and is_save are both True. Please set one of them to False."
         )
-<<<<<<< HEAD
-    
-    
-        
-=======
-
->>>>>>> 99912d625e0955a953ee074f53aca99b479543c9
     return fig, axs
 
 
