@@ -7,6 +7,7 @@ from VSM.WingGeometry import Wing
 from VSM.Panel import Panel
 import VSM.Wake as Wake
 from . import jit_cross, jit_norm, jit_dot
+from VSM.utils import intersect_line_with_plane, point_in_quad
 
 
 class BodyAerodynamics:
@@ -535,6 +536,39 @@ class BodyAerodynamics:
     ##TODO: add this
     # def calculate_kcu(model_type: cylinder, area, location, va)
 
+    def find_center_of_pressure(self, force_array, moment_array, reference_point):
+        """
+        Finds the intersection of the force line with all panels and returns the first valid one.
+        """
+
+        F = force_array
+        M0 = moment_array
+        r0 = np.array(reference_point)
+
+        F_norm_sq = np.dot(F, F)
+
+        if F_norm_sq == 0:
+            raise ValueError("Force vector must not be zero.")
+
+        r0_moment = r0 + np.cross(F, M0) / F_norm_sq
+        F_unit = F / np.linalg.norm(F)
+
+        for panel_idx, panel in enumerate(self.panels):
+            corner_points = panel.corner_points  # shape (4, 3)
+
+            v1 = corner_points[1] - corner_points[0]
+            v2 = corner_points[2] - corner_points[0]
+            normal = np.cross(v1, v2)
+            normal = normal / np.linalg.norm(normal)
+
+            intersection = intersect_line_with_plane(r0_moment, F_unit, corner_points[0], normal)
+
+            if intersection is not None:
+                if point_in_quad(intersection, corner_points):
+                    return intersection  # Found the intersection!
+
+        return None  # No intersection found
+
     def calculate_results(
         self,
         gamma_new,
@@ -855,6 +889,13 @@ class BodyAerodynamics:
 
             # add to the total lift, drag, not the distributions of the wing
 
+        # Find center of pressure
+        x_cp = self.find_center_of_pressure(
+            [fx_global_3D_sum, fy_global_3D_sum, fz_global_3D_sum],
+            [mx_global_3D_sum, my_global_3D_sum, mz_global_3D_sum],
+            reference_point,
+        )
+
         ##TODO: if KCU, use Va, find a force.
 
         ### Storing results in a dictionary
@@ -949,6 +990,7 @@ class BodyAerodynamics:
         results_dict.update([("wing_span", wing_span)])
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
+        results_dict.update([("x_cp", x_cp)])
 
         ### Logging
         logging.debug(f"cl:{results_dict['cl']}")
