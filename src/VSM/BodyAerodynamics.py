@@ -166,8 +166,7 @@ class BodyAerodynamics:
             # add rows to df, mirroring the existing rows to create a full wing
             df = pd.concat([df, df_orderded_opposite])
 
-
-        print(f' len wing_geometry: {len(df)}')
+        print(f" len wing_geometry: {len(df)}")
         # breakpoint()
 
         for i, row in df.iterrows():
@@ -198,7 +197,6 @@ class BodyAerodynamics:
                 ]
                 wing_instance.add_section(LE, TE, airfoil_data)
 
-
         # Instantiate BodyAerodynamics with or without bridles
         if is_with_bridles:
             df_bridle = pd.read_csv(bridle_data_path)
@@ -213,7 +211,7 @@ class BodyAerodynamics:
             return cls([wing_instance], bridle_lines)
         else:
             return cls([wing_instance])
-        
+
     ###########################
     ## GETTER FUNCTIONS
     ###########################
@@ -302,7 +300,6 @@ class BodyAerodynamics:
     ###########################
     ## CALCULATE FUNCTIONS
     ###########################
-
     def calculate_panel_properties(
         self,
         section_list,
@@ -819,9 +816,7 @@ class BodyAerodynamics:
             M_local_3D = moment[i] * moment_axis_global * panel_i.width
 
             # (3) Vector from panel AC to the chosen reference point:
-            r_vector = (
-                panel_ac_global - reference_point
-            )  # e.g. CG, wing root, etc.
+            r_vector = panel_ac_global - reference_point  # e.g. CG, wing root, etc.
 
             # (4) Cross product to shift the force from panel AC to ref. point:
             force_global_3D = np.array([fx_global_3D, fy_global_3D, fz_global_3D])
@@ -1004,6 +999,15 @@ class BodyAerodynamics:
         logging.debug(f"Aspect Ratio Projected: {aspect_ratio_projected}")
 
         return results_dict
+
+    def calculate_y_coordinates(self):
+        """
+        Calculates the y-coordinates of the control points for each panel in the WingAero object.
+
+        Returns:
+            np.ndarray: An array of y-coordinates for each panel's control point.
+        """
+        return np.array([panel.control_point[1] for panel in self.panels])
 
     ###########################
     ## UPDATE FUNCTIONS

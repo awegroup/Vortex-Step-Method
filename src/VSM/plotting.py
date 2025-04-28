@@ -335,8 +335,8 @@ def plot_geometry(
 
 
 def plot_distribution(
-    y_coordinates_list,
-    results_list,
+    solver_list,
+    body_aero_list,
     label_list,
     title="spanwise_distribution",
     data_type=".pdf",
@@ -369,6 +369,12 @@ def plot_distribution(
         None
     """
     set_plot_style()
+
+    y_coordinates_list = []
+    results_list = []
+    for body_aero, solver in zip(body_aero_list, solver_list):
+        y_coordinates_list.append(body_aero.calculate_y_coordinates())
+        results_list.append(solver.solve(body_aero))
 
     if len(y_coordinates_list) != len(results_list) != len(label_list):
         raise ValueError(
@@ -642,6 +648,7 @@ def generate_3D_polar_data(
 
     return polar_data, reynolds_number
 
+
 def plot_polars(
     solver_list,
     body_aero_list,
@@ -703,7 +710,7 @@ def plot_polars(
     # Validate input sizes
     total_solver_count = len(solver_list)
     total_data_count = total_solver_count + len(literature_path_list)
-    
+
     if total_data_count != len(label_list) or len(solver_list) != len(body_aero_list):
         raise ValueError(
             f"Input count mismatch: {len(solver_list)} solvers, "
@@ -714,10 +721,14 @@ def plot_polars(
 
     # Generating polar data
     polar_data_list = []
-    formatted_label_list = label_list.copy()  # Create a copy to preserve original labels
-    
+    formatted_label_list = (
+        label_list.copy()
+    )  # Create a copy to preserve original labels
+
     print("\n=== Generating solver data ===")
-    for i, (solver, body_aero, label) in enumerate(zip(solver_list, body_aero_list, label_list[:len(solver_list)])):
+    for i, (solver, body_aero, label) in enumerate(
+        zip(solver_list, body_aero_list, label_list[: len(solver_list)])
+    ):
         print(f"\n=== label: {label} ===")
         polar_data, reynolds_number = generate_3D_polar_data(
             solver=solver,
@@ -760,7 +771,7 @@ def plot_polars(
             polar_data[5] = df["CMy"].values
         if "CMz" in df.columns:
             polar_data[6] = df["CMz"].values
-        
+
         polar_data_list.append(polar_data)
 
     # Initializing plot
@@ -783,10 +794,10 @@ def plot_polars(
     # plotting the actyual data
     handle_list = []
     for data_idx, label in enumerate(label_list):
-        for ax_idx,(ax,y_label) in enumerate(zip(axs_flat,y_label_list)):
-            if polar_data_list[data_idx][ax_idx+1] is None:
+        for ax_idx, (ax, y_label) in enumerate(zip(axs_flat, y_label_list)):
+            if polar_data_list[data_idx][ax_idx + 1] is None:
                 continue
-            y_data = polar_data_list[data_idx][ax_idx+1]
+            y_data = polar_data_list[data_idx][ax_idx + 1]
             if angle_type == "angle_of_attack" and ax_idx == 2:
                 y_data = polar_data_list[data_idx][1] / polar_data_list[data_idx][2]
             ax.plot(
@@ -799,16 +810,19 @@ def plot_polars(
             )
     # Adding one legend
     handles, labels = axs_flat[0].get_legend_handles_labels()
-    fig.legend(handles, labels,
-            loc="lower center",
-            bbox_to_anchor=(0.5, 0.05),
-            ncol=min(3, len(handles)))
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.05),
+        ncol=min(3, len(handles)),
+    )
     fig.subplots_adjust(bottom=0.1)
     plt.tight_layout(rect=[0, 0.2, 1, 0.95])
     fig.canvas.draw()
 
     # Making it pretty
-    for ax_idx,(ax,y_label) in enumerate(zip(axs_flat,y_label_list)):
+    for ax_idx, (ax, y_label) in enumerate(zip(axs_flat, y_label_list)):
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.grid()
@@ -820,7 +834,7 @@ def plot_polars(
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         # Save the plot with the specified title and data type
-        plt.savefig(Path(save_path) / f"{title}{data_type}", bbox_inches='tight')
+        plt.savefig(Path(save_path) / f"{title}{data_type}", bbox_inches="tight")
         print(f"Plot saved as: {save_path}")
 
     # showing plot
@@ -830,9 +844,13 @@ def plot_polars(
         raise ValueError(
             "is_show and is_save are both True. Please set one of them to False."
         )
+<<<<<<< HEAD
     
     
         
+=======
+
+>>>>>>> 99912d625e0955a953ee074f53aca99b479543c9
     return fig, axs
 
 
