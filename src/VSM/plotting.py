@@ -335,6 +335,10 @@ def plot_geometry(
 
 
 def plot_distribution(
+    alpha_list,
+    Umag,
+    side_slip,
+    yaw_rate,
     solver_list,
     body_aero_list,
     label_list,
@@ -370,186 +374,214 @@ def plot_distribution(
     """
     set_plot_style()
 
-    y_coordinates_list = []
-    results_list = []
-    for body_aero, solver in zip(body_aero_list, solver_list):
-        y_coordinates_list.append(body_aero.calculate_y_coordinates())
-        results_list.append(solver.solve(body_aero))
+    for alpha in alpha_list:
+        y_coordinates_list = []
+        results_list = []
+        for body_aero, solver in zip(body_aero_list, solver_list):
+            body_aero.va_initialize(
+                Umag=Umag,
+                angle_of_attack=alpha,
+                side_slip=side_slip,
+                yaw_rate=yaw_rate,
+            )
 
-    if len(y_coordinates_list) != len(results_list) != len(label_list):
-        raise ValueError(
-            f"The number of y_coordinates = number of results = number of labels. "
-            f"Got {len(y_coordinates_list)} y_coordinates, {len(results_list)} results, {len(label_list)} labels."
+            y_coordinates_list.append(body_aero.calculate_y_coordinates())
+            results_list.append(solver.solve(body_aero))
+
+        if len(y_coordinates_list) != len(results_list) != len(label_list):
+            raise ValueError(
+                f"The number of y_coordinates = number of results = number of labels. "
+                f"Got {len(y_coordinates_list)} y_coordinates, {len(results_list)} results, {len(label_list)} labels."
+            )
+        # Create figure and axes: 3 rows x 3 columns
+        fig, axs = plt.subplots(3, 3, figsize=(27, 15))
+        # fig.suptitle(title)
+
+        # --- Row 1: CD, CL, CS ---------------------------------------------------
+        # Column 1: CD
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[0, 0].plot(
+                y_coords,
+                result["cd_distribution"],
+                label=rf"$C_D$: {result['cd']:.2f}",
+            )
+        axs[0, 0].set_ylabel(r"$C_D$ Distribution")
+        axs[0, 0].tick_params(labelbottom=False)
+        axs[0, 0].legend()
+
+        # Column 2: CL
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[0, 1].plot(
+                y_coords,
+                result["cl_distribution"],
+                label=rf"$C_L$: {result['cl']:.2f}",
+            )
+        axs[0, 1].set_ylabel(r"$C_L$ Distribution")
+        axs[0, 1].tick_params(labelbottom=False)
+        axs[0, 1].legend()
+
+        # Column 3: CS (side force coefficient)
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[0, 2].plot(
+                y_coords,
+                result["cs_distribution"],
+                label=rf"$C_S$: {result['cs']:.2f}",
+            )
+        axs[0, 2].set_ylabel(r"$C_S$ Distribution")
+        axs[0, 2].tick_params(labelbottom=False)
+        axs[0, 2].legend()
+
+        # --- Row 2: CMx, CMy, CMz ------------------------------------------------
+        # Column 1: CMx
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[1, 0].plot(
+                y_coords,
+                result["cmx_distribution"],
+                label=rf"$C_{{mx}}$: {result['cmx']:.2f}",
+            )
+        axs[1, 0].set_ylabel(r"$C_{mx}$ Distribution")
+        axs[1, 0].tick_params(labelbottom=False)
+        axs[1, 0].legend()
+
+        # Column 2: CMy
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[1, 1].plot(
+                y_coords,
+                result["cmy_distribution"],
+                label=rf"$C_{{my}}$: {result['cmy']:.2f}",
+            )
+        axs[1, 1].set_ylabel(r"$C_{my}$ Distribution")
+        axs[1, 1].tick_params(labelbottom=False)
+        axs[1, 1].legend()
+
+        # Column 3: CMz
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[1, 2].plot(
+                y_coords,
+                result["cmz_distribution"],
+                label=rf"$C_{{mz}}$: {result['cmz']:.2f}",
+            )
+        axs[1, 2].set_ylabel(r"$C_{mz}$ Distribution")
+        axs[1, 2].tick_params(labelbottom=False)
+        axs[1, 2].legend()
+
+        # --- Row 3:  -----------------------------------------
+        # Column 1: Gamma
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[2, 0].plot(
+                y_coords,
+                np.rad2deg(result["gamma_distribution"]),
+                label=label,
+            )
+        axs[2, 0].set_xlabel(r"Spanwise Position $y/b$")
+        axs[2, 0].set_ylabel(r"Gamma")
+        # axs[2, 0].legend()
+
+        # Column 2: Gamma distribution
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[2, 1].plot(
+                y_coords,
+                np.rad2deg(result["alpha_geometric"]),
+                label=label,
+            )
+        axs[2, 1].set_xlabel(r"Spanwise Position $y/b$")
+        axs[2, 1].set_ylabel(r"Geometric $\alpha$ (deg)")
+        # axs[2, 1].legend()
+
+        # Column 3: alpha (corrected to aerodynamic center)
+        for y_coords, result, label in zip(
+            y_coordinates_list, results_list, label_list
+        ):
+            axs[2, 2].plot(
+                y_coords,
+                np.rad2deg(result["alpha_at_ac"]),
+                # label=label,
+            )
+        axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
+        axs[2, 2].set_ylabel(r"Corrected $\alpha$ (deg)")
+        # axs[2, 2].legend()
+
+        # --- Adjust y-limits intelligently --------------------------------------
+        # We'll define allowed ranges per subplot index:
+        #  0 -> CD
+        #  1 -> CL
+        #  2 -> CS
+        #  3 -> CMx
+        #  4 -> CMy
+        #  5 -> CMz
+        #  6 -> Gamma
+        #  7 -> alpha corrected
+        #  8 -> alpha uncorrected
+        allowed_ranges = {
+            0: (-1.0, 1.0),  # CD
+            1: (-1.5, 2.0),  # CL
+            2: (-1.5, 1.5),  # CS
+            3: (-1.0, 1.0),  # CMx
+            4: (-1.0, 1.0),  # CMy
+            5: (-1.0, 1.0),  # CMz
+            6: (-200, 500),  # Gamma
+            7: (-10, 150),  # alpha geometric
+            8: (-10, 90),  # alpha corrected
+        }
+
+        for i, ax in enumerate(axs.flat):
+            y_min_allowed, y_max_allowed = allowed_ranges.get(i, ax.get_ylim())
+
+            # Collect all y-data from lines in the current axis
+            y_data = np.concatenate([line.get_ydata() for line in ax.get_lines()])
+            # Identify data within the allowed range
+            in_range = y_data[(y_data >= y_min_allowed) & (y_data <= y_max_allowed)]
+
+            if in_range.size > 0:
+                padding = 0.05 * (in_range.max() - in_range.min())
+                ax.set_ylim(in_range.min() - padding, in_range.max() + padding)
+            else:
+                # If no data is within the range, fall back to a default
+                ax.set_ylim(y_min_allowed, y_max_allowed)
+
+        # Place the legend below the axes
+        labels = []
+        for i, label in enumerate(results_list):
+            label = label_list[i]
+            if run_time_list is not None:
+                labels.append(label + f" t: {run_time_list[i]:.3f}s")
+            else:
+                labels.append(label)
+        # labels = [label for label in label_list]
+        handles = [axs[0, 0].get_lines()[i] for i in range(len(y_coordinates_list))]
+        fig.legend(
+            handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3
         )
-    # Create figure and axes: 3 rows x 3 columns
-    fig, axs = plt.subplots(3, 3, figsize=(27, 15))
-    # fig.suptitle(title)
 
-    # --- Row 1: CD, CL, CS ---------------------------------------------------
-    # Column 1: CD
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[0, 0].plot(
-            y_coords,
-            result["cd_distribution"],
-            label=rf"$C_D$: {result['cd']:.2f}",
-        )
-    axs[0, 0].set_ylabel(r"$C_D$ Distribution")
-    axs[0, 0].tick_params(labelbottom=False)
-    axs[0, 0].legend()
+        # Manually increase the bottom margin to make room for the legend
+        fig.subplots_adjust(bottom=0.2)
 
-    # Column 2: CL
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[0, 1].plot(
-            y_coords,
-            result["cl_distribution"],
-            label=rf"$C_L$: {result['cl']:.2f}",
-        )
-    axs[0, 1].set_ylabel(r"$C_L$ Distribution")
-    axs[0, 1].tick_params(labelbottom=False)
-    axs[0, 1].legend()
+        # Save or show plot
+        if is_save:
+            save_plot(fig, save_path, f"{title}_alpha_{alpha}", data_type)
 
-    # Column 3: CS (side force coefficient)
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[0, 2].plot(
-            y_coords,
-            result["cs_distribution"],
-            label=rf"$C_S$: {result['cs']:.2f}",
-        )
-    axs[0, 2].set_ylabel(r"$C_S$ Distribution")
-    axs[0, 2].tick_params(labelbottom=False)
-    axs[0, 2].legend()
-
-    # --- Row 2: CMx, CMy, CMz ------------------------------------------------
-    # Column 1: CMx
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[1, 0].plot(
-            y_coords,
-            result["cmx_distribution"],
-            label=rf"$C_{{mx}}$: {result['cmx']:.2f}",
-        )
-    axs[1, 0].set_ylabel(r"$C_{mx}$ Distribution")
-    axs[1, 0].tick_params(labelbottom=False)
-    axs[1, 0].legend()
-
-    # Column 2: CMy
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[1, 1].plot(
-            y_coords,
-            result["cmy_distribution"],
-            label=rf"$C_{{my}}$: {result['cmy']:.2f}",
-        )
-    axs[1, 1].set_ylabel(r"$C_{my}$ Distribution")
-    axs[1, 1].tick_params(labelbottom=False)
-    axs[1, 1].legend()
-
-    # Column 3: CMz
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[1, 2].plot(
-            y_coords,
-            result["cmz_distribution"],
-            label=rf"$C_{{mz}}$: {result['cmz']:.2f}",
-        )
-    axs[1, 2].set_ylabel(r"$C_{mz}$ Distribution")
-    axs[1, 2].tick_params(labelbottom=False)
-    axs[1, 2].legend()
-
-    # --- Row 3:  -----------------------------------------
-    # Column 1: Gamma
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[2, 0].plot(
-            y_coords,
-            np.rad2deg(result["gamma_distribution"]),
-            label=label,
-        )
-    axs[2, 0].set_xlabel(r"Spanwise Position $y/b$")
-    axs[2, 0].set_ylabel(r"Gamma")
-    # axs[2, 0].legend()
-
-    # Column 2: Gamma distribution
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[2, 1].plot(
-            y_coords,
-            np.rad2deg(result["alpha_geometric"]),
-            label=label,
-        )
-    axs[2, 1].set_xlabel(r"Spanwise Position $y/b$")
-    axs[2, 1].set_ylabel(r"Geometric $\alpha$ (deg)")
-    # axs[2, 1].legend()
-
-    # Column 3: alpha (corrected to aerodynamic center)
-    for y_coords, result, label in zip(y_coordinates_list, results_list, label_list):
-        axs[2, 2].plot(
-            y_coords,
-            np.rad2deg(result["alpha_at_ac"]),
-            # label=label,
-        )
-    axs[2, 2].set_xlabel(r"Spanwise Position $y/b$")
-    axs[2, 2].set_ylabel(r"Corrected $\alpha$ (deg)")
-    # axs[2, 2].legend()
-
-    # --- Adjust y-limits intelligently --------------------------------------
-    # We'll define allowed ranges per subplot index:
-    #  0 -> CD
-    #  1 -> CL
-    #  2 -> CS
-    #  3 -> CMx
-    #  4 -> CMy
-    #  5 -> CMz
-    #  6 -> Gamma
-    #  7 -> alpha corrected
-    #  8 -> alpha uncorrected
-    allowed_ranges = {
-        0: (-1.0, 1.0),  # CD
-        1: (-1.5, 2.0),  # CL
-        2: (-1.5, 1.5),  # CS
-        3: (-1.0, 1.0),  # CMx
-        4: (-1.0, 1.0),  # CMy
-        5: (-1.0, 1.0),  # CMz
-        6: (-200, 500),  # Gamma
-        7: (-10, 150),  # alpha geometric
-        8: (-10, 90),  # alpha corrected
-    }
-
-    for i, ax in enumerate(axs.flat):
-        y_min_allowed, y_max_allowed = allowed_ranges.get(i, ax.get_ylim())
-
-        # Collect all y-data from lines in the current axis
-        y_data = np.concatenate([line.get_ydata() for line in ax.get_lines()])
-        # Identify data within the allowed range
-        in_range = y_data[(y_data >= y_min_allowed) & (y_data <= y_max_allowed)]
-
-        if in_range.size > 0:
-            padding = 0.05 * (in_range.max() - in_range.min())
-            ax.set_ylim(in_range.min() - padding, in_range.max() + padding)
-        else:
-            # If no data is within the range, fall back to a default
-            ax.set_ylim(y_min_allowed, y_max_allowed)
-
-    # Place the legend below the axes
-    labels = []
-    for i, label in enumerate(results_list):
-        label = label_list[i]
-        if run_time_list is not None:
-            labels.append(label + f" t: {run_time_list[i]:.3f}s")
-        else:
-            labels.append(label)
-    # labels = [label for label in label_list]
-    handles = [axs[0, 0].get_lines()[i] for i in range(len(y_coordinates_list))]
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.05), ncol=3)
-
-    # Manually increase the bottom margin to make room for the legend
-    fig.subplots_adjust(bottom=0.2)
-
-    # Save or show plot
-    if is_save:
-        save_plot(fig, save_path, title, data_type)
-
-    if is_show and not is_save:
-        plt.show()
-    elif is_show and is_save:
-        raise ValueError(
-            "is_show and is_save are both True. Please set one of them to False."
-        )
+        if is_show and not is_save:
+            plt.show()
+        elif is_show and is_save:
+            raise ValueError(
+                "is_show and is_save are both True. Please set one of them to False."
+            )
 
 
 def generate_3D_polar_data(

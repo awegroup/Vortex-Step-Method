@@ -119,29 +119,83 @@ class BodyAerodynamics:
         n_panels: int,
         spanwise_panel_distribution: str,
         is_with_corrected_polar: bool = False,
-        polar_data_dir: str = "",
+        polar_data_dir: str = None,
         is_with_bridles: bool = False,
         bridle_data_path: str = None,
         is_half_wing: bool = False,
+        is_neuralfoil: bool = False,
+        nf_airfoil_data_dir: str = None,
+        nf_reynolds_number: float = None,
+        nf_alpha_range: np.ndarray = [-10, 25, 26],
+        nf_xtr_lower: float = 0.01,
+        nf_xtr_upper: float = 0.01,
+        nf_n_crit: float = 9,
+        nf_is_with_save_polar: bool = False,
     ):
-        """Instantiate a BodyAerodynamics object from wing geometry and optional polar/bridle data.
+        """
+        Instantiate a BodyAerodynamics object from wing geometry data and optional aerodynamic polar or bridle data.
 
-        Args:
-            file_path (str): Path to the wing geometry CSV file. The file should contain the columns:
-            LE_x, LE_y, LE_z, TE_x, TE_y, TE_z, d_tube, camber.
-            n_panels (int): Number of panels to discretize the wing.
-            spanwise_panel_distribution (str): Method for distributing the panels along the wing span.
-            is_with_corrected_polar (bool, optional): If True, use corrected polar data from CSV files.
-            Defaults to False.
-            polar_data_dir (str, optional): Directory path where corrected polar CSV files are stored.
-            Each file should contain columns: alpha, cl, cd, cm. Defaults to "".
-            is_with_bridles (bool, optional): If True, incorporate bridles into the aerodynamic model.
-            Defaults to False.
-            bridle_data_path (str, optional): Path to the bridle data CSV file. The file should have columns:
-            p1_x, p1_y, p1_z, p2_x, p2_y, p2_z, diameter. Defaults to None.
+        This class method constructs a Wing instance and populates it with sections using data from a CSV
+        file that defines wing geometry. Optionally, it can load pre-computed corrected polars or run NeuralFoil
+        to generate polar data. Bridles can also be incorporated if required.
 
-        Returns:
-            BodyAerodynamics: An instance of BodyAerodynamics built using the provided geometry and data.
+        ## Args:
+            file_path (str): Path to the wing geometry CSV file. Required columns:
+            • LE_x, LE_y, LE_z: Leading Edge coordinates.
+            • TE_x, TE_y, TE_z: Trailing Edge coordinates.
+
+            ### --- Breukels Correlation (if used) ---
+            - d_tube: Tube diameter (required).
+            - camber (or y_camber): Camber information (required).
+
+            ### --- Wing Configuration ---
+            - is_half_wing (bool, optional): If True, the input represents half a wing. The data will be mirrored
+              (excluding the mid-span slice) to form a full wing.
+
+            ### --- Panel Configuration ---
+            - n_panels (int): Number of panels to discretize the wing.
+            - spanwise_panel_distribution (str): Method for distributing panels along the wing span
+              (e.g., uniform, cosine, etc.).
+
+            ### --- Corrected Polar Data ---
+            - is_with_corrected_polar (bool): If True, uses pre-computed corrected polar data from CSV files.
+            - polar_data_dir (str): Directory containing corrected polar CSV files, each with columns:
+              alpha, cl, cd, cm (with alpha in radians).
+
+            ### --- NeuralFoil Polar Data ---
+            - is_neuralfoil (bool): If True, computes airfoil polar data using NeuralFoil.
+            - nf_airfoil_data_dir (str): Directory containing airfoil .dat files with (x, y) columns, orderd like
+                • 1.dat: mid-span slice
+                • 2.dat: first slice from the root
+                • ...
+                • n.dat: last 'tip' slice
+
+            - nf_reynolds_number (float): Reynolds Number at which NeuralFoil should run.
+            - nf_alpha_range (np.ndarray): Array with the minimum, maximum, and number of alpha values (in degrees).
+            - nf_xtr_lower (float): Lower bound for transition location (0 means forced, 1 is fully free).
+            - nf_xtr_upper (float): Upper bound for transition location.
+            - nf_n_crit (float): Critical amplification factor for turbulent transition.
+            Guidelines:
+                • Sailplane:           12–14
+                • Motorglider:         11–13
+                • Clean wind tunnel:   10–12
+                • Average wind tunnel: 9   (standard "e^9 method")
+                • Dirty wind tunnel:   4–8
+            - nf_is_with_save_polar (bool): If True, saves the generated polar data to a CSV file in the specified directory.
+
+            ### --- Bridle Data ---
+            - is_with_bridles (bool, optional): If True, reads an additional CSV file for bridle information.
+            - bridle_data_path (str): Path to the bridle data CSV file. Required columns:
+            • p1_x, p1_y, p1_z: First bridle point.
+            • p2_x, p2_y, p2_z: Second bridle point.
+            • diameter: Cable diameter.
+
+        ## Returns:
+            BodyAerodynamics: An instance built using the provided wing geometry and (if applicable) the aerodynamic
+            polar or bridle data.
+
+        ## Raises:
+            ValueError: If required data for any enabled configuration (corrected polar, NeuralFoil, or Breukels) is missing.
         """
         # Initialize wing
         wing_instance = Wing(
@@ -165,15 +219,16 @@ class BodyAerodynamics:
             # add rows to df, mirroring the existing rows to create a full wing
             df = pd.concat([df, df_orderded_opposite])
 
-        print(f" len wing_geometry: {len(df)}")
-        # breakpoint()
-
         for i, row in df.iterrows():
             # 1) extract leading/trailing‐edge coords
             LE = np.array([row["LE_x"], row["LE_y"], row["LE_z"]])
             TE = np.array([row["TE_x"], row["TE_y"], row["TE_z"]])
 
+            ##########################
+            ### PreComputed Polars ####
+            ##########################
             if is_with_corrected_polar:
+                print(f"corrected_polar index: {i}")
                 # 2a) corrected‐polar branch
                 df_polar = pd.read_csv(Path(polar_data_dir) / f"{i}.csv")
                 polar_data = [
@@ -188,7 +243,91 @@ class BodyAerodynamics:
                     ),
                 ]
                 wing_instance.add_section(LE, TE, polar_data)
+
+            ##########################
+            ### NeuralFoil polars ####
+            ##########################
+            elif is_neuralfoil:
+
+                if nf_airfoil_data_dir is None:
+                    raise ValueError(
+                        "airfoil_data_dir must be set if is_neuralfoil is True"
+                    )
+                if nf_reynolds_number is None:
+                    raise ValueError(
+                        "Re_for_neuralfoil must be set if is_neuralfoil is True"
+                    )
+                n_files_in_airfoil_data_dir = len(
+                    [
+                        f
+                        for f in Path(nf_airfoil_data_dir).iterdir()
+                        if f.is_file() and f.suffix == ".dat"
+                    ]
+                )
+                idx = n_files_in_airfoil_data_dir - i
+                # if not is_half_wing and nf_is_airfoils_of_half_wing:
+                #     # deal with the index change
+                #     if idx < 0:
+                #         idx = n_files_in_airfoil_data_dir + idx
+                # read the airfoil data
+                airfoil_dat_file_path = Path(nf_airfoil_data_dir) / f"{idx}.dat"
+
+                # Run neuralfoil
+                import neuralfoil as nf
+
+                alpha_range = np.linspace(
+                    nf_alpha_range[0],
+                    nf_alpha_range[1],
+                    nf_alpha_range[2],
+                )
+                aero = nf.get_aero_from_dat_file(
+                    filename=airfoil_dat_file_path,
+                    alpha=alpha_range,
+                    Re=nf_reynolds_number,
+                    model_size="xxxlarge",
+                    xtr_lower=nf_xtr_lower,
+                    xtr_upper=nf_xtr_upper,
+                    n_crit=nf_n_crit,
+                )
+                polar_data = [
+                    "polar_data",
+                    np.column_stack(
+                        (np.deg2rad(alpha_range), aero["CL"], aero["CD"], aero["CM"])
+                    ),
+                ]
+                wing_instance.add_section(LE, TE, polar_data)
+
+                if nf_is_with_save_polar:
+                    # Save the polar data
+                    save_path = (
+                        Path(nf_airfoil_data_dir)
+                        / "neuralfoil_calculated_2D_polars"
+                        / f"{idx}.csv"
+                    )
+                    df_to_save = pd.DataFrame(
+                        {
+                            "alpha": alpha_range,
+                            "CL": aero["CL"],
+                            "CD": aero["CD"],
+                            "CM": aero["CM"],
+                        }
+                    )
+                    if not save_path.parent.exists():
+                        save_path.parent.mkdir(parents=True, exist_ok=True)
+                    df_to_save.to_csv(save_path, index=False)
+
+            #############################
+            ### Breukels Correlation ####
+            #############################
             else:
+                if row["d_tube"] is None:
+                    raise ValueError(
+                        "d_tube must be provided as column in wing_geometry if using Breukels Correlation"
+                    )
+                if row["y_camber"] is None:
+                    raise ValueError(
+                        "y_camber must be provided as column in wing_geometry if using Breukels Correlation"
+                    )
                 # 2b) always fall back to breukels
                 airfoil_data = [
                     "lei_airfoil_breukels",
