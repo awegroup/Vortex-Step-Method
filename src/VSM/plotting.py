@@ -249,7 +249,7 @@ def creating_geometry_plot(
     # Ensure the figure is fully rendered
     fig.canvas.draw()
 
-    return fig
+    return fig,ax
 
 
 def plot_geometry(
@@ -593,6 +593,7 @@ def generate_3D_polar_data(
     side_slip=0,
     yaw_rate=0,
     Umag=10,
+    steering="sideforce",  # sideforce or roll
 ):
     """
     Generates the polar data for the given solver and body_aero.
@@ -613,6 +614,8 @@ def generate_3D_polar_data(
     """
 
     cl = np.zeros(len(angle_range))
+    aero_roll = np.zeros(len(angle_range))
+    cl_total = np.zeros(len(angle_range))
     cd = np.zeros(len(angle_range))
     cs = np.zeros(len(angle_range))
     cmx = np.zeros(len(angle_range))
@@ -643,6 +646,8 @@ def generate_3D_polar_data(
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
+        cl_total[i] = np.sqrt(results["cl"]**2+results["cs"]**2)
+        aero_roll[i] = np.degrees(np.arctan2(results["cs"], results["cl"]))
         cmx[i] = results["cmx"]
         cmy[i] = results["cmy"]
         cmz[i] = results["cmz"]
@@ -668,6 +673,9 @@ def generate_3D_polar_data(
         reynolds_number,
         run_time,
     ]
+    if steering == "roll":
+        polar_data[1] = cl_total
+        polar_data[3] = aero_roll
     reynolds_number = results["Rey"]
 
     return polar_data, reynolds_number
@@ -686,6 +694,7 @@ def plot_polars(
     Umag=10,
     title="polar",
     data_type=".pdf",
+    steering = "sideforce",     # sideforce or roll
     save_path=None,
     is_save=True,
     is_show=True,
@@ -762,6 +771,7 @@ def plot_polars(
             side_slip=side_slip,
             yaw_rate=yaw_rate,
             Umag=Umag,
+            steering=steering,
         )
         polar_data_list.append(polar_data)
         # Append Reynolds number to the label
@@ -776,11 +786,17 @@ def plot_polars(
         elif angle_type == "side_slip":
             polar_data[0] = df["beta"].values
         if "CL" in df.columns:
-            polar_data[1] = df["CL"].values
+            if steering == "sideforce":
+                polar_data[1] = df["CL"].values
+            elif steering == "roll":
+                polar_data[1] = np.sqrt(df["CL"]**2 + df["CS"]**2)
         if "CD" in df.columns:
             polar_data[2] = df["CD"].values
         if "CS" in df.columns:
-            polar_data[3] = df["CS"].values
+            if steering == "sideforce":
+                polar_data[3] = df["CS"].values
+            elif steering == "roll":
+                polar_data[3] = np.degrees(np.arctan2(df["CS"], df["CL"]))
         if "CMx" in df.columns:
             polar_data[4] = df["CMx"].values
         if "CMy" in df.columns:
@@ -802,7 +818,10 @@ def plot_polars(
         r"$C_{mz}$ (Yaw)",
     ]
     if angle_type == "side_slip":
-        y_label_list[2] = r"$C_{\mathrm{S}}$"
+        if steering == "sideforce":
+            y_label_list[2] = r"$C_{\mathrm{S}}$"
+        elif steering == "roll":
+            y_label_list[2] = r"$\phi_a$"
 
     # plotting the actyual data
     handle_list = []
@@ -857,7 +876,6 @@ def plot_polars(
         raise ValueError(
             "is_show and is_save are both True. Please set one of them to False."
         )
-
     return fig, axs
 
 
