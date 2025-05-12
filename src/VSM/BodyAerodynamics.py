@@ -229,7 +229,6 @@ class BodyAerodynamics:
             ### PreComputed Polars ####
             ##########################
             if is_with_corrected_polar:
-                print(f"corrected_polar index: {i}")
                 # 2a) corrected‐polar branch
                 df_polar = pd.read_csv(Path(polar_data_dir) / f"{i}.csv")
                 polar_data = [
@@ -266,10 +265,6 @@ class BodyAerodynamics:
                     ]
                 )
                 idx = n_files_in_airfoil_data_dir - i
-                # if not is_half_wing and nf_is_airfoils_of_half_wing:
-                #     # deal with the index change
-                #     if idx < 0:
-                #         idx = n_files_in_airfoil_data_dir + idx
                 # read the airfoil data
                 airfoil_dat_file_path = Path(nf_airfoil_data_dir) / f"{idx}.dat"
 
@@ -697,7 +692,9 @@ class BodyAerodynamics:
             normal = np.cross(v1, v2)
             normal = normal / np.linalg.norm(normal)
 
-            intersection = intersect_line_with_plane(r0_moment, F_unit, corner_points[0], normal)
+            intersection = intersect_line_with_plane(
+                r0_moment, F_unit, corner_points[0], normal
+            )
 
             if intersection is not None:
                 if point_in_quad(intersection, corner_points):
