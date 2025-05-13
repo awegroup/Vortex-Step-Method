@@ -153,7 +153,7 @@ def main():
             # "WT Rey 560e4",
         ],
         literature_path_list=[],  # [path_cfd_lebesque_alpha_sweep, path_wt_alpha_sweep],
-        angle_range=np.linspace(0, 10, 10),
+        angle_range=np.linspace(0, 10, 20),
         angle_type="angle_of_attack",
         angle_of_attack=0,
         side_slip=0,

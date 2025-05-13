@@ -716,7 +716,7 @@ class BodyAerodynamics:
         Returns two 3D force vectors: (f_corr_drag, f_corr_span)
         in the panel's true local drag- and spanwise- directions.
         # this is following:
-        "A correction model for the effect of spanwise flow on the 
+        "A correction model for the effect of spanwise flow on the
         viscous force contribution in BEM and Lifting Line methods"
         Mac Gaunaa et al 2024 J. Phys.: Conf. Ser. 2767 022068
         DOI: 10.1088/1742-6596/2767/2/022068
@@ -1341,16 +1341,16 @@ class BodyAerodynamics:
 
     def update_from_points(
         self,
-        le_arr: np.ndarray,
-        te_arr: np.ndarray,
-        d_tube_arr: np.ndarray,
-        y_camber_arr: np.ndarray,
+        le_arr,
+        te_arr,
+        d_tube_arr,
+        y_camber_arr,
         aero_input_type: str = "lei_airfoil_breukels",
     ):
         # Update each wing with the new points.
         for wing in self.wings:
             wing.update_wing_from_points(
-                le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
+                self.panels, le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
             )
         # Rebuild the panels based on the updated geometry.
         self._build_panels()
