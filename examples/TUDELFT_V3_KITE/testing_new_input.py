@@ -44,6 +44,7 @@ def main():
     n_panels = 40
     spanwise_panel_distribution = "uniform"
     solver_base_version = Solver(reference_point=[0, 0, 0])
+    solver_viscous_correction = Solver(is_with_viscous_drag_correction=True)
 
     print(f"\nCreating corrected polar input")
     body_aero_polar_CFD_CAD = BodyAerodynamics.from_file(
@@ -54,41 +55,31 @@ def main():
         polar_data_dir=polar_data_dir,
         is_half_wing=True,
     )
-    n_panels = 40
-    body_aero_CFD_CAD_smooth = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=True,
-        polar_data_dir=f"{polar_data_dir}_smooth",
-        is_half_wing=True,
-    )
-
-    body_aero_polar_surfplan = BodyAerodynamics.from_file(
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "wing_geometry_from_surfplan.csv",
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=True,
-        polar_data_dir=Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "2D_polars_corrected",
-        is_half_wing=False,
-    )
-    body_aero_breukels_surfplan = BodyAerodynamics.from_file(
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "wing_geometry_from_surfplan.csv",
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=False,
-        polar_data_dir=polar_data_dir,
-        is_half_wing=False,
-    )
+    # body_aero_polar_surfplan = BodyAerodynamics.from_file(
+    #     Path(PROJECT_DIR)
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "wing_geometry_from_surfplan.csv",
+    #     n_panels,
+    #     spanwise_panel_distribution,
+    #     is_with_corrected_polar=True,
+    #     polar_data_dir=Path(PROJECT_DIR)
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "2D_polars_corrected",
+    #     is_half_wing=False,
+    # )
+    # body_aero_breukels_surfplan = BodyAerodynamics.from_file(
+    #     Path(PROJECT_DIR)
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "wing_geometry_from_surfplan.csv",
+    #     n_panels,
+    #     spanwise_panel_distribution,
+    #     is_with_corrected_polar=False,
+    #     polar_data_dir=polar_data_dir,
+    #     is_half_wing=False,
+    # )
 
     ### 4. Setting va
     Umag = 2.83
@@ -96,11 +87,10 @@ def main():
     side_slip = 0
     yaw_rate = 0
     body_aero_polar_CFD_CAD.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_CFD_CAD_smooth.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_polar_surfplan.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_breukels_surfplan.va_initialize(
-        Umag, angle_of_attack, side_slip, yaw_rate
-    )
+    # body_aero_polar_surfplan.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    # body_aero_breukels_surfplan.va_initialize(
+    #     Umag, angle_of_attack, side_slip, yaw_rate
+    # )
 
     # #### 5. Plotting the kite geometry using Matplotlib
     # plot_geometry(
@@ -144,26 +134,26 @@ def main():
     plot_polars(
         solver_list=[
             solver_base_version,
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
+            solver_viscous_correction,
+            # solver_base_version,
+            # solver_base_version,
         ],
         body_aero_list=[
             body_aero_polar_CFD_CAD,
-            body_aero_CFD_CAD_smooth,
-            body_aero_polar_surfplan,
-            body_aero_breukels_surfplan,
+            body_aero_polar_CFD_CAD,
+            # body_aero_polar_surfplan,
+            # body_aero_breukels_surfplan,
         ],
         label_list=[
             "VSM Polar CFD CAD",
-            "VSM Polar CFD CAD smooth",
-            "VSM Polar Breukels-NeuralFoil Surfplan",
-            "VSM Breukels Surfplan",
-            "CFD Rey 10e5",
-            "WT Rey 560e4",
+            "VSM Polar CFD CAD viscous correction",
+            # "VSM Polar Breukels-NeuralFoil Surfplan",
+            # "VSM Breukels Surfplan",
+            # "CFD Rey 10e5",
+            # "WT Rey 560e4",
         ],
-        literature_path_list=[path_cfd_lebesque_alpha_sweep, path_wt_alpha_sweep],
-        angle_range=np.linspace(-5, 25, 10),
+        literature_path_list=[],  # [path_cfd_lebesque_alpha_sweep, path_wt_alpha_sweep],
+        angle_range=np.linspace(0, 10, 10),
         angle_type="angle_of_attack",
         angle_of_attack=0,
         side_slip=0,
@@ -175,77 +165,77 @@ def main():
         is_save=True,
         is_show=False,
     )
-    ### plot beta sweep
-    path_cfd_lebesque_beta_sweep = (
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "3D_polars_literature"
-        / "CFD_RANS_Rey_10e5_Poland2025_beta_sweep_alpha_13_02.csv"
-    )
-    plot_polars(
-        solver_list=[
-            solver_base_version,
-            solver_base_version,
-            # solver_base_version,
-            # solver_base_version,
-        ],
-        body_aero_list=[
-            body_aero_polar_CFD_CAD,
-            body_aero_CFD_CAD_smooth,
-            # body_aero_polar_surfplan,
-            # body_aero_breukels_surfplan,
-        ],
-        label_list=[
-            "VSM Polar CFD CAD",
-            "VSM Polar CFD CAD smooth",
-            # "VSM Polar Breukels-NeuralFoil Surfplan",
-            # "VSM Breukels Surfplan",
-            "CFD Rey 10e5",
-        ],
-        literature_path_list=[path_cfd_lebesque_beta_sweep],
-        angle_range=[0, 4, 8, 12],
-        angle_type="side_slip",
-        angle_of_attack=13.02,
-        side_slip=0,
-        yaw_rate=0,
-        Umag=Umag,
-        title=f"betasweep",
-        data_type=".pdf",
-        save_path=Path(save_folder),
-        is_save=True,
-        is_show=False,
-    )
-    ### plot distributions
-    plot_distribution(
-        alpha_list=[-10, -5, 0, 6.8, 11.9, 15, 20, 25],
-        Umag=Umag,
-        side_slip=0,
-        yaw_rate=0,
-        solver_list=[
-            solver_base_version,
-            solver_base_version,
-            # solver_base_version,
-            # solver_base_version,
-        ],
-        body_aero_list=[
-            body_aero_polar_CFD_CAD,
-            body_aero_CFD_CAD_smooth,
-            # body_aero_polar_surfplan,
-            # body_aero_breukels_surfplan,
-        ],
-        label_list=[
-            "VSM Polar CFD CAD",
-            "VSM Polar CFD CAD smooth",
-            # "VSM Polar Breukels-NeuralFoil Surfplan",
-            # "VSM Breukels Surfplan",
-        ],
-        title=f"spanwise_distribution",
-        data_type=".pdf",
-        save_path=Path(save_folder) / "spanwise_distribution",
-        is_save=True,
-        is_show=False,
-    )
+    # ### plot beta sweep
+    # path_cfd_lebesque_beta_sweep = (
+    #     Path(PROJECT_DIR)
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "3D_polars_literature"
+    #     / "CFD_RANS_Rey_10e5_Poland2025_beta_sweep_alpha_13_02.csv"
+    # )
+    # plot_polars(
+    #     solver_list=[
+    #         solver_base_version,
+    #         solver_base_version,
+    #         # solver_base_version,
+    #         # solver_base_version,
+    #     ],
+    #     body_aero_list=[
+    #         body_aero_polar_CFD_CAD,
+    #         body_aero_CFD_CAD_smooth,
+    #         # body_aero_polar_surfplan,
+    #         # body_aero_breukels_surfplan,
+    #     ],
+    #     label_list=[
+    #         "VSM Polar CFD CAD",
+    #         "VSM Polar CFD CAD smooth",
+    #         # "VSM Polar Breukels-NeuralFoil Surfplan",
+    #         # "VSM Breukels Surfplan",
+    #         "CFD Rey 10e5",
+    #     ],
+    #     literature_path_list=[path_cfd_lebesque_beta_sweep],
+    #     angle_range=[0, 4, 8, 12],
+    #     angle_type="side_slip",
+    #     angle_of_attack=13.02,
+    #     side_slip=0,
+    #     yaw_rate=0,
+    #     Umag=Umag,
+    #     title=f"betasweep",
+    #     data_type=".pdf",
+    #     save_path=Path(save_folder),
+    #     is_save=True,
+    #     is_show=False,
+    # )
+    # ### plot distributions
+    # plot_distribution(
+    #     alpha_list=[-10, -5, 0, 6.8, 11.9, 15, 20, 25],
+    #     Umag=Umag,
+    #     side_slip=0,
+    #     yaw_rate=0,
+    #     solver_list=[
+    #         solver_base_version,
+    #         solver_base_version,
+    #         # solver_base_version,
+    #         # solver_base_version,
+    #     ],
+    #     body_aero_list=[
+    #         body_aero_polar_CFD_CAD,
+    #         body_aero_CFD_CAD_smooth,
+    #         # body_aero_polar_surfplan,
+    #         # body_aero_breukels_surfplan,
+    #     ],
+    #     label_list=[
+    #         "VSM Polar CFD CAD",
+    #         "VSM Polar CFD CAD smooth",
+    #         # "VSM Polar Breukels-NeuralFoil Surfplan",
+    #         # "VSM Breukels Surfplan",
+    #     ],
+    #     title=f"spanwise_distribution",
+    #     data_type=".pdf",
+    #     save_path=Path(save_folder) / "spanwise_distribution",
+    #     is_save=True,
+    #     is_show=False,
+    # )
 
 
 if __name__ == "__main__":

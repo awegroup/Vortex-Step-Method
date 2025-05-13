@@ -702,6 +702,52 @@ class BodyAerodynamics:
 
         return None  # No intersection found
 
+    def viscous_drag_correction(
+        self,
+        Umag,
+        chord,
+        dir_induced_va,
+        panel,  # your panel object
+        density,
+        mu,
+        q_inf,
+    ):
+        """
+        Returns two 3D force vectors: (f_corr_drag, f_corr_span)
+        in the panel's true local drag- and spanwise- directions.
+        # this is following:
+        "A correction model for the effect of spanwise flow on the 
+        viscous force contribution in BEM and Lifting Line methods"
+        Mac Gaunaa et al 2024 J. Phys.: Conf. Ser. 2767 022068
+        DOI: 10.1088/1742-6596/2767/2/022068
+        """
+        # 1) decompose into spanwise vs. normal components
+        v_par = Umag * np.dot(dir_induced_va, panel.z_airf)
+        v_perp = np.sqrt(max(0.0, Umag**2 - v_par**2))
+
+        # 2) angle & Re
+        β = np.arctan2(v_par, v_perp)
+        Re_ref = density * v_perp * chord / mu
+
+        # 3) nondim corrections (Eqns 10 & 11)
+        f0 = 0.062 * Re_ref ** (-1 / 7)
+        ΔCd = f0 * ((np.cos(β)) ** (-5 / 7) - 1.0)
+        C_para = f0 * np.tan(β) * (np.cos(β)) ** (-5 / 7)
+
+        # 4) dimensional magnitudes
+        extra_D = ΔCd * q_inf * chord
+        extra_S = C_para * q_inf * chord
+
+        # 5) build true‐direction vectors
+        #    — drag is _tangent_ to the panel, i.e. in the direction of the induced‐wind drag
+        dir_drag = np.cross(panel.z_airf, np.cross(panel.z_airf, dir_induced_va))
+        dir_drag = dir_drag / np.linalg.norm(dir_drag)
+
+        #    — spanwise is simply panel.z_airf
+        dir_span = panel.z_airf
+
+        return extra_D * dir_drag, extra_S * dir_span
+
     def calculate_results(
         self,
         gamma_new,
@@ -720,6 +766,7 @@ class BodyAerodynamics:
         va_unit_array,
         panels,
         is_only_f_and_gamma_output,
+        is_with_viscous_drag_correction,
         reference_point,
     ):
 
@@ -834,7 +881,6 @@ class BodyAerodynamics:
             # panel force VECTOR TANGENTIAL to CALCULATED induced velocity
             drag_induced_va = drag_induced_va_mag * dir_drag_induced_va
             ftotal_induced_va = lift_induced_va + drag_induced_va
-            logging.debug(f" OLD ftotal_induced_va: {ftotal_induced_va}")
 
             ### Converting forces to prescribed wing va
             dir_lift_prescribed_va = jit_cross(va, spanwise_direction)
@@ -858,6 +904,44 @@ class BodyAerodynamics:
             #     ) + jit_dot(drag_induced_va, spanwise_direction)
 
             side_prescribed_va = side_prescribed_va
+
+            ##################################
+            if is_with_viscous_drag_correction:
+                f_corr_drag, f_corr_span = self.viscous_drag_correction(
+                    Umag=Umag_array[i],
+                    chord=panel_chord,
+                    dir_induced_va=dir_induced_va_airfoil,  # needed to compute β
+                    panel=panel_i,  # needed for true span & drag dirs
+                    density=density,
+                    mu=mu,
+                    q_inf=q_inf,
+                )
+                ftotal_induced_va += f_corr_drag + f_corr_span
+
+                # Decompose corrections into the (D, L, S) basis
+                e_D = va_unit
+                e_L = dir_lift_prescribed_va
+                e_S = dir_side
+
+                # project both correction vectors
+                dD = np.dot(f_corr_drag, e_D) + np.dot(f_corr_span, e_D)
+                dL = np.dot(f_corr_drag, e_L) + np.dot(f_corr_span, e_L)
+                dS = np.dot(f_corr_drag, e_S) + np.dot(f_corr_span, e_S)
+
+                # printing the delta's
+                print(f"\nPanel {i}")
+                print(
+                    f"Drag: {drag_prescribed_va:.3f}, Lift: {lift_prescribed_va:.3f}, Side: {side_prescribed_va:.3f}"
+                )
+                print(f"+Drag: {dD:.3f}, +Lift: {dL:.3f}, +Side: {dS:.3f}")
+
+                # add into your existing scalars
+                drag_prescribed_va += dD
+                lift_prescribed_va += dL
+                side_prescribed_va += dS
+
+            # ----------------------------------
+            ####################################
 
             ### Converting forces to the global reference frame
             fx_global_2D = jit_dot(ftotal_induced_va, np.array([1, 0, 0]))
