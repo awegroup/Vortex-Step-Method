@@ -97,7 +97,7 @@ class Wing:
             # 1. retrieve polar data
             polar_data_arr = []
             for panel in panels:
-                polar_data_arr.append(panel.polar_data)
+                polar_data_arr.append(panel.panel_polar_data)
             # 2. clear
             self.sections.clear()
             # 3. add sections
