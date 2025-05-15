@@ -58,54 +58,29 @@ class Wing:
 
     def update_wing_from_points(
         self,
-        panels,
         le_arr: np.ndarray,
         te_arr: np.ndarray,
-        d_tube_arr: np.ndarray,
-        y_camber_arr: np.ndarray,
-        aero_input_type: str = "lei_airfoil_breukels",
+        aero_input_type: str,
     ):
         """Update the wing geometry from points
         Args:
-            le_arr (np.ndarray): Array of leading edge points
-            te_arr (np.ndarray): Array of trailing edge points
-            d_tube_arr (np.ndarray): Array of tube diameters
-            y_camber_arr (np.ndarray): Array of camber heights
-            aero_input_type (str): Aerodynamic input type, options:
-                - "lei_airfoil_breukels": LEI airfoil with Breukels parameters
+            le_arr (np.ndarray): Array of leading edge points.
+            te_arr (np.ndarray): Array of trailing edge points.
+            aero_input_type (str): Type of aerodynamic input. Options include:
+                - "reuse_initial_polar_data": Reuse initial polar data.
         Returns:
             None
-        Example:
-            wing.update_wing_from_points(
-                le_arr=np.array([[0, 0, 0], [1, 0, 0]]),
-                te_arr=np.array([[1, 0, 0], [2, 0, 0]]),
-                d_tube_arr=np.array([0.1, 0.2]),
-                y_camber_arr=np.array([0.05, 0.1]),
-                aero_input_type="lei_airfoil_breukels",
-            )
         """
-        if aero_input_type == "lei_airfoil_breukels":
-            self.sections.clear()
-            for le, te, d_tube, y_camber in zip(
-                le_arr, te_arr, d_tube_arr, y_camber_arr
-            ):
-                self.add_section(le, te, ["lei_airfoil_breukels", [d_tube, y_camber]])
-
-            # Recalculate the refined aerodynamic mesh.
-            self.sections = self.refine_aerodynamic_mesh()
-        elif aero_input_type == "polar_data":
-            # 1. retrieve polar data
-            polar_data_arr = []
-            for panel in panels:
-                polar_data_arr.append(panel.panel_polar_data)
+        if aero_input_type == "reuse_initial_polar_data":
+            # 1) Capture the current ribs’ polar data BEFORE we clear them:
+            original_rib_polar_data_arr = [sec.aero_input[1] for sec in self.sections]
             # 2. clear
             self.sections.clear()
             # 3. add sections
-            for le, te, polar_data in zip(le_arr, te_arr, polar_data_arr):
+            for le, te, polar_data in zip(le_arr, te_arr, original_rib_polar_data_arr):
                 self.add_section(le, te, ["polar_data", polar_data])
             # 4. Recalculate the refined aerodynamic mesh.
             self.sections = self.refine_aerodynamic_mesh()
-
         else:
             raise ValueError(
                 f"Unsupported aero model: {aero_input_type}. Supported: lei_airfoil_breukels"

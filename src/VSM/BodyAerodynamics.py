@@ -1343,14 +1343,14 @@ class BodyAerodynamics:
         self,
         le_arr,
         te_arr,
-        d_tube_arr,
-        y_camber_arr,
-        aero_input_type: str = "lei_airfoil_breukels",
+        aero_input_type,
     ):
         # Update each wing with the new points.
         for wing in self.wings:
             wing.update_wing_from_points(
-                self.panels, le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
+                le_arr,
+                te_arr,
+                aero_input_type,
             )
         # Rebuild the panels based on the updated geometry.
         self._build_panels()
