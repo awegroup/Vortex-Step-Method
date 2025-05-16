@@ -1339,18 +1339,11 @@ class BodyAerodynamics:
 
         return lift_j + drag_j
 
-    def update_from_points(
-        self,
-        le_arr,
-        te_arr,
-        aero_input_type,
-    ):
+    def update_from_points(self, le_arr, te_arr, aero_input_type, initial_polar_data):
         # Update each wing with the new points.
         for wing in self.wings:
             wing.update_wing_from_points(
-                le_arr,
-                te_arr,
-                aero_input_type,
+                le_arr, te_arr, aero_input_type, initial_polar_data
             )
         # Rebuild the panels based on the updated geometry.
         self._build_panels()

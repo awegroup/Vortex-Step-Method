@@ -58,9 +58,10 @@ class Wing:
 
     def update_wing_from_points(
         self,
-        le_arr: np.ndarray,
-        te_arr: np.ndarray,
-        aero_input_type: str,
+        le_arr,
+        te_arr,
+        aero_input_type,
+        initial_polar_data,
     ):
         """Update the wing geometry from points
         Args:
@@ -72,15 +73,11 @@ class Wing:
             None
         """
         if aero_input_type == "reuse_initial_polar_data":
-            # 1) Capture the current ribs’ polar data BEFORE we clear them:
-            original_rib_polar_data_arr = [sec.aero_input[1] for sec in self.sections]
-            # 2. clear
+            # 1. clear
             self.sections.clear()
-            # 3. add sections
-            for le, te, polar_data in zip(le_arr, te_arr, original_rib_polar_data_arr):
-                self.add_section(le, te, ["polar_data", polar_data])
-            # 4. Recalculate the refined aerodynamic mesh.
-            self.sections = self.refine_aerodynamic_mesh()
+            # 2. add sections
+            for le, te, polar_data in zip(le_arr, te_arr, initial_polar_data):
+                self.add_section(le, te, polar_data)
         else:
             raise ValueError(
                 f"Unsupported aero model: {aero_input_type}. Supported: lei_airfoil_breukels"
