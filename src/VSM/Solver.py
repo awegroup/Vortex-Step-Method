@@ -354,9 +354,7 @@ class Solver:
                         f"Oscillation detected at iteration {i}, applying additional damping"
                     )
 
-        if converged:
-            logging.info(f"Converged after {i} iterations (base)")
-        else:
+        if not converged:
             logging.warning(f"NOT Converged after {self.max_iterations} iterations")
         return converged, gamma_new, alpha_array, Umag_array
 
