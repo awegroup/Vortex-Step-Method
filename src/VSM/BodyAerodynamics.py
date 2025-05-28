@@ -316,9 +316,6 @@ class BodyAerodynamics:
             ### Breukels Correlation ####
             #############################
             else:
-<<<<<<< HEAD
-                
-=======
                 if row["d_tube"] is None:
                     raise ValueError(
                         "d_tube must be provided as column in wing_geometry if using Breukels Correlation"
@@ -327,7 +324,7 @@ class BodyAerodynamics:
                     raise ValueError(
                         "y_camber must be provided as column in wing_geometry if using Breukels Correlation"
                     )
->>>>>>> 3799eaa4df43688081d091b01b53de525b808ffa
+
                 # 2b) always fall back to breukels
                 airfoil_data = [
                     "lei_airfoil_breukels",
