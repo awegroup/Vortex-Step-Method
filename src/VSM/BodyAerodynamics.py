@@ -150,7 +150,7 @@ class BodyAerodynamics:
         )
         # Read wing geometry and airfoil parameters from file
         df = pd.read_csv(file_path)
-
+        
         if is_half_wing:
             # make a copy of df
             df_orderded_opposite = df.copy()
@@ -190,6 +190,7 @@ class BodyAerodynamics:
                 ]
                 wing_instance.add_section(LE, TE, polar_data)
             else:
+                
                 # 2b) always fall back to breukels
                 airfoil_data = [
                     "lei_airfoil_breukels",
@@ -564,7 +565,8 @@ class BodyAerodynamics:
                 if point_in_quad(intersection, corner_points):
                     return intersection  # Found the intersection!
 
-        return None  # No intersection found
+        logging.warning("No intersection found with any panel.")
+        return None
 
     def calculate_results(
         self,
@@ -985,7 +987,7 @@ class BodyAerodynamics:
         results_dict.update([("wing_span", wing_span)])
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
-        results_dict.update([("x_cp", x_cp)])
+        results_dict.update([("center_of_pressure", x_cp)])
 
         ### Logging
         logging.debug(f"cl:{results_dict['cl']}")

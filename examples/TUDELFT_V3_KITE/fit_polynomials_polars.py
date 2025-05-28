@@ -44,6 +44,14 @@ def main():
     bridle_data_path = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
     )
+    file_path = (
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_CAD.csv"
+    )
+    polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
+    file_path = (
+        Path(PROJECT_DIR) / "data" / "V9_KITE" / "geometry.csv"
+    )
+    # polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
 
     ### 2. defining settings
     n_panels = 40
@@ -57,9 +65,9 @@ def main():
         file_path,
         n_panels,
         spanwise_panel_distribution,
-        is_with_corrected_polar=True,
-        polar_data_dir=polar_data_dir,
+        is_with_corrected_polar=False,
     )
+
 
     ### 4. Setting va
     Umag = 20
@@ -69,9 +77,9 @@ def main():
 
     ### 7. Plotting the polar curves for different angles of attack and side slip angles
     # and saving in results with literature
-    save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE"
+    save_folder = Path(PROJECT_DIR) / "results" / "V9_KITE" 
 
-    angle_of_attack_range = np.linspace(1, 19, 10)
+    angle_of_attack_range = np.linspace(0, 15, 12)
     gamma = None
     begin_time = time.time()
     center_of_pressure = np.zeros((len(angle_of_attack_range), 3))
@@ -81,12 +89,12 @@ def main():
     aero_roll = np.zeros((len(angle_of_attack_range)))
     for i, angle_i in enumerate(angle_of_attack_range):
         body_aero_polar_with_bridles.va_initialize(
-            Umag, angle_i, 5, yaw_rate
+            Umag, angle_i, 0, yaw_rate
         )
         
 
         results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
-        center_of_pressure[i, :] = results["x_cp"]
+        center_of_pressure[i, :] = results["center_of_pressure"]
         total_force[i,:] = np.array([
             results["Fx"],
             results["Fy"],
@@ -165,6 +173,15 @@ def main():
             x_cp[2],
             s=100,  # size of the point
             label=f"CP {i+1}",
+        )
+        # Add angle of attack as text near the scatter point
+        ax.text(
+            x_cp[0],
+            x_cp[1]+0.1,
+            x_cp[2],
+            f"{angle_of_attack_range[i]:.1f}°",
+            color="black",
+            fontsize=8,
         )
 
     print("Center of pressure: ", center_of_pressure)
