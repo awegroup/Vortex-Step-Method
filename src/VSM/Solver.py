@@ -52,7 +52,8 @@ class Solver:
         gamma_loop_type: str = "base",
         gamma_initial_distribution_type: str = "elliptical",
         is_only_f_and_gamma_output: bool = False,
-        reference_point: list = [0, 0, 0], 
+        is_with_viscous_drag_correction: bool = False,
+        reference_point: list = [0, 0, 0],
         # === athmospheric properties ===
         mu: float = 1.81e-5,
         density: float = 1.225,
@@ -83,6 +84,7 @@ class Solver:
         self.gamma_loop_type = gamma_loop_type
         self.gamma_initial_distribution_type = gamma_initial_distribution_type
         self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
+        self.is_with_viscous_drag_correction = is_with_viscous_drag_correction
         self.reference_point = reference_point
         # === athmospheric properties ===
         self.mu = mu
@@ -256,6 +258,7 @@ class Solver:
             va_unit_array,
             self.panels,
             self.is_only_f_and_gamma_output,
+            self.is_with_viscous_drag_correction,
             self.reference_point,
         )
         return results
@@ -351,9 +354,7 @@ class Solver:
                         f"Oscillation detected at iteration {i}, applying additional damping"
                     )
 
-        if converged:
-            logging.info(f"Converged after {i} iterations (base)")
-        else:
+        if not converged:
             logging.warning(f"NOT Converged after {self.max_iterations} iterations")
         return converged, gamma_new, alpha_array, Umag_array
 

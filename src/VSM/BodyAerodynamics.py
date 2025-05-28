@@ -120,29 +120,83 @@ class BodyAerodynamics:
         n_panels: int,
         spanwise_panel_distribution: str,
         is_with_corrected_polar: bool = False,
-        polar_data_dir: str = "",
+        polar_data_dir: str = None,
         is_with_bridles: bool = False,
         bridle_data_path: str = None,
         is_half_wing: bool = False,
+        is_neuralfoil: bool = False,
+        nf_airfoil_data_dir: str = None,
+        nf_reynolds_number: float = None,
+        nf_alpha_range: np.ndarray = [-10, 25, 26],
+        nf_xtr_lower: float = 0.01,
+        nf_xtr_upper: float = 0.01,
+        nf_n_crit: float = 9,
+        nf_is_with_save_polar: bool = False,
     ):
-        """Instantiate a BodyAerodynamics object from wing geometry and optional polar/bridle data.
+        """
+        Instantiate a BodyAerodynamics object from wing geometry data and optional aerodynamic polar or bridle data.
 
-        Args:
-            file_path (str): Path to the wing geometry CSV file. The file should contain the columns:
-            LE_x, LE_y, LE_z, TE_x, TE_y, TE_z, d_tube, camber.
-            n_panels (int): Number of panels to discretize the wing.
-            spanwise_panel_distribution (str): Method for distributing the panels along the wing span.
-            is_with_corrected_polar (bool, optional): If True, use corrected polar data from CSV files.
-            Defaults to False.
-            polar_data_dir (str, optional): Directory path where corrected polar CSV files are stored.
-            Each file should contain columns: alpha, cl, cd, cm. Defaults to "".
-            is_with_bridles (bool, optional): If True, incorporate bridles into the aerodynamic model.
-            Defaults to False.
-            bridle_data_path (str, optional): Path to the bridle data CSV file. The file should have columns:
-            p1_x, p1_y, p1_z, p2_x, p2_y, p2_z, diameter. Defaults to None.
+        This class method constructs a Wing instance and populates it with sections using data from a CSV
+        file that defines wing geometry. Optionally, it can load pre-computed corrected polars or run NeuralFoil
+        to generate polar data. Bridles can also be incorporated if required.
 
-        Returns:
-            BodyAerodynamics: An instance of BodyAerodynamics built using the provided geometry and data.
+        ## Args:
+            file_path (str): Path to the wing geometry CSV file. Required columns:
+            • LE_x, LE_y, LE_z: Leading Edge coordinates.
+            • TE_x, TE_y, TE_z: Trailing Edge coordinates.
+
+            ### --- Breukels Correlation (if used) ---
+            - d_tube: Tube diameter (required).
+            - camber (or y_camber): Camber information (required).
+
+            ### --- Wing Configuration ---
+            - is_half_wing (bool, optional): If True, the input represents half a wing. The data will be mirrored
+              (excluding the mid-span slice) to form a full wing.
+
+            ### --- Panel Configuration ---
+            - n_panels (int): Number of panels to discretize the wing.
+            - spanwise_panel_distribution (str): Method for distributing panels along the wing span
+              (e.g., uniform, cosine, etc.).
+
+            ### --- Corrected Polar Data ---
+            - is_with_corrected_polar (bool): If True, uses pre-computed corrected polar data from CSV files.
+            - polar_data_dir (str): Directory containing corrected polar CSV files, each with columns:
+              alpha, cl, cd, cm (with alpha in radians).
+
+            ### --- NeuralFoil Polar Data ---
+            - is_neuralfoil (bool): If True, computes airfoil polar data using NeuralFoil.
+            - nf_airfoil_data_dir (str): Directory containing airfoil .dat files with (x, y) columns, orderd like
+                • 1.dat: mid-span slice
+                • 2.dat: first slice from the root
+                • ...
+                • n.dat: last 'tip' slice
+
+            - nf_reynolds_number (float): Reynolds Number at which NeuralFoil should run.
+            - nf_alpha_range (np.ndarray): Array with the minimum, maximum, and number of alpha values (in degrees).
+            - nf_xtr_lower (float): Lower bound for transition location (0 means forced, 1 is fully free).
+            - nf_xtr_upper (float): Upper bound for transition location.
+            - nf_n_crit (float): Critical amplification factor for turbulent transition.
+            Guidelines:
+                • Sailplane:           12–14
+                • Motorglider:         11–13
+                • Clean wind tunnel:   10–12
+                • Average wind tunnel: 9   (standard "e^9 method")
+                • Dirty wind tunnel:   4–8
+            - nf_is_with_save_polar (bool): If True, saves the generated polar data to a CSV file in the specified directory.
+
+            ### --- Bridle Data ---
+            - is_with_bridles (bool, optional): If True, reads an additional CSV file for bridle information.
+            - bridle_data_path (str): Path to the bridle data CSV file. Required columns:
+            • p1_x, p1_y, p1_z: First bridle point.
+            • p2_x, p2_y, p2_z: Second bridle point.
+            • diameter: Cable diameter.
+
+        ## Returns:
+            BodyAerodynamics: An instance built using the provided wing geometry and (if applicable) the aerodynamic
+            polar or bridle data.
+
+        ## Raises:
+            ValueError: If required data for any enabled configuration (corrected polar, NeuralFoil, or Breukels) is missing.
         """
         # Initialize wing
         wing_instance = Wing(
@@ -166,14 +220,14 @@ class BodyAerodynamics:
             # add rows to df, mirroring the existing rows to create a full wing
             df = pd.concat([df, df_orderded_opposite])
 
-        print(f" len wing_geometry: {len(df)}")
-        # breakpoint()
-
         for i, row in df.iterrows():
             # 1) extract leading/trailing‐edge coords
             LE = np.array([row["LE_x"], row["LE_y"], row["LE_z"]])
             TE = np.array([row["TE_x"], row["TE_y"], row["TE_z"]])
 
+            ##########################
+            ### PreComputed Polars ####
+            ##########################
             if is_with_corrected_polar:
                 # 2a) corrected‐polar branch
                 df_polar = pd.read_csv(Path(polar_data_dir) / f"{i}.csv")
@@ -189,8 +243,91 @@ class BodyAerodynamics:
                     ),
                 ]
                 wing_instance.add_section(LE, TE, polar_data)
+
+            ##########################
+            ### NeuralFoil polars ####
+            ##########################
+            elif is_neuralfoil:
+
+                if nf_airfoil_data_dir is None:
+                    raise ValueError(
+                        "airfoil_data_dir must be set if is_neuralfoil is True"
+                    )
+                if nf_reynolds_number is None:
+                    raise ValueError(
+                        "Re_for_neuralfoil must be set if is_neuralfoil is True"
+                    )
+                n_files_in_airfoil_data_dir = len(
+                    [
+                        f
+                        for f in Path(nf_airfoil_data_dir).iterdir()
+                        if f.is_file() and f.suffix == ".dat"
+                    ]
+                )
+                idx = n_files_in_airfoil_data_dir - i
+                # read the airfoil data
+                airfoil_dat_file_path = Path(nf_airfoil_data_dir) / f"{idx}.dat"
+
+                # Run neuralfoil
+                import neuralfoil as nf
+
+                alpha_range = np.linspace(
+                    nf_alpha_range[0],
+                    nf_alpha_range[1],
+                    nf_alpha_range[2],
+                )
+                aero = nf.get_aero_from_dat_file(
+                    filename=airfoil_dat_file_path,
+                    alpha=alpha_range,
+                    Re=nf_reynolds_number,
+                    model_size="xxxlarge",
+                    xtr_lower=nf_xtr_lower,
+                    xtr_upper=nf_xtr_upper,
+                    n_crit=nf_n_crit,
+                )
+                polar_data = [
+                    "polar_data",
+                    np.column_stack(
+                        (np.deg2rad(alpha_range), aero["CL"], aero["CD"], aero["CM"])
+                    ),
+                ]
+                wing_instance.add_section(LE, TE, polar_data)
+
+                if nf_is_with_save_polar:
+                    # Save the polar data
+                    save_path = (
+                        Path(nf_airfoil_data_dir)
+                        / "neuralfoil_calculated_2D_polars"
+                        / f"{idx}.csv"
+                    )
+                    df_to_save = pd.DataFrame(
+                        {
+                            "alpha": alpha_range,
+                            "CL": aero["CL"],
+                            "CD": aero["CD"],
+                            "CM": aero["CM"],
+                        }
+                    )
+                    if not save_path.parent.exists():
+                        save_path.parent.mkdir(parents=True, exist_ok=True)
+                    df_to_save.to_csv(save_path, index=False)
+
+            #############################
+            ### Breukels Correlation ####
+            #############################
             else:
+<<<<<<< HEAD
                 
+=======
+                if row["d_tube"] is None:
+                    raise ValueError(
+                        "d_tube must be provided as column in wing_geometry if using Breukels Correlation"
+                    )
+                if row["y_camber"] is None:
+                    raise ValueError(
+                        "y_camber must be provided as column in wing_geometry if using Breukels Correlation"
+                    )
+>>>>>>> 3799eaa4df43688081d091b01b53de525b808ffa
                 # 2b) always fall back to breukels
                 airfoil_data = [
                     "lei_airfoil_breukels",
@@ -559,7 +696,9 @@ class BodyAerodynamics:
             normal = np.cross(v1, v2)
             normal = normal / np.linalg.norm(normal)
 
-            intersection = intersect_line_with_plane(r0_moment, F_unit, corner_points[0], normal)
+            intersection = intersect_line_with_plane(
+                r0_moment, F_unit, corner_points[0], normal
+            )
 
             if intersection is not None:
                 if point_in_quad(intersection, corner_points):
@@ -567,6 +706,52 @@ class BodyAerodynamics:
 
         logging.warning("No intersection found with any panel.")
         return None
+
+    def viscous_drag_correction(
+        self,
+        Umag,
+        chord,
+        dir_induced_va,
+        panel,  # your panel object
+        density,
+        mu,
+        q_inf,
+    ):
+        """
+        Returns two 3D force vectors: (f_corr_drag, f_corr_span)
+        in the panel's true local drag- and spanwise- directions.
+        # this is following:
+        "A correction model for the effect of spanwise flow on the
+        viscous force contribution in BEM and Lifting Line methods"
+        Mac Gaunaa et al 2024 J. Phys.: Conf. Ser. 2767 022068
+        DOI: 10.1088/1742-6596/2767/2/022068
+        """
+        # 1) decompose into spanwise vs. normal components
+        v_par = Umag * np.dot(dir_induced_va, panel.z_airf)
+        v_perp = np.sqrt(max(0.0, Umag**2 - v_par**2))
+
+        # 2) angle & Re
+        β = np.arctan2(v_par, v_perp)
+        Re_ref = density * v_perp * chord / mu
+
+        # 3) nondim corrections (Eqns 10 & 11)
+        f0 = 0.062 * Re_ref ** (-1 / 7)
+        ΔCd = f0 * ((np.cos(β)) ** (-5 / 7) - 1.0)
+        C_para = f0 * np.tan(β) * (np.cos(β)) ** (-5 / 7)
+
+        # 4) dimensional magnitudes
+        extra_D = ΔCd * q_inf * chord
+        extra_S = C_para * q_inf * chord
+
+        # 5) build true‐direction vectors
+        #    — drag is _tangent_ to the panel, i.e. in the direction of the induced‐wind drag
+        dir_drag = np.cross(panel.z_airf, np.cross(panel.z_airf, dir_induced_va))
+        dir_drag = dir_drag / np.linalg.norm(dir_drag)
+
+        #    — spanwise is simply panel.z_airf
+        dir_span = panel.z_airf
+
+        return extra_D * dir_drag, extra_S * dir_span
 
     def calculate_results(
         self,
@@ -586,6 +771,7 @@ class BodyAerodynamics:
         va_unit_array,
         panels,
         is_only_f_and_gamma_output,
+        is_with_viscous_drag_correction,
         reference_point,
     ):
 
@@ -700,7 +886,6 @@ class BodyAerodynamics:
             # panel force VECTOR TANGENTIAL to CALCULATED induced velocity
             drag_induced_va = drag_induced_va_mag * dir_drag_induced_va
             ftotal_induced_va = lift_induced_va + drag_induced_va
-            logging.debug(f" OLD ftotal_induced_va: {ftotal_induced_va}")
 
             ### Converting forces to prescribed wing va
             dir_lift_prescribed_va = jit_cross(va, spanwise_direction)
@@ -724,6 +909,44 @@ class BodyAerodynamics:
             #     ) + jit_dot(drag_induced_va, spanwise_direction)
 
             side_prescribed_va = side_prescribed_va
+
+            ##################################
+            if is_with_viscous_drag_correction:
+                f_corr_drag, f_corr_span = self.viscous_drag_correction(
+                    Umag=Umag_array[i],
+                    chord=panel_chord,
+                    dir_induced_va=dir_induced_va_airfoil,  # needed to compute β
+                    panel=panel_i,  # needed for true span & drag dirs
+                    density=density,
+                    mu=mu,
+                    q_inf=q_inf,
+                )
+                ftotal_induced_va += f_corr_drag + f_corr_span
+
+                # Decompose corrections into the (D, L, S) basis
+                e_D = va_unit
+                e_L = dir_lift_prescribed_va
+                e_S = dir_side
+
+                # project both correction vectors
+                dD = np.dot(f_corr_drag, e_D) + np.dot(f_corr_span, e_D)
+                dL = np.dot(f_corr_drag, e_L) + np.dot(f_corr_span, e_L)
+                dS = np.dot(f_corr_drag, e_S) + np.dot(f_corr_span, e_S)
+
+                # printing the delta's
+                print(f"\nPanel {i}")
+                print(
+                    f"Drag: {drag_prescribed_va:.3f}, Lift: {lift_prescribed_va:.3f}, Side: {side_prescribed_va:.3f}"
+                )
+                print(f"+Drag: {dD:.3f}, +Lift: {dL:.3f}, +Side: {dS:.3f}")
+
+                # add into your existing scalars
+                drag_prescribed_va += dD
+                lift_prescribed_va += dL
+                side_prescribed_va += dS
+
+            # ----------------------------------
+            ####################################
 
             ### Converting forces to the global reference frame
             fx_global_2D = jit_dot(ftotal_induced_va, np.array([1, 0, 0]))
@@ -1121,18 +1344,11 @@ class BodyAerodynamics:
 
         return lift_j + drag_j
 
-    def update_from_points(
-        self,
-        le_arr: np.ndarray,
-        te_arr: np.ndarray,
-        d_tube_arr: np.ndarray,
-        y_camber_arr: np.ndarray,
-        aero_input_type: str = "lei_airfoil_breukels",
-    ):
+    def update_from_points(self, le_arr, te_arr, aero_input_type, initial_polar_data):
         # Update each wing with the new points.
         for wing in self.wings:
             wing.update_wing_from_points(
-                le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type
+                le_arr, te_arr, aero_input_type, initial_polar_data
             )
         # Rebuild the panels based on the updated geometry.
         self._build_panels()
