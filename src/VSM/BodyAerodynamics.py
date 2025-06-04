@@ -748,6 +748,71 @@ class BodyAerodynamics:
 
         return extra_D * dir_drag, extra_S * dir_span
 
+    def compute_panel_center_of_pressures(
+        self, results_dict, reference_point=[0, 0, 0]
+    ):
+        """
+        Compute the center of pressure for each panel by using the full 3D
+        force and moment vectors and projecting them onto the panel's local axes.
+
+        Parameters
+        ----------
+        results_dict : dict
+            Must contain keys
+            - "F_distribution": list of (3,) force vectors in global coords
+            - "M_distribution": list of (3,) moment vectors about reference_point
+        reference_point : array_like (3,)
+            The point about which M_distribution is measured.
+
+        Returns
+        -------
+        panel_cp_locations : list of (3,) floats
+            Global XYZ location of CP for each panel.
+        """
+        panel_cp_locations = []
+        # sum of these is equal to entire force and moment on the body
+        F_dist = results_dict["F_distribution"]
+        M_dist = results_dict["M_distribution"]
+
+        for i, (F_glob, M_ref) in enumerate(zip(F_dist, M_dist)):
+            panel = self.panels[i]
+            ac = panel.aerodynamic_center  # (3,)
+            y_airf = panel.y_airf  # chord direction
+            z_airf = panel.z_airf  # span direction
+            c = panel.chord
+
+            F = np.array(F_glob)
+            M_ref = np.array(M_ref)
+            # 1) shift moment from 'reference_point' back to the AC:
+            r = ac - np.array(reference_point)
+            M_local = M_ref - np.cross(r, F)
+
+            # 2) pitching moment about span axis:
+            m_pitch = np.dot(M_local, z_airf)
+
+            # 3) force in the chord plane (perpendicular to span)
+            F_perp = F - np.dot(F, z_airf) * z_airf
+            F_perp_mag = np.linalg.norm(F_perp)
+
+            # 4) if there's no pitching‐plane force, fallback to AC
+            if F_perp_mag < 1e-12:
+                panel_cp_locations.append(ac)
+                continue
+
+            # 5) lever arm along chord = M / F
+            lever = m_pitch / F_perp_mag
+
+            # 6) clamp lever arm so CP stays on [LE, TE]:
+            #    at quarter chord AC sits at +0.25c from LE,
+            #    so lever ∈ [−0.25c, +0.75c]
+            lever = np.clip(lever, -0.25 * c, 0.75 * c)
+
+            # 7) build CP in global coords
+            cp = ac + lever * y_airf
+            panel_cp_locations.append(cp)
+
+        return panel_cp_locations
+
     def calculate_results(
         self,
         gamma_new,
@@ -1206,6 +1271,9 @@ class BodyAerodynamics:
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
         results_dict.update([("x_cp", x_cp)])
+
+        panel_cp_locations = self.compute_panel_center_of_pressures(results_dict)
+        results_dict.update([("panel_cp_locations", panel_cp_locations)])
 
         ### Logging
         logging.debug(f"cl:{results_dict['cl']}")

@@ -17,7 +17,7 @@ from VSM.interactive import interactive_plot
 def main():
     """
     This script demonstrates how to use the VSM library to perform a 3D aerodynamic analysis of the TUDELFT_V3_KITE.
-    
+
     The example covers the following steps:
     1. Define file paths for the kite geometry, 2D polars, and bridle geometry.
     2. Load the kite geometry from a CSV file.
@@ -34,10 +34,13 @@ def main():
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_surfplan.csv"
-    polar_data_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
+    file_path = (
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "wing_geometry_from_surfplan.csv"
     )
+    polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
     bridle_data_path = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
     )
@@ -46,7 +49,6 @@ def main():
     n_panels = 40
     spanwise_panel_distribution = "uniform"
     solver_base_version = Solver()
-
 
     ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
     print(f"\nCreating breukels input")
