@@ -204,7 +204,7 @@ class BodyAerodynamics:
         )
         # Read wing geometry and airfoil parameters from file
         df = pd.read_csv(file_path)
-
+        
         if is_half_wing:
             # make a copy of df
             df_orderded_opposite = df.copy()
@@ -324,6 +324,7 @@ class BodyAerodynamics:
                     raise ValueError(
                         "y_camber must be provided as column in wing_geometry if using Breukels Correlation"
                     )
+
                 # 2b) always fall back to breukels
                 airfoil_data = [
                     "lei_airfoil_breukels",
@@ -700,7 +701,8 @@ class BodyAerodynamics:
                 if point_in_quad(intersection, corner_points):
                     return intersection  # Found the intersection!
 
-        return None  # No intersection found
+        logging.warning("No intersection found with any panel.")
+        return None
 
     def viscous_drag_correction(
         self,
@@ -1270,7 +1272,7 @@ class BodyAerodynamics:
         results_dict.update([("wing_span", wing_span)])
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
-        results_dict.update([("x_cp", x_cp)])
+        results_dict.update([("center_of_pressure", x_cp)])
 
         panel_cp_locations = self.compute_panel_center_of_pressures(results_dict)
         results_dict.update([("panel_cp_locations", panel_cp_locations)])
