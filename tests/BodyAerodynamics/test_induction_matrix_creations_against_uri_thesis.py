@@ -183,8 +183,27 @@ def test_induction_matrix_creation():
     core_radius_fraction = 1e-20  # only value I could find
     wing = Wing(n_panels, "unchanged")
     for idx in range(int(len(coord_left_to_right) / 2)):
+        # Generate inviscid polar data for this section
+        alpha_range = [
+            -10 * np.pi / 180,
+            30 * np.pi / 180,
+            np.pi / 180,
+        ]  # radians, step = 1 deg
+        alpha = np.arange(
+            alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
+        )
+        polar_data = np.column_stack(
+            [
+                alpha,
+                2 * np.pi * alpha,  # CL
+                np.zeros_like(alpha),  # CD
+                np.zeros_like(alpha),  # CM
+            ]
+        )
         wing.add_section(
-            coord_left_to_right[2 * idx], coord_left_to_right[2 * idx + 1], ["inviscid"]
+            coord_left_to_right[2 * idx],
+            coord_left_to_right[2 * idx + 1],
+            polar_data,
         )
     wing_aero = BodyAerodynamics([wing])
     wing_aero.va = Uinf

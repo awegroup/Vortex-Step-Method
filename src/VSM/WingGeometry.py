@@ -9,7 +9,8 @@ logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class Wing:
-    """Class to define a wing object for aerodynamic analysis.
+    """
+    Class to define a wing object for aerodynamic analysis.
 
     The Wing class represents a wing geometry composed of multiple sections and provides methods
     to update, refine, and analyze the aerodynamic mesh as well as compute geometric properties.
@@ -26,20 +27,20 @@ class Wing:
         sections (List[Section]): List of Section objects that define the wing geometry.
 
     Methods:
-        update_wing_from_points(le_arr, te_arr, d_tube_arr, y_camber_arr, aero_input_type):
+        update_wing_from_points(le_arr, te_arr, polar_data_arr, aero_input_type):
             Updates the wing geometry using arrays of leading edge points, trailing edge points,
-            tube diameters, and camber heights.
-        add_section(LE_point, TE_point, aero_input):
-            Adds a new section to the wing with the given leading edge, trailing edge, and aerodynamic input.
+            and polar data arrays.
+        add_section(LE_point, TE_point, polar_data):
+            Adds a new section to the wing with the given leading edge, trailing edge, and polar data.
         find_farthest_point_and_sort(sections):
             Determines a starting section and sorts all sections based on proximity for mesh refinement.
         refine_aerodynamic_mesh():
             Refines the wing's aerodynamic mesh according to the selected spanwise panel distribution.
-        refine_mesh_for_uniform_or_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, aero_input):
+        refine_mesh_for_uniform_or_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, polar_data):
             Refines the mesh using linear or cosine spacing by interpolating leading/trailing edge points
-            and aerodynamic input.
-        calculate_new_aero_input(aero_input, section_index, left_weight, right_weight):
-            Interpolates aerodynamic input data between adjacent sections.
+            and polar data.
+        calculate_new_polar_data(polar_data, section_index, left_weight, right_weight):
+            Interpolates polar data between adjacent sections.
         refine_mesh_by_splitting_provided_sections():
             Splits the provided sections into additional sections to match the desired number of panels.
         calculate_cosine_van_Garrel(new_sections):
@@ -50,55 +51,50 @@ class Wing:
             Calculates the projected area of the wing onto a plane defined by the given normal vector.
     """
 
-    # this creates self.n_panels and so on
     n_panels: int
     spanwise_panel_distribution: str = "uniform"
     spanwise_direction: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
-    sections: List["Section"] = field(default_factory=list)  # child-class
+    sections: List["Section"] = field(default_factory=list)
 
     def update_wing_from_points(
         self,
         le_arr,
         te_arr,
         aero_input_type,
-        initial_polar_data,
+        polar_data_arr,
     ):
-        """Update the wing geometry from points
+        """
+        Update the wing geometry from points and polar data arrays.
+
         Args:
             le_arr (np.ndarray): Array of leading edge points.
             te_arr (np.ndarray): Array of trailing edge points.
-            aero_input_type (str): Type of aerodynamic input. Options include:
-                - "reuse_initial_polar_data": Reuse initial polar data.
-        Returns:
-            None
+            aero_input_type (str): Type of aerodynamic input. Only "reuse_initial_polar_data" is supported.
+            polar_data_arr (list): List of polar_data arrays for each section.
         """
         if aero_input_type == "reuse_initial_polar_data":
-            # 1. clear
             self.sections.clear()
-            # 2. add sections
-            for le, te, polar_data in zip(le_arr, te_arr, initial_polar_data):
+            for le, te, polar_data in zip(le_arr, te_arr, polar_data_arr):
                 self.add_section(le, te, polar_data)
         else:
             raise ValueError(
-                f"Unsupported aero model: {aero_input_type}. Supported: lei_airfoil_breukels"
+                f"Unsupported aero model: {aero_input_type}. Supported: reuse_initial_polar_data"
             )
 
-    def add_section(self, LE_point: np.array, TE_point: np.array, aero_input: List):
-        """Add a section to the wing
-        Args:
-            LE_point (np.array): Leading edge point of the section
-            TE_point (np.array): Trailing edge point of the section
-            aero_input (list): Aerodynamic input for the section
-        Returns:
-            None
-        Example:
-            wing.add_section(
-                LE_point=np.array([0, 0, 0]),
-                TE_point=np.array([1, 0, 0]),
-                aero_input=["lei_airfoil_breukels", [0.1, 0.05]],
-            )
+    def add_section(
+        self, LE_point: np.array, TE_point: np.array, polar_data: np.ndarray
+    ):
         """
-        self.sections.append(Section(LE_point, TE_point, aero_input))
+        Add a section to the wing.
+
+        Args:
+            LE_point (np.array): Leading edge point of the section.
+            TE_point (np.array): Trailing edge point of the section.
+            polar_data (np.ndarray): Polar data array for the section ([alpha, CL, CD, CM]).
+        """
+        self.sections.append(
+            Section(np.array(LE_point), np.array(TE_point), np.array(polar_data))
+        )
 
     def find_farthest_point_and_sort(self, sections):
         """Sorts the sections based on their proximity to each other
@@ -187,7 +183,7 @@ class Wing:
 
         ### Defining variables extracting from the object
         # Extract LE, TE, and aero_input from the sections
-        LE, TE, aero_input = (
+        LE, TE, polar_data = (
             np.zeros((len(self.sections), 3)),
             np.zeros((len(self.sections), 3)),
             [],
@@ -195,7 +191,7 @@ class Wing:
         for i, section in enumerate(self.sections):
             LE[i] = section.LE_point
             TE[i] = section.TE_point
-            aero_input.append(section.aero_input)
+            polar_data.append(section.polar_data)
 
         # refine the mesh
         if self.spanwise_panel_distribution in [
@@ -204,7 +200,7 @@ class Wing:
             "cosine_van_Garrel",
         ]:
             return self.refine_mesh_for_uniform_or_cosine_distribution(
-                self.spanwise_panel_distribution, n_sections, LE, TE, aero_input
+                self.spanwise_panel_distribution, n_sections, LE, TE, polar_data
             )
         elif (self.spanwise_panel_distribution == "unchanged") or (
             len(self.sections) == n_sections
@@ -218,7 +214,7 @@ class Wing:
             )
 
     def refine_mesh_for_uniform_or_cosine_distribution(
-        self, spanwise_panel_distribution, n_sections, LE, TE, aero_input
+        self, spanwise_panel_distribution, n_sections, LE, TE, polar_data
     ):
         """Refine the aerodynamic mesh of the wing based on uniform or cosine spacing
         Args:
@@ -226,18 +222,18 @@ class Wing:
             n_sections (int): Number of sections to create
             LE (np.ndarray): Leading edge points
             TE (np.ndarray): Trailing edge points
-            aero_input (list): Aerodynamic input for each section
+            polar_data (list): Aerodynamic input for each section
         Returns:
             new_sections (list): List of Section objects with refined aerodynamic mesh
         Example:
             new_sections = wing.refine_mesh_for_uniform_or_cosine_distribution(
-                "uniform", 5, LE, TE, aero_input
+                "uniform", 5, LE, TE, polar_data
             )
         """
         if n_sections == 2:
             return [
-                Section(LE[0], TE[0], aero_input[0]),
-                Section(LE[-1], TE[-1], aero_input[-1]),
+                Section(LE[0], TE[0], polar_data[0]),
+                Section(LE[-1], TE[-1], polar_data[-1]),
             ]
 
         # 1. Compute the 1/4 chord line
@@ -262,7 +258,7 @@ class Wing:
         new_quarter_chord = np.zeros((n_sections, 3))
         new_LE = np.zeros((n_sections, 3))
         new_TE = np.zeros((n_sections, 3))
-        new_aero_input = np.empty((n_sections,), dtype=object)
+        new_polar_data = np.empty((n_sections,), dtype=object)
         new_sections = []
 
         # 3. Calculate new quarter chord points and interpolate aero inputs
@@ -314,115 +310,71 @@ class Wing:
             new_TE[i] = new_quarter_chord[i] + 0.75 * avg_chord
 
             # Interpolate aero_input
-            new_aero_input[i] = self.calculate_new_aero_input(
-                aero_input, section_index, left_weight, right_weight
+            new_polar_data[i] = self.calculate_new_polar_data(
+                polar_data, section_index, left_weight, right_weight
             )
 
-            new_sections.append(Section(new_LE[i], new_TE[i], new_aero_input[i]))
+            new_sections.append(
+                Section(
+                    np.array(new_LE[i]),
+                    np.array(new_TE[i]),
+                    np.array(new_polar_data[i]),
+                )
+            )
 
             if self.spanwise_panel_distribution == "cosine_van_Garrel":
                 raise NotImplementedError(
                     "Cosine van Garrel distribution is not yet implemented"
                 )
-                # new_sections = self.calculate_cosine_van_Garrel(new_sections)
-
         return new_sections
 
-    def interpolate_to_common_alpha(
-        self, alpha_common, alpha_orig, CL_orig, CD_orig, CM_orig
+    def calculate_new_polar_data(
+        self, polar_data, section_index, left_weight, right_weight
     ):
-        CL_common = np.interp(alpha_common, alpha_orig, CL_orig)
-        CD_common = np.interp(alpha_common, alpha_orig, CD_orig)
-        CM_common = np.interp(alpha_common, alpha_orig, CM_orig)
-        return CL_common, CD_common, CM_common
-
-    def calculate_new_aero_input(
-        self, aero_input, section_index, left_weight, right_weight
-    ):
-        """Interpolates the aero_input of two sections
-        Args:
-            aero_input (list): List of aerodynamic input data
-            section_index (int): Index of the section to interpolate
-            left_weight (float): Weight for the left section
-            right_weight (float): Weight for the right section
-        Returns:
-            new_aero_input (list): Interpolated aerodynamic input data
-        Example:
-            new_aero_input = wing.calculate_new_aero_input(
-                aero_input, section_index, left_weight, right_weight
-            )
         """
-        if aero_input[section_index][0] != aero_input[section_index + 1][0]:
-            raise NotImplementedError(
-                "Different aero models over the span are not supported"
-            )
-        if aero_input[section_index][0] == "inviscid":
-            return ["inviscid"]
-        elif aero_input[section_index][0] == "polar_data":
-            polar_left = aero_input[section_index][1]
-            polar_right = aero_input[section_index + 1][1]
+        Interpolates the polar_data of two sections.
+        Args:
+            polar_data (list): List of (N,4) polar arrays.
+            section_index (int): Index of the section to interpolate.
+            left_weight (float): Weight for the left section.
+            right_weight (float): Weight for the right section.
+        Returns:
+            new_polar (np.ndarray): Interpolated polar data (N,4).
+        """
+        polar_left = polar_data[section_index]
+        polar_right = polar_data[section_index + 1]
 
-            # Unpack polar data for (N,4) arrays:
-            # Each row is [alpha, cl, cd, cm]
-            alpha_left = polar_left[:, 0]
-            CL_left = polar_left[:, 1]
-            CD_left = polar_left[:, 2]
-            CM_left = polar_left[:, 3]
+        # Unpack polar data for (N,4) arrays:
+        # Each row is [alpha, cl, cd, cm]
+        alpha_left = polar_left[:, 0]
+        CL_left = polar_left[:, 1]
+        CD_left = polar_left[:, 2]
+        CM_left = polar_left[:, 3]
 
-            alpha_right = polar_right[:, 0]
-            CL_right = polar_right[:, 1]
-            CD_right = polar_right[:, 2]
-            CM_right = polar_right[:, 3]
+        alpha_right = polar_right[:, 0]
+        CL_right = polar_right[:, 1]
+        CD_right = polar_right[:, 2]
+        CM_right = polar_right[:, 3]
 
-            # Create a common alpha array spanning the union of both alpha arrays
-            alpha_common = np.union1d(alpha_left, alpha_right)
+        # Create a common alpha array spanning the union of both alpha arrays
+        alpha_common = np.union1d(alpha_left, alpha_right)
 
-            # Interpolate both sets to the common alpha array.
-            # Assume interpolate_to_common_alpha returns arrays for Cl, Cd, and Cm.
-            CL_left_common, CD_left_common, CM_left_common = (
-                self.interpolate_to_common_alpha(
-                    alpha_common, alpha_left, CL_left, CD_left, CM_left
-                )
-            )
-            CL_right_common, CD_right_common, CM_right_common = (
-                self.interpolate_to_common_alpha(
-                    alpha_common, alpha_right, CL_right, CD_right, CM_right
-                )
-            )
+        # Interpolate both sets to the common alpha array.
+        CL_left_common = np.interp(alpha_common, alpha_left, CL_left)
+        CD_left_common = np.interp(alpha_common, alpha_left, CD_left)
+        CM_left_common = np.interp(alpha_common, alpha_left, CM_left)
+        CL_right_common = np.interp(alpha_common, alpha_right, CL_right)
+        CD_right_common = np.interp(alpha_common, alpha_right, CD_right)
+        CM_right_common = np.interp(alpha_common, alpha_right, CM_right)
 
-            # Interpolate using the given weights.
-            CL_interp = CL_left_common * left_weight + CL_right_common * right_weight
-            CD_interp = CD_left_common * left_weight + CD_right_common * right_weight
-            CM_interp = CM_left_common * left_weight + CM_right_common * right_weight
+        # Interpolate using the given weights.
+        CL_interp = CL_left_common * left_weight + CL_right_common * right_weight
+        CD_interp = CD_left_common * left_weight + CD_right_common * right_weight
+        CM_interp = CM_left_common * left_weight + CM_right_common * right_weight
 
-            # Return the interpolated polar data in an (N,4) array.
-            new_polar = np.column_stack((alpha_common, CL_interp, CD_interp, CM_interp))
-            return ["polar_data", new_polar]
-        elif aero_input[section_index][0] == "lei_airfoil_breukels":
-            tube_diameter_left = aero_input[section_index][1][0]
-            tube_diameter_right = aero_input[section_index + 1][1][0]
-            tube_diameter_i = np.array(
-                tube_diameter_left * left_weight + tube_diameter_right * right_weight
-            )
-
-            chamber_height_left = aero_input[section_index][1][1]
-            chamber_height_right = aero_input[section_index + 1][1][1]
-            chamber_height_i = np.array(
-                chamber_height_left * left_weight + chamber_height_right * right_weight
-            )
-            logging.debug(f"left_weight: {left_weight}")
-            logging.debug(f"right_weight: {right_weight}")
-            logging.debug(f"tube_diameter_i: {tube_diameter_i}")
-            logging.debug(f"chamber_height_i: {chamber_height_i}")
-            return [
-                "lei_airfoil_breukels",
-                np.array([tube_diameter_i, chamber_height_i]),
-            ]
-
-        else:
-            raise NotImplementedError(
-                f"Unsupported aero model: {aero_input[section_index][0]}"
-            )
+        # Return the interpolated polar data in an (N,4) array.
+        new_polar = np.column_stack((alpha_common, CL_interp, CD_interp, CM_interp))
+        return new_polar
 
     def refine_mesh_by_splitting_provided_sections(self):
         """Refine the aerodynamic mesh of the wing by splitting the provided sections
@@ -460,7 +412,7 @@ class Wing:
         # Extract provided LE, TE, and aero_inputs for interpolation
         LE = [np.array(section.LE_point) for section in self.sections]
         TE = [np.array(section.TE_point) for section in self.sections]
-        aero_input = [section.aero_input for section in self.sections]
+        polar_data = [section.polar_data for section in self.sections]
 
         for left_section_index in range(n_section_pairs):
             # Add the provided section at the start of this pair
@@ -478,9 +430,9 @@ class Wing:
             TE_pair_list = np.array(
                 [TE[left_section_index], TE[left_section_index + 1]]
             )
-            aero_input_pair_list = [
-                aero_input[left_section_index],
-                aero_input[left_section_index + 1],
+            polar_data_pair_list = [
+                polar_data[left_section_index],
+                polar_data[left_section_index + 1],
             ]
 
             # Generate the new sections for this pair
@@ -491,7 +443,7 @@ class Wing:
                     + 2,  # +2 because refine_mesh expects total sections, including endpoints
                     LE_pair_list,
                     TE_pair_list,
-                    aero_input_pair_list,
+                    polar_data_pair_list,
                 )
                 # Append only the new sections (excluding the endpoints, which are already in `new_sections`)
                 new_sections.extend(new_splitted_sections[1:-1])
@@ -590,21 +542,13 @@ class Wing:
 
 @dataclass
 class Section:
-    """Section class representing the geometry of a wing section.
+    """
+    Section class representing the geometry of a wing section.
 
     Parameters:
         LE_point (np.ndarray): The leading edge coordinate.
         TE_point (np.ndarray): The trailing edge coordinate.
-        aero_input (list): The aerodynamic input data, which can be one of:
-            - ["inviscid"]: for inviscid aerodynamics.
-            - ["polar_data", [alpha, CL, CD, CM]]:
-                * alpha: Array of angles of attack (in radians).
-                * CL: Array of lift coefficients.
-                * CD: Array of drag coefficients.
-                * CM: Array of moment coefficients.
-            - ["lei_airfoil_breukels", [d_tube, camber]]:
-                * d_tube: Non-dimensional tube diameter.
-                * camber: Non-dimensional camber height.
+        polar_data (np.ndarray): The aerodynamic polar data as an (N,4) array: [alpha, CL, CD, CM].
 
     Returns:
         Section: An instance representing the wing section.
@@ -612,4 +556,4 @@ class Section:
 
     LE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     TE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
-    aero_input: list = field(default_factory=list)
+    polar_data: np.ndarray = field(default_factory=lambda: np.zeros((0, 4)))

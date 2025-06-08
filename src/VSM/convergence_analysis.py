@@ -1,13 +1,12 @@
 import numpy as np
 import time as time
 from pathlib import Path
-import pandas as pd
-import matplotlib.pyplot as plt
 from VSM.WingGeometry import Wing
 from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution
 from VSM.plot_styling import set_plot_style
+import pandas as pd
 
 
 def generate_n_panel_sensivitity_df(
@@ -31,13 +30,12 @@ def generate_n_panel_sensivitity_df(
 
     results_list = []
     for n_panels in n_panels_list:
-        body_aero = BodyAerodynamics.from_file(
+        # Use the new instantiate method
+        body_aero = BodyAerodynamics.instantiate(
             n_panels=n_panels,
-            spanwise_panel_distribution=spanwise_panel_distribution,
             file_path=geometry_path,
-            is_with_corrected_polar=is_with_corrected_polar,
-            polar_data_dir=polar_data_dir,
-            is_half_wing=True,
+            spanwise_panel_distribution=spanwise_panel_distribution,
+            is_with_bridles=False,
         )
         # Initialize the aerodynamic model with the test conditions.
         body_aero.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)

@@ -15,6 +15,7 @@ import tests.thesis_functions_oriol_cayon as thesis_functions
 from VSM.WingGeometry import Wing
 from VSM.BodyAerodynamics import BodyAerodynamics
 from VSM.Solver import Solver
+from VSM.AirfoilAerodynamics import AirfoilAerodynamics
 
 
 def cosspace(min, max, n_points):
@@ -495,11 +496,17 @@ def calculate_new_for_alpha_range(
     wing = Wing(N, "unchanged")
     for idx in range(int(len(coord_left_to_right) / 2)):
         logging.debug(f"coord_left_to_right[idx] = {coord_left_to_right[idx]}")
-        wing.add_section(
+        safe_add_section(
+            wing,
             coord_left_to_right[2 * idx],
             coord_left_to_right[2 * idx + 1],
             airfoil_input,
         )
+        # wing.add_section(
+        #     coord_left_to_right[2 * idx],
+        #     coord_left_to_right[2 * idx + 1],
+        #     airfoil_input,
+        # )
 
     wing_aero = BodyAerodynamics([wing])
 
@@ -734,3 +741,44 @@ def calculate_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
         projected_area += area
 
     return projected_area
+
+
+def safe_add_section(wing, LE, TE, polar_data):
+    """
+    Helper to add a section to a Wing, handling ["polar_data", array], plain array, ["inviscid"], or ["lei_airfoil_breukels", [t, kappa]].
+    """
+    if (
+        isinstance(polar_data, (list, tuple))
+        and len(polar_data) == 1
+        and polar_data[0] == "inviscid"
+    ):
+        alpha_range = [-10, 30, 1]
+        alpha = np.arange(
+            alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
+        )
+        alpha_rad = np.deg2rad(alpha)
+        cl = 2 * np.pi * alpha_rad
+        cd = np.zeros_like(alpha_rad)
+        cm = np.zeros_like(alpha_rad)
+        polar_data = np.column_stack((alpha_rad, cl, cd, cm))
+    elif (
+        isinstance(polar_data, (list, tuple))
+        and len(polar_data) == 2
+        and polar_data[0] == "lei_airfoil_breukels"
+    ):
+        t, kappa = polar_data[1]
+        alpha_range = [-10, 30, 1]
+        aero = AirfoilAerodynamics.from_yaml_entry(
+            "breukels_regression", {"t": t, "kappa": kappa}, alpha_range=alpha_range
+        )
+        polar_data = aero.to_polar_array()
+    elif isinstance(polar_data, (list, tuple)) and isinstance(polar_data[0], str):
+        polar_data = np.array(polar_data[1])
+    else:
+        polar_data = np.array(polar_data)
+    # Ensure polar_data is 2D
+    if polar_data.ndim != 2 or polar_data.shape[1] != 4:
+        raise ValueError(
+            f"polar_data must be (N,4) array, got shape {polar_data.shape}"
+        )
+    wing.add_section(LE, TE, polar_data)

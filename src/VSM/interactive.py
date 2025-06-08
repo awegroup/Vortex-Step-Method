@@ -200,8 +200,11 @@ def add_aerodynamic_vectors(
             showlegend=is_first,
         )
     )
-
     # Add the arrowhead as a cone
+    sizeref = np.linalg.norm(vector) / 10  # Adjust for the size of the arrowhead
+    if np.isnan(sizeref) or sizeref <= 0:
+        sizeref = 1  # or some reasonable default
+
     fig.add_trace(
         go.Cone(
             x=[vector_endpoint[0]],
@@ -211,7 +214,7 @@ def add_aerodynamic_vectors(
             v=[vector[1]],
             w=[vector[2]],
             sizemode="absolute",
-            sizeref=np.linalg.norm(vector) / 10,  # Adjust for the size of the arrowhead
+            sizeref=sizeref,  # Adjust for the size of the arrowhead
             anchor="tip",
             colorscale=[[0, "red"], [1, "red"]],
             showscale=False,

@@ -67,6 +67,7 @@ def main():
     yaw_rate = 0
     n_panels_list = [20, 40, 50]
 
+    # The following call will use BodyAerodynamics.instantiate inside generate_csv_files
     convergence_results_dir = generate_csv_files(
         convergence_analysis_dir,
         geometry_path,

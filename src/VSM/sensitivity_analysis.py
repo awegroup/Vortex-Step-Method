@@ -155,15 +155,13 @@ def testing_n_panels_effect(
     y_coords_list = []
 
     for n_panels in n_panels_list:
-        body_aero = BodyAerodynamics.from_file(
+        # Use the new instantiate method
+        body_aero = BodyAerodynamics.instantiate(
             n_panels=n_panels,
-            spanwise_panel_distribution=spanwise_panel_distribution,
             file_path=file_path,
-            is_with_corrected_polar=is_with_corrected_polar,
-            polar_data_dir=polar_data_dir,
-            is_half_wing=True,
+            spanwise_panel_distribution=spanwise_panel_distribution,
+            is_with_bridles=False,
         )
-
         body_aero_list.append(body_aero)
         label_list.append(f"n_panels = {n_panels}")
         y_coords_list.append([panel.control_point[1] for panel in body_aero.panels])
@@ -299,13 +297,12 @@ def testing_all_solver_settings(
         n_panels_list,
         relaxation_factor_list,
     ]
-    body_aero = BodyAerodynamics.from_file(
+    # Use instantiate for the base object
+    body_aero = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        spanwise_panel_distribution=spanwise_panel_distribution,
         file_path=geometry_path,
-        is_with_corrected_polar=is_with_corrected_polar,
-        polar_data_dir=polar_data_dir,
-        is_half_wing=True,
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
     )
 
     for parameter, value_list in zip(parameter_list, value_list_list):

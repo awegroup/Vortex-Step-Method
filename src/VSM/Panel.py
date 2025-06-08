@@ -88,62 +88,26 @@ class Panel:
         y_airf,
         z_airf,
     ):
-        TE_point_1 = np.array(section_1.TE_point)
-        LE_point_1 = np.array(section_1.LE_point)
-        TE_point_2 = np.array(section_2.TE_point)
-        LE_point_2 = np.array(section_2.LE_point)
-
-        self._TE_point_1 = TE_point_1
-        self._LE_point_1 = LE_point_1
-        self._TE_point_2 = TE_point_2
-        self._LE_point_2 = LE_point_2
+        self._TE_point_1 = section_1.TE_point
+        self._LE_point_1 = section_1.LE_point
+        self._TE_point_2 = section_2.TE_point
+        self._LE_point_2 = section_2.LE_point
         self._chord = np.average(
             [
-                jit_norm(TE_point_1 - LE_point_1),
-                jit_norm(TE_point_2 - LE_point_2),
+                jit_norm(self._TE_point_1 - self._LE_point_1),
+                jit_norm(self._TE_point_2 - self._LE_point_2),
             ]
         )
         self._va = None
-        self._corner_points = np.array([LE_point_1, TE_point_1, TE_point_2, LE_point_2])
-
-        # Defining panel_aero_model
-        self._panel_polar_data = None
-        if section_1.aero_input[0] != section_2.aero_input[0]:
-            raise ValueError(
-                "Both sections should have the same aero_input, got"
-                + section_1.aero_input[0]
-                + " and "
-                + section_2.aero_input[0]
-            )
-        self._panel_aero_model = section_1.aero_input[0]
-
-        # Initializing the panel aerodynamic data dependent on the aero_model
-        if self._panel_aero_model == "polar_data":
-            # Average the polar_data of the two sections
-            aero_1 = section_1.aero_input[1]
-            aero_2 = section_2.aero_input[1]
-            if (
-                len(aero_1) != len(aero_2)
-                or np.array(aero_1).shape != np.array(aero_2).shape
-            ):
-                raise ValueError(
-                    "The polar data of the two sections should have the same shape & length"
-                )
-            self._panel_polar_data = np.array(
-                [0.5 * (a1 + a2) for a1, a2 in zip(aero_1, aero_2)]
-            )
-        elif self._panel_aero_model == "lei_airfoil_breukels":
-            self.instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(
-                section_1, section_2
-            )
-        elif (
-            self._panel_aero_model == "inviscid"
-            or self._panel_aero_model == "cl_is_pisin2alpha"
-        ):
-            pass
-        else:
-            raise NotImplementedError
-
+        self._corner_points = np.array(
+            [self._LE_point_1, self._TE_point_1, self._TE_point_2, self._LE_point_2]
+        )
+        self._panel_polar_data = np.array(
+            [
+                0.5 * (a1 + a2)
+                for a1, a2 in zip(section_1.polar_data, section_2.polar_data)
+            ]
+        )
         self._aerodynamic_center = aerodynamic_center
         self._control_point = control_point
         self._bound_point_1 = bound_point_1
@@ -159,8 +123,8 @@ class Panel:
         ### Setting up the filaments (order used to reversed for right-to-left input)
         self._filaments = []
         self._filaments.append(BoundFilament(x1=bound_point_2, x2=bound_point_1))
-        self._filaments.append(BoundFilament(x1=bound_point_1, x2=TE_point_1))
-        self._filaments.append(BoundFilament(x1=TE_point_2, x2=bound_point_2))
+        self._filaments.append(BoundFilament(x1=bound_point_1, x2=self._TE_point_1))
+        self._filaments.append(BoundFilament(x1=self._TE_point_2, x2=bound_point_2))
 
     ###########################
     ## GETTER FUNCTIONS
@@ -270,171 +234,27 @@ class Panel:
         alpha = np.arctan(v_normal / v_tangential)
         return alpha, relative_velocity
 
-    def instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(
-        self, section_1, section_2
-    ):
-        """Instantiates the Lei Airfoil Breukels Cl, Cd, Cm coefficients
-
-        Args:
-            section_1 (Section Object): First section of the panel
-            section_2 (Section Object): Second section of the panel
-
-        Returns:
-            None"""
-
-        t1, k1 = section_1.aero_input[1]
-        t2, k2 = section_2.aero_input[1]
-        t = (t1 + t2) / 2
-        k = (k1 + k2) / 2
-
-        # cl_coefficients
-        C20 = -0.008011
-        C21 = -0.000336
-        C22 = 0.000992
-        C23 = 0.013936
-        C24 = -0.003838
-        C25 = -0.000161
-        C26 = 0.001243
-        C27 = -0.009288
-        C28 = -0.002124
-        C29 = 0.012267
-        C30 = -0.002398
-        C31 = -0.000274
-        C32 = 0
-        C33 = 0
-        C34 = 0
-        C35 = -3.371000
-        C36 = 0.858039
-        C37 = 0.141600
-        C38 = 7.201140
-        C39 = -0.676007
-        C40 = 0.806629
-        C41 = 0.170454
-        C42 = -0.390563
-        C43 = 0.101966
-
-        S9 = C20 * t**2 + C21 * t + C22
-        S10 = C23 * t**2 + C24 * t + C25
-        S11 = C26 * t**2 + C27 * t + C28
-        S12 = C29 * t**2 + C30 * t + C31
-        S13 = C32 * t**2 + C33 * t + C34
-        S14 = C35 * t**2 + C36 * t + C37
-        S15 = C38 * t**2 + C39 * t + C40
-        S16 = C41 * t**2 + C42 * t + C43
-
-        lambda5 = S9 * k + S10
-        lambda6 = S11 * k + S12
-        lambda7 = S13 * k + S14
-        lambda8 = S15 * k + S16
-
-        self._cl_coefficients = [lambda5, lambda6, lambda7, lambda8]
-
-        # cd_coefficients
-        C44 = 0.546094
-        C45 = 0.022247
-        C46 = -0.071462
-        C47 = -0.006527
-        C48 = 0.002733
-        C49 = 0.000686
-        C50 = 0.123685
-        C51 = 0.143755
-        C52 = 0.495159
-        C53 = -0.105362
-        C54 = 0.033468
-
-        cd_2_deg = (C44 * t + C45) * k**2 + (C46 * t + C47) * k + (C48 * t + C49)
-        cd_1_deg = 0
-        cd_0_deg = (C50 * t + C51) * k + (C52 * t**2 + C53 * t + C54)
-
-        self._cd_coefficients = [cd_2_deg, cd_1_deg, cd_0_deg]
-
-        # cm_coefficients
-        C55 = -0.284793
-        C56 = -0.026199
-        C57 = -0.024060
-        C58 = 0.000559
-        C59 = -1.787703
-        C60 = 0.352443
-        C61 = -0.839323
-        C62 = 0.137932
-
-        cm_2_deg = (C55 * t + C56) * k + (C57 * t + C58)
-        cm_1_deg = 0
-        cm_0_deg = (C59 * t + C60) * k + (C61 * t + C62)
-
-        self._cm_coefficients = [cm_2_deg, cm_1_deg, cm_0_deg]
-
     def calculate_cl(self, alpha):
         """
-        Get the lift coefficient (Cl) for a given angle of attack.
-
-        Args:
-            alpha (float): Angle of attack in radians.
-            airfoil_data (np.array): Array containing airfoil data.
-
-        Returns:
-            float: Interpolated lift coefficient (Cl).
+        Get the lift coefficient (Cl) for a given angle of attack in radians.
         """
-        if self._panel_aero_model == "polar_data":
-            return np.interp(
-                alpha,
-                self._panel_polar_data[:, 0],
-                self._panel_polar_data[:, 1],
-            )
-        elif self._panel_aero_model == "lei_airfoil_breukels":
-            cl = np.polyval(self._cl_coefficients, np.rad2deg(alpha))
-            # if outside of 20 degrees which in rad = np.pi/9
-            if alpha > (np.pi / 9) or alpha < -(np.pi / 9):
-                cl = 2 * np.cos(alpha) * np.sin(alpha) ** 2
-            #### alternative approach, of ensuring that for negative alpha, cl is very small 0
-            # if alpha < 0 and alpha > -(np.pi / 9):
-            #     cl = -0.01
-            # elif alpha > (np.pi / 9) or alpha < -(np.pi / 9):
-            #     cl = 2 * np.cos(alpha) * np.sin(alpha) ** 2
-            ####
-            return cl
-        elif self._panel_aero_model == "inviscid":
-            return 2 * np.pi * alpha
-        elif self._panel_aero_model == "cl_is_pisin2alpha":
-            return np.pi * np.sin(2 * alpha)
-        else:
-            raise NotImplementedError
+        return np.interp(
+            alpha,
+            self._panel_polar_data[:, 0],
+            self._panel_polar_data[:, 1],
+        )
 
     def calculate_cd_cm(self, alpha):
         """
-        Get the lift, drag, and moment coefficients (Cl, Cd, Cm) for a given angle of attack.
-
-        Args:
-            alpha (float): Angle of attack in radians.
-            airfoil_data (np.array): Array containing airfoil data.
-
-        Returns:
-            tuple: Interpolated (Cl, Cd, Cm) coefficients.
+        Get the drag and moment coefficients (Cd, Cm) for a given angle of attack in radians.
         """
-        if self._panel_aero_model == "polar_data":
-            cd = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
-            )
-            cm = np.interp(
-                alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
-            )
-            return cd, cm
-        elif self._panel_aero_model == "lei_airfoil_breukels":
-            cd = np.polyval(self._cd_coefficients, np.rad2deg(alpha))
-            cm = np.polyval(self._cm_coefficients, np.rad2deg(alpha))
-            # if outside of 20 degrees (np.pi/9)
-            if alpha > (np.pi / 9) or alpha < -(np.pi / 9):
-                cd = 2 * np.sin(alpha) ** 3
-            return cd, cm
-        elif self._panel_aero_model == "inviscid":
-            cd = 0.0
-            cm = 0.0
-            return cd, cm
-
-        elif self._panel_aero_model == "cl_is_pisin2alpha":
-            return 0, 0
-        else:
-            raise NotImplementedError
+        cd = np.interp(
+            alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
+        )
+        cm = np.interp(
+            alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 3]
+        )
+        return cd, cm
 
     def calculate_velocity_induced_bound_2D(self, evaluation_point):
         """Calculates velocity induced by bound vortex filaments at the control point

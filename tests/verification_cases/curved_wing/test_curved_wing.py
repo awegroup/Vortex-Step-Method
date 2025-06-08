@@ -40,6 +40,7 @@ def get_curved_case_params():
     relaxation_factor = 0.03
     core_radius_fraction = 1e-20
 
+    # Load polar data as [alpha(rad), CL, CD, CM]
     data_airf = np.loadtxt(
         r"./polars/clarky_maneia.csv",
         delimiter=",",
@@ -59,6 +60,15 @@ def get_curved_case_params():
         data_airf,
     ]
     return case_parameters
+
+
+def safe_add_section(wing, LE, TE, polar_data):
+    # Accepts both ["polar_data", array] and plain array
+    if isinstance(polar_data, (list, tuple)) and isinstance(polar_data[0], str):
+        polar_data = np.array(polar_data[1])
+    else:
+        polar_data = np.array(polar_data)
+    wing.add_section(LE, TE, polar_data)
 
 
 def test_curved():

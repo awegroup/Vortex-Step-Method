@@ -74,10 +74,27 @@ def test_calculate_results():
     wing = Wing(N, "unchanged")
     for idx in range(int(len(coord_left_to_right) / 2)):
         logging.debug(f"coord_left_to_right[idx] = {coord_left_to_right[idx]}")
+        # Generate inviscid polar data for this section
+        alpha_range = [
+            -10 * np.pi / 180,
+            30 * np.pi / 180,
+            np.pi / 180,
+        ]  # radians, step = 1 deg
+        alpha = np.arange(
+            alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
+        )
+        polar_data = np.column_stack(
+            [
+                alpha,
+                2 * np.pi * alpha,  # CL
+                np.zeros_like(alpha),  # CD
+                np.zeros_like(alpha),  # CM
+            ]
+        )
         wing.add_section(
             coord_left_to_right[2 * idx],
             coord_left_to_right[2 * idx + 1],
-            ["inviscid"],
+            polar_data,
         )
     wing_aero = BodyAerodynamics([wing])
     wing_aero.va = Uinf
@@ -99,9 +116,12 @@ def test_calculate_results():
     n_panels = len(wing_aero.panels)
     lift, drag, moment = np.zeros(n_panels), np.zeros(n_panels), np.zeros(n_panels)
     for i, panel in enumerate(wing_aero.panels):
-        lift[i] = dyn_visc * panel.calculate_cl(alpha[i]) * panel.chord
-        drag[i] = dyn_visc * panel.calculate_cd_cm(alpha[i])[0] * panel.chord
-        moment[i] = dyn_visc * panel.calculate_cd_cm(alpha[i])[1] * (panel.chord**2)
+        cl_val = np.asarray(panel.calculate_cl(alpha[i])).item()
+        cd_val = np.asarray(panel.calculate_cd_cm(alpha[i])[0]).item()
+        cm_val = np.asarray(panel.calculate_cd_cm(alpha[i])[1]).item()
+        lift[i] = dyn_visc * cl_val * panel.chord
+        drag[i] = dyn_visc * cd_val * panel.chord
+        moment[i] = dyn_visc * cm_val * (panel.chord**2)
         print("lift:", lift, "drag:", drag, "moment:", moment)
     Fmag = np.column_stack([lift, drag, moment])
 

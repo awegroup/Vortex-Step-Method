@@ -51,11 +51,11 @@ wing_airfoils:
   # For type=breukels_regression: d_tube, y_camber
   # For type=kasper_regression: t, eta, kappa, delta, lamba, phi
   # For type=polars: csv_file_path
-  # data:
-  # - [1, neuralfoil, {dat_file_path: "airfoils/1.dat", model_size: "xxxlarge", xtr_lower: 0.0, xtr_upper: 1.0, n_crit: 9.0}]
-  # - [2, breukels_regression, {d_tube: 0.1837, y_camber: 0.175}]
-  # - [3, polars, {csv_file_path: "polars/3.csv"}]
-  # - [4, kasper_regression, {t: 0.095, eta: 7.236059407808, kappa: 0.0, delta: 0.0, lamba: 0.0, phi: 0.0}]
+  data:
+  - [1, neuralfoil, {dat_file_path: "airfoils/1.dat", model_size: "xxxlarge", xtr_lower: 0.0, xtr_upper: 1.0, n_crit: 9.0}]
+  - [2, breukels_regression, {d_tube: 0.1837, y_camber: 0.175}]
+  - [3, polars, {csv_file_path: "polars/3.csv"}]
+  - [4, kasper_regression, {t: 0.095, eta: 7.236059407808, kappa: 0.0, delta: 0.0, lamba: 0.0, phi: 0.0}]
   data:
     - [1, breukels_regression, {d_tube: 0.1837401335882308, y_camber: 0.095}]
     - [2, breukels_regression, {d_tube: 0.1837401335882308, y_camber: 0.0943989}]

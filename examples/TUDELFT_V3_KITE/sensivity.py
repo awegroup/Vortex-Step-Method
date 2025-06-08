@@ -67,11 +67,11 @@ def main():
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
     )
     polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
-    # sensitivity results
     sensitivity_results_dir = (
         Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "sensitivity_analysis"
     )
 
+    # Use BodyAerodynamics.instantiate in the analysis functions (see sensitivity_analysis.py)
     testing_all_solver_settings(
         sensitivity_results_dir=sensitivity_results_dir,
         geometry_path=geometry_path,

@@ -84,7 +84,7 @@ def test_elliptical():
         is_plotting=False,
     )
 
-    # checking all LLTs to be close
+    # checking all LLT to be close
     assert np.allclose(CL_th, CL_LLT, atol=1e-2)
     assert np.allclose(CDi_th, CD_LLT, atol=1e-3)
     assert np.allclose(CL_th, CL_LLT_new, atol=1e-2)
