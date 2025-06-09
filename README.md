@@ -4,7 +4,9 @@ The Vortex Step Method (VSM) is an enhanced lifting line method that improves up
 The software presented here includes examples for: a rectangular wing and a leading-edge inflatable kite.
 
 ## Documentation
-For detailed documentation, please refer to the following resources:
+For detailed documentation, please refer to the following resources.
+
+**code core**
 - [Aerodynamic Model](docs/Aerodynamic_model.pdf)
 - [Airfoil Aerodynamics](docs/AirfoilAerodynamics.md)
 - [Body Aerodynamics](docs/BodyAerodynamics.md)
@@ -14,6 +16,9 @@ For detailed documentation, please refer to the following resources:
 - [Wake](docs/Wake.md)
 - [WingGeometry](docs/WingGeometry.md)
 
+**Other**
+- [Nomenclature](docs/nomenclature.md)
+- [Style Guide](docs/style_guide.md)
 
 ## Installation Instructions
 1. Clone the repository:
