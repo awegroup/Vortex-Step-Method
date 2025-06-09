@@ -1,30 +1,26 @@
 import numpy as np
 import time as time
 from pathlib import Path
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution
 from VSM.plot_styling import set_plot_style
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
-def generate_n_panel_sensivitity_df(
+def generate_n_panel_sensitivity_df(
     n_panels_list,
     Umag,
     angle_of_attack,
     side_slip,
     yaw_rate,
-    geometry_path,
-    is_with_corrected_polar,
-    polar_data_dir,
+    config_path,
     spanwise_panel_distribution,
     solver_instance,
 ):
-    if geometry_path is None or polar_data_dir is None:
-        raise ValueError(
-            "For n_panels sensitivity, 'geometry_path' and 'polar_data_dir' must be provided."
-        )
+
     if solver_instance is None:
         solver_instance = Solver()
 
@@ -33,7 +29,7 @@ def generate_n_panel_sensivitity_df(
         # Use the new instantiate method
         body_aero = BodyAerodynamics.instantiate(
             n_panels=n_panels,
-            file_path=geometry_path,
+            file_path=config_path,
             spanwise_panel_distribution=spanwise_panel_distribution,
             is_with_bridles=False,
         )
@@ -66,10 +62,8 @@ def generate_n_panel_sensivitity_df(
 
 
 def generate_csv_files(
+    config_path,
     convergence_analysis_dir,
-    geometry_path,
-    is_with_corrected_polar,
-    polar_data_dir,
     spanwise_panel_distribution,
     Umag,
     angle_of_attack,
@@ -83,8 +77,6 @@ def generate_csv_files(
     gamma_loop_type_list=None,
     max_iterations_list=None,
     relaxation_factor_list=None,
-    is_with_corrected_polar_list=None,
-    polar_data_dir_list=None,
     spanwise_panel_distribution_list=None,
 ):
     """
@@ -95,21 +87,9 @@ def generate_csv_files(
     the resulting aerodynamic coefficients and runtime data, and saves the results as CSV files. This allows the user
     to investigate how convergence is affected by changes in model settings and discretization resolution.
 
-    Possible options for solver parameters include:
-        - aerodynamic_model_type (default: "VSM"): e.g., "VSM", "LLT", indicating the aerodynamic model to use.
-        - allowed_error (default: 1e-6): e.g., 1e-6, representing the normalized error tolerance for convergence.
-        - core_radius_fraction (default: 1e-20): e.g., 1e-20, a small fraction to prevent singularities in vortex core calculations.
-        - gamma_initial_distribution_type (default: "elliptical"): e.g., "previous", "elliptical", "cosine", "zero",
-          which sets the initial distribution of circulation.
-        - gamma_loop_type (default: "base"): e.g., "base", "non_linear", or other methods for stall-related adjustments.
-        - max_iterations (default: 5000): e.g., 5000, the maximum number of iterations allowed for solver convergence.
-        - relaxation_factor (default: 0.01): e.g., 0.01, the factor by which the solution is relaxed in each iteration.
-
     Args:
         convergence_analysis_dir (str): Directory to save the CSV files for convergence analysis.
-        geometry_path (str): Path to the geometry file defining the body.
-        is_with_corrected_polar (bool): Flag to indicate whether to use corrected polar data.
-        polar_data_dir (str): Directory containing polar data files.
+        config_path (str): Path to the geometry file defining the body.
         spanwise_panel_distribution (str): Type of panel distribution along the span.
         Umag (float): Magnitude of the freestream velocity (m/s).
         angle_of_attack (float): Angle of attack (in degrees).
@@ -123,8 +103,6 @@ def generate_csv_files(
         gamma_loop_type_list (list): List of gamma loop types (e.g., ["base", "non_linear"]).
         max_iterations_list (list): List of maximum iteration counts (e.g., [5000]).
         relaxation_factor_list (list): List of solver relaxation factors (e.g., [0.01]).
-        is_with_corrected_polar_list (list): List of booleans for the corrected polar flag (e.g., [True, False]).
-        polar_data_dir_list (list): List of directories for alternate polar data files.
         spanwise_panel_distribution_list (list): List of panel distribution types (e.g., ["uniform", "cosine", "split_provided","unchanged"]).
 
     Returns:
@@ -139,8 +117,6 @@ def generate_csv_files(
         "gamma_loop_type",
         "max_iterations",
         "relaxation_factor",
-        "is_with_corrected_polar",
-        "polar_data_dir",
         "spanwise_panel_distribution",
     ]
     value_list_list = [
@@ -151,8 +127,6 @@ def generate_csv_files(
         gamma_loop_type_list,
         max_iterations_list,
         relaxation_factor_list,
-        is_with_corrected_polar_list,
-        polar_data_dir_list,
         spanwise_panel_distribution_list,
     ]
     # Write a custom dir for the parameter setup
@@ -173,35 +147,28 @@ def generate_csv_files(
             continue
         for value in value_list:
             print(f"\nConvergence analysis over n_panels with {parameter} = {value}")
-            polar_data_dir_i = polar_data_dir
             spanwise_panel_distribution_i = spanwise_panel_distribution
-            is_with_corrected_polar_i = is_with_corrected_polar
             solver_instance = None
-            if parameter == "is_with_corrected_polar":
-                is_with_corrected_polar_i = value
-            elif parameter == "spanwise_panel_distribution":
+            if parameter == "spanwise_panel_distribution":
                 spanwise_panel_distribution_i = value
-            elif parameter == "polar_data_dir":
-                polar_data_dir_i = value
             else:
                 solver_instance = Solver(**{parameter: value})
 
-            df = generate_n_panel_sensivitity_df(
+            df = generate_n_panel_sensitivity_df(
                 n_panels_list,
                 Umag,
                 angle_of_attack,
                 side_slip,
                 yaw_rate,
-                geometry_path,
-                is_with_corrected_polar_i,
-                polar_data_dir_i,
+                config_path,
                 spanwise_panel_distribution_i,
                 solver_instance,
             )
-            # concatenate the results
+            # Save the DataFrame to a CSV file
             df.to_csv(
                 Path(convergence_results_dir, f"{parameter}_{value}.csv"), index=False
             )
+
     return convergence_results_dir
 
 
@@ -311,4 +278,4 @@ def plot_convergence(convergence_results_dir, name, plot_type="pdf"):
     # Save the figure
     save_path = Path(convergence_results_dir, f"{name}.{plot_type}")
     plt.savefig(save_path, bbox_inches="tight")
-    print(f"Figure saved to {save_path}")
+    print(f"\n--> Figure saved to {save_path}")

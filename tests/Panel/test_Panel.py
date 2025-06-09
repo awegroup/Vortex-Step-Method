@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
 import logging
-from VSM.Panel import Panel  # Assuming the Panel class is in a file named Panel.py
-from VSM.AirfoilAerodynamics import AirfoilAerodynamics
+from VSM.core.Panel import Panel  # Assuming the Panel class is in a file named Panel.py
+from VSM.core.AirfoilAerodynamics import AirfoilAerodynamics
 
 import os
 import sys

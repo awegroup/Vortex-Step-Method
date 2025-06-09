@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from scipy.interpolate import interp1d
 import neuralfoil as nf
 
 
@@ -18,7 +17,13 @@ class AirfoilAerodynamics:
         )
 
     @staticmethod
-    def from_yaml_entry(airfoil_type, airfoil_params, alpha_range=None, reynolds=None):
+    def from_yaml_entry(
+        airfoil_type,
+        airfoil_params,
+        alpha_range=None,
+        reynolds=None,
+        file_path=None,
+    ):
         """
         Factory to create AirfoilAerodynamics from a YAML airfoil entry.
         """
@@ -30,11 +35,11 @@ class AirfoilAerodynamics:
         obj.CM = None
 
         if obj.source == "neuralfoil":
-            obj._from_neuralfoil(airfoil_params, alpha_range, reynolds)
+            obj._from_neuralfoil(airfoil_params, alpha_range, reynolds, file_path)
         elif obj.source == "breukels_regression":
             obj._from_breukels_regression(airfoil_params, alpha_range)
         elif obj.source == "polars":
-            obj._from_polars(airfoil_params, alpha_range)
+            obj._from_polars(airfoil_params, alpha_range, file_path)
         elif obj.source == "inviscid":
             obj._from_inviscid(alpha_range)
         else:
@@ -42,7 +47,13 @@ class AirfoilAerodynamics:
 
         return obj
 
-    def _from_neuralfoil(self, airfoil_params, alpha_range, reynolds):
+    def _from_neuralfoil(self, airfoil_params, alpha_range, reynolds, file_path):
+        if file_path is None:
+            raise ValueError("file_path must be provided for airfoil type 'polars'.")
+        file_path = Path(file_path)
+        airfoil_params["dat_file_path"] = (
+            file_path.parent / airfoil_params["dat_file_path"]
+        )
         filename = airfoil_params["dat_file_path"]
         alpha = np.arange(
             alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
@@ -85,7 +96,14 @@ class AirfoilAerodynamics:
         self.CD = CD
         self.CM = CM
 
-    def _from_polars(self, airfoil_params, alpha_range):
+    def _from_polars(self, airfoil_params, alpha_range, file_path):
+
+        if file_path is None:
+            raise ValueError("file_path must be provided for airfoil type 'polars'.")
+        file_path = Path(file_path)
+        airfoil_params["csv_file_path"] = (
+            file_path.parent / airfoil_params["csv_file_path"]
+        )
         df = pd.read_csv(airfoil_params["csv_file_path"])
         if np.max(np.abs(df["alpha"])) > 2 * np.pi:
             alpha_orig = np.deg2rad(df["alpha"].values)

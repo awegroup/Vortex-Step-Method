@@ -1,9 +1,9 @@
 import numpy as np
 import logging
 from copy import deepcopy
-from VSM.Filament import BoundFilament, SemiInfiniteFilament
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Filament import BoundFilament, SemiInfiniteFilament
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
 
 import os
 import sys

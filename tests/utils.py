@@ -12,10 +12,10 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, root_path)
 import tests.thesis_functions_oriol_cayon as thesis_functions
 
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
-from VSM.AirfoilAerodynamics import AirfoilAerodynamics
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
+from VSM.core.AirfoilAerodynamics import AirfoilAerodynamics
 
 
 def cosspace(min, max, n_points):

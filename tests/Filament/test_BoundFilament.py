@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import logging
-from VSM.Filament import BoundFilament
+from VSM.core.Filament import BoundFilament
 
 
 # Define fixtures for core_radius_fraction and gamma

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from VSM.WingGeometry import Wing, Section
-from VSM.AirfoilAerodynamics import AirfoilAerodynamics
+from VSM.core.WingGeometry import Wing, Section
+from VSM.core.AirfoilAerodynamics import AirfoilAerodynamics
 
 
 def make_inviscid_polar_data(alpha_range_deg=[-10, 30, 1]):

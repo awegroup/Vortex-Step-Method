@@ -3,10 +3,10 @@ import numpy as np
 import logging
 import pprint
 from copy import deepcopy
-from VSM.Solver import Solver
-from VSM.Panel import Panel
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.WingGeometry import Wing
+from VSM.core.Solver import Solver
+from VSM.core.Panel import Panel
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.WingGeometry import Wing
 
 
 import os

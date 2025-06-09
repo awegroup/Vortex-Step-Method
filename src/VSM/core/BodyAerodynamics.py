@@ -3,13 +3,12 @@ import logging
 import pandas as pd
 from pathlib import Path
 import yaml
-
-from VSM.WingGeometry import Wing
-from VSM.Panel import Panel
-import VSM.Wake as Wake
+from VSM.core.WingGeometry import Wing
+from VSM.core.Panel import Panel
+from VSM.core.Wake import Wake
+from VSM.core.AirfoilAerodynamics import AirfoilAerodynamics
+from VSM.core.utils import intersect_line_with_plane, point_in_quad
 from . import jit_cross, jit_norm, jit_dot
-from VSM.utils import intersect_line_with_plane, point_in_quad
-from VSM.AirfoilAerodynamics import AirfoilAerodynamics
 
 
 class BodyAerodynamics:
@@ -366,9 +365,9 @@ class BodyAerodynamics:
               - ...
 
         - bridle_lines: (optional)
-            headers: [name, rest_length, diameter, material, density]
+            headers: [name, rest_length, diameter, material, rho]
             data:
-              - [name, rest_length, diameter, material, density]
+              - [name, rest_length, diameter, material, rho]
               - ...
 
         - bridle_connections: (optional)
@@ -425,6 +424,7 @@ class BodyAerodynamics:
                     airfoil_params,
                     alpha_range=alpha_range,
                     reynolds=reynolds,
+                    file_path=file_path,
                 )
                 airfoil_polar_map[airfoil_id] = aero.to_polar_array()
 
@@ -854,7 +854,7 @@ class BodyAerodynamics:
         chord,
         dir_induced_va,
         panel,  # your panel object
-        density,
+        rho,
         mu,
         q_inf,
     ):
@@ -873,7 +873,7 @@ class BodyAerodynamics:
 
         # 2) angle & Re
         β = np.arctan2(v_par, v_perp)
-        Re_ref = density * v_perp * chord / mu
+        Re_ref = rho * v_perp * chord / mu
 
         # 3) nondim corrections (Eqns 10 & 11)
         f0 = 0.062 * Re_ref ** (-1 / 7)
@@ -962,7 +962,7 @@ class BodyAerodynamics:
     def calculate_results(
         self,
         gamma_new,
-        density,
+        rho,
         aerodynamic_model_type,
         core_radius_fraction,
         mu,
@@ -991,11 +991,9 @@ class BodyAerodynamics:
             cl_array[icp] = panel_i.calculate_cl(alpha_array[icp])
             cd_array[icp], cm_array[icp] = panel_i.calculate_cd_cm(alpha_array[icp])
             panel_width_array[icp] = panel_i.width
-        lift = (cl_array * 0.5 * density * Umag_array**2 * chord_array)[:, np.newaxis]
-        drag = (cd_array * 0.5 * density * Umag_array**2 * chord_array)[:, np.newaxis]
-        moment = (cm_array * 0.5 * density * Umag_array**2 * chord_array**2)[
-            :, np.newaxis
-        ]
+        lift = (cl_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
+        drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
+        moment = (cm_array * 0.5 * rho * Umag_array**2 * chord_array**2)[:, np.newaxis]
 
         if aerodynamic_model_type == "VSM":
             alpha_corrected = self.update_effective_angle_of_attack_if_VSM(
@@ -1047,7 +1045,7 @@ class BodyAerodynamics:
         va_mag = jit_norm(self._va)
         va = self._va
         va_unit = va / va_mag
-        q_inf = 0.5 * density * va_mag**2
+        q_inf = 0.5 * rho * va_mag**2
         for i, panel_i in enumerate(self.panels):
 
             ### Defining panel_variables
@@ -1123,7 +1121,7 @@ class BodyAerodynamics:
                     chord=panel_chord,
                     dir_induced_va=dir_induced_va_airfoil,  # needed to compute β
                     panel=panel_i,  # needed for true span & drag dirs
-                    density=density,
+                    rho=rho,
                     mu=mu,
                     q_inf=q_inf,
                 )
@@ -1294,7 +1292,7 @@ class BodyAerodynamics:
         )
         # Calculating Reynolds Number
         max_chord = max(np.array([panel.chord for panel in self.panels]))
-        reynolds_number = density * va_mag * max_chord / mu
+        reynolds_number = rho * va_mag * max_chord / mu
 
         ##TODO: if bridle not none add lift, drag...
         if self._bridle_line_system is not None:
@@ -1524,7 +1522,7 @@ class BodyAerodynamics:
         return alpha_array[:, np.newaxis]
 
     def calculate_line_aerodynamic_force(
-        self, va, line, cd_cable=1.1, cf_cable=0.01, density=1.225
+        self, va, line, cd_cable=1.1, cf_cable=0.01, rho=1.225
     ):
         # TODO: test this function
         p1 = line[0]
@@ -1545,7 +1543,7 @@ class BodyAerodynamics:
         )
         dir_D = va / np.linalg.norm(va)  # Drag direction
         dir_L = -(ej - np.dot(ej, dir_D) * dir_D)  # Lift direction
-        dynamic_pressure_area = 0.5 * density * np.linalg.norm(va) ** 2 * length * d
+        dynamic_pressure_area = 0.5 * rho * np.linalg.norm(va) ** 2 * length * d
 
         # Calculate lift and drag using the common factor
         lift_j = dynamic_pressure_area * cl_t * dir_L

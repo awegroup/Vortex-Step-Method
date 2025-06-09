@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 
 import pandas as pd
 from pathlib import Path
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
     plot_geometry,
@@ -19,95 +19,67 @@ from VSM.fitting import fit_and_evaluate_model
 
 def main():
     """
-    This script demonstrates how to use the VSM library to perform a 3D aerodynamic analysis of the TUDELFT_V3_KITE.
-    
-    The example covers the following steps:
-    1. Define file paths for the kite geometry, 2D polars, and bridle geometry.
-    2. Load the kite geometry from a CSV file.
-    3. Create three BodyAerodynamics objects:
-       - One using the baseline Breukels input.
-       - One with corrected polar data.
-       - One with corrected polar data and bridles.
-    4. Initialize the aerodynamic model with a specific wind speed, angle of attack, side slip angle, and yaw rate.
-    5. Plot the kite geometry using Matplotlib.
-    6. Generate an interactive plot using Plotly.
-    7. Plot and save polar curves (both angle of attack and side slip sweeps) for different settings, comparing them to literature data.
+    Fit and evaluate polynomials for polars using YAML config input.
     """
 
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_surfplan.csv"
-    polar_data_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
+    yaml_config_path = (
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "config_kite_CAD_CFD_polars.yaml"
     )
-    bridle_data_path = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
-    )
-    file_path = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_CAD.csv"
-    )
-    polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
-    file_path = (
-        Path(PROJECT_DIR) / "data" / "V9_KITE" / "geometry.csv"
-    )
-    # polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
-
     ### 2. defining settings
     n_panels = 40
     spanwise_panel_distribution = "uniform"
-    solver = Solver(reference_point=[0,0,0])
-
+    solver = Solver(reference_point=[0, 0, 0])
 
     ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
-    print(f"\nCreating corrected polar input with bridles")
-    body_aero_polar_with_bridles = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=False,
+    print(f"\nCreating polar input with bridles from YAML")
+    body_aero_polar_with_bridles = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=yaml_config_path,
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=True,
     )
-
 
     ### 4. Setting va
     Umag = 20
     yaw_rate = 0
     body_aero_polar_with_bridles.va_initialize(Umag, 5, 0, yaw_rate)
-    
 
     ### 7. Plotting the polar curves for different angles of attack and side slip angles
     # and saving in results with literature
-    save_folder = Path(PROJECT_DIR) / "results" / "V9_KITE" 
+    save_folder = Path(PROJECT_DIR) / "results" / "V9_KITE"
 
+    begin_time = time.time()
     angle_of_attack_range = np.linspace(0, 15, 12)
     gamma = None
-    begin_time = time.time()
     center_of_pressure = np.zeros((len(angle_of_attack_range), 3))
     total_force = np.zeros((len(angle_of_attack_range), 3))
     cl = np.zeros((len(angle_of_attack_range)))
     cd = np.zeros((len(angle_of_attack_range)))
     aero_roll = np.zeros((len(angle_of_attack_range)))
     for i, angle_i in enumerate(angle_of_attack_range):
-        body_aero_polar_with_bridles.va_initialize(
-            Umag, angle_i, 0, yaw_rate
-        )
-        
+        body_aero_polar_with_bridles.va_initialize(Umag, angle_i, 0, yaw_rate)
 
         results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
         center_of_pressure[i, :] = results["center_of_pressure"]
-        total_force[i,:] = np.array([
-            results["Fx"],
-            results["Fy"],
-            results["Fz"],
-        ])
+        total_force[i, :] = np.array(
+            [
+                results["Fx"],
+                results["Fy"],
+                results["Fz"],
+            ]
+        )
         # print(f"Center of pressure: {x_cp}")
         # print(results["cl"], results["cd"], results["cs"])
         # print(results["cl"]**2 + results["cs"]**2)
-        cl[i] = np.sqrt(results["cl"]**2+results["cs"]**2)
+        cl[i] = np.sqrt(results["cl"] ** 2 + results["cs"] ** 2)
         cd[i] = results["cd"]
-        aero_roll[i] = np.arctan2(
-            results["cs"], results["cl"]
-        ) * 180 / np.pi
+        aero_roll[i] = np.arctan2(results["cs"], results["cl"]) * 180 / np.pi
     end_time = time.time()
     print(f"Time taken for calculations: {end_time - begin_time} seconds")
 
@@ -120,7 +92,7 @@ def main():
     fit_cl = fit_and_evaluate_model(
         cl,
         dependencies=dependencies,
-        alpha=angle_of_attack_range/180*np.pi,
+        alpha=angle_of_attack_range / 180 * np.pi,
     )
     print("Fitted coefficients for lift coefficient:")
     print(fit_cl["coeffs"])
@@ -128,7 +100,7 @@ def main():
     fit_cd = fit_and_evaluate_model(
         cd,
         dependencies=dependencies,
-        alpha=angle_of_attack_range/180*np.pi,
+        alpha=angle_of_attack_range / 180 * np.pi,
     )
     print("Fitted coefficients for drag coefficient:")
     print(fit_cd["coeffs"])
@@ -148,7 +120,9 @@ def main():
     ax = fig.add_subplot(111, projection="3d")
 
     print("number of panels: ", len(body_aero_polar_with_bridles.panels))
-    corner_points = np.array([panel.corner_points for panel in body_aero_polar_with_bridles.panels])
+    corner_points = np.array(
+        [panel.corner_points for panel in body_aero_polar_with_bridles.panels]
+    )
     for i, panel in enumerate(body_aero_polar_with_bridles.panels):
         # Get the corner points of the current panel and close the loop by adding the first point again
         x_corners = np.append(corner_points[i, :, 0], corner_points[i, 0, 0])
@@ -177,7 +151,7 @@ def main():
         # Add angle of attack as text near the scatter point
         ax.text(
             x_cp[0],
-            x_cp[1]+0.1,
+            x_cp[1] + 0.1,
             x_cp[2],
             f"{angle_of_attack_range[i]:.1f}°",
             color="black",
@@ -186,7 +160,7 @@ def main():
 
     print("Center of pressure: ", center_of_pressure)
     max_diff_x = np.max(center_of_pressure[:, 0]) - np.min(center_of_pressure[:, 0])
-    print("max_diff_x: ", max_diff_x/2.6*100, "%")
+    print("max_diff_x: ", max_diff_x / 2.6 * 100, "%")
     plt.show()
 
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))

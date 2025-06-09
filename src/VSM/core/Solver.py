@@ -21,7 +21,7 @@ class Solver:
         is_only_f_and_gamma_output (bool): If True, only output force and gamma values (default: False).
         reference_point (list): Reference point in space for aerodynamic calculations (default: [-0.17, 0.00, 9.25]).
         mu (float): Dynamic viscosity of the fluid (default: 1.81e-5).
-        density (float): Fluid density (default: 1.225).
+        rho (float): Fluid density (default: 1.225).
         is_smooth_circulation (bool): If True, applies smoothing to the circulation distribution (default: False).
         smoothness_factor (float): Smoothing factor for circulation (default: 0.08).
         is_artificial_damping (bool): Defines if artificial damping is applied for stall modeling (default: False).
@@ -56,7 +56,7 @@ class Solver:
         reference_point: list = [0, 0, 0],
         # === athmospheric properties ===
         mu: float = 1.81e-5,
-        density: float = 1.225,
+        rho: float = 1.225,
         # ===============================
         #       STALL MODELS
         # ===============================
@@ -88,7 +88,7 @@ class Solver:
         self.reference_point = reference_point
         # === athmospheric properties ===
         self.mu = mu
-        self.density = density
+        self.rho = rho
         # ===============================
         #       STALL MODELS
         # ===============================
@@ -243,7 +243,7 @@ class Solver:
         # Calculating results (incl. updating angle of attack for VSM)
         results = body_aero.calculate_results(
             gamma_new,
-            self.density,
+            self.rho,
             self.aerodynamic_model_type,
             self.core_radius_fraction,
             self.mu,

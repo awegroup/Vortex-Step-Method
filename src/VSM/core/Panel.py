@@ -1,6 +1,6 @@
 import numpy as np
 import logging
-from VSM.Filament import BoundFilament
+from VSM.core.Filament import BoundFilament
 from . import jit_cross, jit_norm, jit_dot
 
 

@@ -3,7 +3,7 @@ import logging
 import matplotlib.pyplot as plt
 import pytest
 import pprint
-from VSM.Filament import SemiInfiniteFilament, BoundFilament
+from VSM.core.Filament import SemiInfiniteFilament, BoundFilament
 
 
 def calculate_induced_vel_3_horsheshoes():

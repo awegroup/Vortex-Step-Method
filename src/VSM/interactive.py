@@ -1,7 +1,7 @@
 from typing import List, Tuple, Dict, Any
 import numpy as np
 import plotly.graph_objects as go
-from VSM.Solver import Solver
+from VSM.core.Solver import Solver
 
 
 def add_panel_edges(fig: go.Figure, panel: Any, is_first: bool, is_last: bool) -> None:

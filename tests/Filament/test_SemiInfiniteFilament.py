@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from VSM.Filament import SemiInfiniteFilament
+from VSM.core.Filament import SemiInfiniteFilament
 
 
 # Define fixtures for core_radius_fraction and gamma

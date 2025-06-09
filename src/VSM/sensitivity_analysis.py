@@ -3,9 +3,9 @@ import time as time
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution
 from VSM.plot_styling import set_plot_style
 
@@ -109,10 +109,19 @@ def testing_single_solver_setting(
                 begin_time = time.time()
                 results_list.append(solver.solve(body_aero))
                 run_time_list.append(time.time() - begin_time)
-
+            # Prepare inputs for plot_distribution
+            alpha_list = [alpha]
+            solver_list_for_plot = solver_list
+            body_aero_list_for_plot = body_aero_list
+            # plot_distribution expects:
+            # (alpha_list, Umag, side_slip, yaw_rate, solver_list, body_aero_list, label_list, ...)
             plot_distribution(
-                y_coordinates_list=y_coords_list,
-                results_list=results_list,
+                alpha_list=alpha_list,
+                Umag=Umag,
+                side_slip=side_slip,
+                yaw_rate=yaw_rate,
+                solver_list=solver_list_for_plot,
+                body_aero_list=body_aero_list_for_plot,
                 label_list=label_list,
                 title=f"spanwise_distribution_{parameter}_{side_slip}_alpha_{alpha}",
                 data_type=".pdf",
@@ -232,9 +241,19 @@ def testing_n_panels_effect(
                 results_list.append(solver.solve(body_aero))
                 run_time_list.append(time.time() - begin_time)
 
+            # Prepare inputs for plot_distribution
+            alpha_list = [alpha]
+            solver_list_for_plot = solver_list
+            body_aero_list_for_plot = body_aero_list
+            # plot_distribution expects:
+            # (alpha_list, Umag, side_slip, yaw_rate, solver_list, body_aero_list, label_list, ...)
             plot_distribution(
-                y_coordinates_list=y_coords_list,
-                results_list=results_list,
+                alpha_list=alpha_list,
+                Umag=Umag,
+                side_slip=side_slip,
+                yaw_rate=yaw_rate,
+                solver_list=solver_list_for_plot,
+                body_aero_list=body_aero_list_for_plot,
                 label_list=label_list,
                 title=f"spanwise_distribution_n_panels_beta_{side_slip}_alpha_{alpha}",
                 data_type=".pdf",
