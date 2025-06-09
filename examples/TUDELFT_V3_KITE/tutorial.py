@@ -1,16 +1,11 @@
-import numpy as np
-import logging
-import matplotlib.pyplot as plt
-import pandas as pd
 from pathlib import Path
-from VSM.core.WingGeometry import Wing
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
-    plot_geometry,
 )
-from VSM.interactive import interactive_plot
+from VSM.plot_geometry_matplotlib import plot_geometry
+from VSM.plot_geometry_plotly import interactive_plot
 
 
 def main():
@@ -68,6 +63,18 @@ def main():
         spanwise_panel_distribution=spanwise_panel_distribution,
         is_with_bridles=False,
     )
+    body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_CAD_CFD_polars.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=True,
+    )
+
     body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
         n_panels=n_panels,
         file_path=(
@@ -137,13 +144,14 @@ def main():
     This allows for interactive exploration of the geometry and panel arrangement.
     """
     interactive_plot(
-        body_aero_breukels_regression,
+        body_aero_CAD_CFD_polars_with_bridles,
         vel=Umag,
         angle_of_attack=angle_of_attack,
         side_slip=side_slip,
         yaw_rate=yaw_rate,
         is_with_aerodynamic_details=True,
         title="TUDELFT_V3_KITE",
+        is_with_bridles=False,
     )
 
     # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
@@ -168,16 +176,19 @@ def main():
             solver_base_version,
             solver_base_version,
             solver_base_version,
+            solver_base_version,
         ],
         body_aero_list=[
             body_aero_breukels_regression,
             body_aero_CAD_CFD_polars,
+            body_aero_CAD_CFD_polars_with_bridles,
             body_aero_CAD_neuralfoil,
             body_aero_inviscid,
         ],
         label_list=[
             "VSM Breukels Regression",
             "VSM CAD CFD Polars",
+            "VSM CAD CFD Polars with Bridles",
             "VSM CAD NeuralFoil",
             "VSM Inviscid",
             "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0",

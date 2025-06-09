@@ -14,7 +14,7 @@ from . import jit_cross, jit_norm, jit_dot
 class BodyAerodynamics:
     """BodyAerodynamics class
 
-    This class calculates the aerodynamic properties of a wing system, including the generation
+    This class computes the aerodynamic properties of a wing system, including the generation
     of panels, evaluation of circulatory distributions, and computation of aerodynamic forces,
     moments, and induced velocities. It supports both standard wing and bridled configurations.
 
@@ -36,14 +36,14 @@ class BodyAerodynamics:
         _build_panels: Constructs panels from the current wing geometry.
         from_file: Class method to instantiate an object by reading wing geometry and optional polar/bridle data from files.
         update_from_points: Updates the wing geometry from new LE, TE, tube diameter, and camber points.
-        calculate_panel_properties: Computes the aerodynamic and geometric properties for each panel.
-        calculate_AIC_matrices: Calculates the Aerodynamic Influence Coefficient matrices based on the specified aerodynamic model.
-        calculate_circulation_distribution_elliptical_wing: Returns the circulation distribution for an elliptical wing.
-        calculate_circulation_distribution_cosine: Returns the circulation distribution based on a cosine profile.
-        calculate_results: Computes aerodynamic forces, moments, and other metrics based on the current state.
+        compute_panel_properties: Computes the aerodynamic and geometric properties for each panel.
+        compute_AIC_matrices: Calculates the Aerodynamic Influence Coefficient matrices based on the specified aerodynamic model.
+        compute_circulation_distribution_elliptical_wing: Returns the circulation distribution for an elliptical wing.
+        compute_circulation_distribution_cosine: Returns the circulation distribution based on a cosine profile.
+        compute_results: Computes aerodynamic forces, moments, and other metrics based on the current state.
         va_initialize: Initializes the apparent velocity vector (va) and yaw rate.
         update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack for VSM using induced velocities.
-        calculate_line_aerodynamic_force: Computes the aerodynamic force on a line element (used for bridles).
+        compute_line_aerodynamic_force: Computes the aerodynamic force on a line element (used for bridles).
 
     """
 
@@ -88,7 +88,7 @@ class BodyAerodynamics:
                 x_airf_list,
                 y_airf_list,
                 z_airf_list,
-            ) = self.calculate_panel_properties(
+            ) = self.compute_panel_properties(
                 section_list,
                 n_panels_per_wing,
                 self._aerodynamic_center_location,
@@ -287,7 +287,7 @@ class BodyAerodynamics:
     #         if is_neuralfoil and nf_is_with_save_polar:
     #             save_path = (
     #                 Path(nf_airfoil_data_dir)
-    #                 / "neuralfoil_calculated_2D_polars"
+    #                 / "neuralfoil_computed_2D_polars"
     #                 / f"{idx}.csv"
     #             )
     #             df_to_save = pd.DataFrame(
@@ -577,7 +577,7 @@ class BodyAerodynamics:
     ###########################
     ## CALCULATE FUNCTIONS
     ###########################
-    def calculate_panel_properties(
+    def compute_panel_properties(
         self,
         section_list,
         n_panels,
@@ -709,7 +709,7 @@ class BodyAerodynamics:
             z_airf_list,
         )
 
-    def calculate_AIC_matrices(
+    def compute_AIC_matrices(
         self, aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
     ):
         """Calculates the AIC matrices for the given aerodynamic model
@@ -735,7 +735,7 @@ class BodyAerodynamics:
             ep = getattr(panel_icp, evaluation_point)
             for jring, panel_jring in enumerate(self.panels):
                 velocity_induced = (
-                    panel_jring.calculate_velocity_induced_single_ring_semiinfinite(
+                    panel_jring.compute_velocity_induced_single_ring_semiinfinite(
                         ep,
                         evaluation_point_on_bound,
                         va_norm_array[jring],
@@ -747,12 +747,12 @@ class BodyAerodynamics:
                 AIC[:, icp, jring] = velocity_induced
 
                 if icp == jring and aerodynamic_model_type == "VSM":
-                    U_2D = panel_jring.calculate_velocity_induced_bound_2D(ep)
+                    U_2D = panel_jring.compute_velocity_induced_bound_2D(ep)
                     AIC[:, icp, jring] -= U_2D
 
         return AIC[0], AIC[1], AIC[2]
 
-    def calculate_circulation_distribution_elliptical_wing(self, gamma_0=1):
+    def compute_circulation_distribution_elliptical_wing(self, gamma_0=1):
         """
         Calculates the circulation distribution for an elliptical wing.
 
@@ -781,7 +781,7 @@ class BodyAerodynamics:
         logging.debug(f"Calculated elliptical gamma distribution: {gamma_i}")
         return gamma_i
 
-    def calculate_circulation_distribution_cosine(self, gamma_0=1):
+    def compute_circulation_distribution_cosine(self, gamma_0=1):
         """
         Calculates the circulation distribution based on a cosine profile,
         i.e. f(x) = 1 - cos(x), where x is remapped over [0, π].
@@ -808,7 +808,7 @@ class BodyAerodynamics:
         return gamma_i
 
     ##TODO: add this
-    # def calculate_kcu(model_type: cylinder, area, location, va)
+    # def compute_kcu(model_type: cylinder, area, location, va)
 
     def find_center_of_pressure(self, force_array, moment_array, reference_point):
         """
@@ -959,7 +959,7 @@ class BodyAerodynamics:
 
         return panel_cp_locations
 
-    def calculate_results(
+    def compute_results(
         self,
         gamma_new,
         rho,
@@ -988,8 +988,8 @@ class BodyAerodynamics:
         )
         panel_width_array = np.zeros(len(panels))
         for icp, panel_i in enumerate(panels):
-            cl_array[icp] = panel_i.calculate_cl(alpha_array[icp])
-            cd_array[icp], cm_array[icp] = panel_i.calculate_cd_cm(alpha_array[icp])
+            cl_array[icp] = panel_i.compute_cl(alpha_array[icp])
+            cd_array[icp], cm_array[icp] = panel_i.compute_cd_cm(alpha_array[icp])
             panel_width_array[icp] = panel_i.width
         lift = (cl_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
         drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
@@ -1275,7 +1275,7 @@ class BodyAerodynamics:
             raise ValueError("more than 1 wing functions have not been implemented yet")
 
         wing = self.wings[0]
-        projected_area = wing.calculate_projected_area()
+        projected_area = wing.compute_projected_area()
         wing_span = wing.span
         aspect_ratio_projected = wing_span**2 / projected_area
 
@@ -1300,7 +1300,7 @@ class BodyAerodynamics:
             # TODO: Calculate induced va at each point of the bridle
             # TODO: Calculate moments at each point of the bridle
             for bridle_line in self._bridle_line_system:
-                fa_bridle += self.calculate_line_aerodynamic_force(va, bridle_line)
+                fa_bridle += self.compute_line_aerodynamic_force(va, bridle_line)
 
             fx_global_3D_sum += fa_bridle[0]
             fy_global_3D_sum += fa_bridle[1]
@@ -1432,7 +1432,7 @@ class BodyAerodynamics:
 
         return results_dict
 
-    def calculate_y_coordinates(self):
+    def compute_y_coordinates(self):
         """
         Calculates the y-coordinates of the control points for each panel in the WingAero object.
 
@@ -1504,7 +1504,7 @@ class BodyAerodynamics:
         # The correction is done by calculating the alpha at the aerodynamic center,
         # where as before the control_point was used in the VSM method
         aerodynamic_model_type = "LLT"
-        AIC_x, AIC_y, AIC_z = self.calculate_AIC_matrices(
+        AIC_x, AIC_y, AIC_z = self.compute_AIC_matrices(
             aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
         )
         induced_velocity_all = np.array(
@@ -1521,7 +1521,7 @@ class BodyAerodynamics:
 
         return alpha_array[:, np.newaxis]
 
-    def calculate_line_aerodynamic_force(
+    def compute_line_aerodynamic_force(
         self, va, line, cd_cable=1.1, cf_cable=0.01, rho=1.225
     ):
         # TODO: test this function

@@ -63,7 +63,7 @@ def get_v3_case_params():
         data_airf[j, 2] = Cd
         data_airf[j, 3] = Cm
 
-    Atot = test_utils.calculate_projected_area(coord)
+    Atot = test_utils.compute_projected_area(coord)
     coord_input_params = [coord, LE_thicc, camber]
     case_parameters = [
         coord_input_params,
@@ -91,7 +91,7 @@ def test_v3():
 
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -103,7 +103,7 @@ def test_v3():
         gamma_VSM_new,
         panel_y,
         AR,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
@@ -121,7 +121,7 @@ def test_v3():
 
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -133,7 +133,7 @@ def test_v3():
         gamma_VSM_new,
         panel_y,
         AR,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     polars_CFD = np.vstack((aoas_CFD, CL_CFD, CD_CFD)).T
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         gamma_VSM_new,
         panel_y,
         AR,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )

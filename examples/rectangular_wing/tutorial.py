@@ -3,8 +3,8 @@ import numpy as np
 from VSM.core.Solver import Solver
 from VSM.core.WingGeometry import Wing
 from VSM.core.BodyAerodynamics import BodyAerodynamics
-from VSM.plotting import plot_geometry
-from VSM.interactive import interactive_plot
+from VSM.plot_geometry_matplotlib import plot_geometry
+from VSM.plot_geometry_plotly import interactive_plot
 
 
 def main():

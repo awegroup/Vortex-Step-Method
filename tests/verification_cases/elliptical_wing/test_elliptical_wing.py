@@ -67,7 +67,7 @@ def test_elliptical():
     CDi_th = CL_th**2 / np.pi / AR
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -79,7 +79,7 @@ def test_elliptical():
         gamma_VSM_new,
         panel_y,
         AR_projected,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     CDi_th = CL_th**2 / np.pi / AR
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -131,7 +131,7 @@ if __name__ == "__main__":
         gamma_VSM_new,
         panel_y,
         AR_projected,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )

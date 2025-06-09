@@ -4,33 +4,36 @@ from . import jit_norm
 
 
 class Wake:
-    """
-    Class to encapsulate 2D airfoil aerodynamic data and interpolation.
+    """Wake management class for trailing vortex filament systems.
 
-    Use AirfoilAerodynamics.from_yaml_entry(...) to instantiate.
+    Static factory class that handles creation and updates of semi-infinite
+    vortex filaments extending from wing trailing edges.
     """
 
     def __init__(self):
-        raise RuntimeError(
-            "Use AirfoilAerodynamics.from_yaml_entry(...) to instantiate."
-        )
+        """Prevent direct instantiation.
+
+        Raises:
+            RuntimeError: Always raised to enforce static usage pattern.
+        """
+        raise RuntimeError("Use Wake.frozen_wake(...) static method.")
 
     @staticmethod
-    def frozen_wake(
-        va_distribution,
-        panels,
-    ):
-        """frozen_wake function is used to update the filaments of the panels
+    def frozen_wake(va_distribution: np.ndarray, panels: list) -> list:
+        """Update panel filament systems with semi-infinite wake elements.
 
-            It makes sure to replace older filaments if present, by checking length of the filaments
+        Creates or updates semi-infinite trailing vortex filaments based on local
+        flow conditions using the frozen wake assumption.
 
         Args:
-            - va_distribution (np.ndarray): Array of velocity vectors at each panel
-            - panels (List[Panel]): List of panels
+            va_distribution (np.ndarray): Array of velocity vectors at each panel.
+            panels (list): List of Panel objects to update.
 
         Returns:
-            - List[Panel]: List of panels with updated filaments
+            list: Updated panel list with wake filaments.
 
+        Raises:
+            ValueError: If panel has unexpected number of filaments.
         """
         for i, panel in enumerate(panels):
             va_i = va_distribution[i]

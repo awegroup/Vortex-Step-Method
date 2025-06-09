@@ -4,49 +4,37 @@ from . import jit_cross
 
 
 class Solver:
-    """Solver class for solving the aerodynamic model.
+    """Solver for aerodynamic circulation distribution and force computation.
 
-    This class computes the circulation distribution over a wing and calculates
-    the resulting aerodynamic forces. It supports several iterative methods for
-    solving the nonlinear system associated with the aerodynamic model.
+    Implements iterative algorithms to determine circulation distribution that satisfies
+    boundary conditions for VSM and LLT aerodynamic models.
 
     Attributes:
-        aerodynamic_model_type (str): Type of aerodynamic model to use ('VSM' or 'LLT', default: 'VSM').
-        max_iterations (int): Maximum number of iterations for convergence (default: 5000).
-        allowed_error (float): Allowed normalized error for convergence (default: 1e-6).
-        relaxation_factor (float): Base relaxation factor for iterative updates (default: 0.01).
-        core_radius_fraction (float): Fraction of core radius used in induced velocity calculations (default: 1e-20).
-        gamma_loop_type (str): Type of iterative loop to use ('base', 'non_linear', or stall-related methods; default: 'base').
-        gamma_initial_distribution_type (str): Type of initial gamma distribution ('previous', 'elliptical', 'cosine', or 'zero'; default: 'elliptical').
-        is_only_f_and_gamma_output (bool): If True, only output force and gamma values (default: False).
-        reference_point (list): Reference point in space for aerodynamic calculations (default: [-0.17, 0.00, 9.25]).
-        mu (float): Dynamic viscosity of the fluid (default: 1.81e-5).
-        rho (float): Fluid density (default: 1.225).
-        is_smooth_circulation (bool): If True, applies smoothing to the circulation distribution (default: False).
-        smoothness_factor (float): Smoothing factor for circulation (default: 0.08).
-        is_artificial_damping (bool): Defines if artificial damping is applied for stall modeling (default: False).
-        artificial_damping (dict): Parameters for artificial damping (default: {"k2": 0.1, "k4": 0.0}).
-        is_with_simonet_artificial_viscosity (bool): If True, uses Simonet's artificial viscosity model (default: False).
-        _simonet_artificial_viscosity_fva (float): Parameter for Simonet's artificial viscosity (default: None).
-
-    Methods:
-        solve(body_aero, gamma_distribution=None):
-            Solves the aerodynamic model by computing the circulation distribution and
-            resulting forces.
-        compute_aerodynamic_quantities(gamma):
-            Computes aerodynamic quantities such as angle of attack, relative velocity,
-            and lift coefficient based on a given circulation distribution.
-        gamma_loop(gamma_initial, extra_relaxation_factor=1.0):
-            Iterative solver for updating the circulation distribution using a relaxation scheme.
-        gamma_loop_non_linear(gamma_initial):
-            Nonlinear solver that applies robust methods (Broyden) to compute the circulation distribution.
+        aerodynamic_model_type (str): Aerodynamic model type ('VSM' or 'LLT').
+        max_iterations (int): Maximum number of iterations for convergence.
+        allowed_error (float): Convergence tolerance for normalized error.
+        relaxation_factor (float): Under-relaxation factor for stability.
+        core_radius_fraction (float): Vortex core radius fraction.
+        gamma_loop_type (str): Iterative algorithm type.
+        gamma_initial_distribution_type (str): Initial circulation distribution method.
+        is_only_f_and_gamma_output (bool): Return only forces and circulation if True.
+        is_with_viscous_drag_correction (bool): Enable viscous drag correction.
+        reference_point (list): Reference point for moment calculations.
+        mu (float): Dynamic viscosity of fluid.
+        rho (float): Fluid density.
+        is_smooth_circulation (bool): Apply circulation smoothing.
+        smoothness_factor (float): Smoothing strength parameter.
+        is_artificial_damping (bool): Enable artificial damping for stall.
+        artificial_damping (dict): Artificial damping parameters.
+        is_with_simonet_artificial_viscosity (bool): Enable Simonet artificial viscosity.
+        _simonet_artificial_viscosity_fva (float): Simonet model parameter.
     """
 
     def __init__(
         self,
         aerodynamic_model_type: str = "VSM",
-        max_iterations: float = 5000,
-        allowed_error: float = 1e-6,  # 1e-5,
+        max_iterations: int = 5000,
+        allowed_error: float = 1e-6,
         relaxation_factor: float = 0.01,
         core_radius_fraction: float = 1e-20,
         gamma_loop_type: str = "base",
@@ -54,28 +42,37 @@ class Solver:
         is_only_f_and_gamma_output: bool = False,
         is_with_viscous_drag_correction: bool = False,
         reference_point: list = [0, 0, 0],
-        # === athmospheric properties ===
         mu: float = 1.81e-5,
         rho: float = 1.225,
-        # ===============================
-        #       STALL MODELS
-        # ===============================
-        # === STALL: smooth_circulation ===
         is_smooth_circulation: bool = False,
-        smoothness_factor: float = 0.08,  # for smoothing stall model
-        # === STALL: artificial damping ===
+        smoothness_factor: float = 0.08,
         is_artificial_damping: bool = False,
         artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
-        # === STALL: simonet_aritificial_viscosity ===
         is_with_simonet_artificial_viscosity: bool = False,
         simonet_artificial_viscosity_fva: float = None,
-        ## TODO: would be nice to having these defined here instead of inside the panel class?
-        # aerodynamic_center_location: float = 0.25,
-        # control_point_location: float = 0.75,
-        ## TODO: these are hardcoded in the Filament, should be defined here
-        # alpha_0 = 1.25643
-        # nu = 1.48e-5
     ):
+        """Initialize solver with configuration parameters.
+
+        Args:
+            aerodynamic_model_type (str): Type of aerodynamic model ('VSM' or 'LLT').
+            max_iterations (int): Maximum solver iterations.
+            allowed_error (float): Convergence tolerance.
+            relaxation_factor (float): Under-relaxation factor.
+            core_radius_fraction (float): Vortex core radius fraction.
+            gamma_loop_type (str): Iterative algorithm type.
+            gamma_initial_distribution_type (str): Initial circulation distribution.
+            is_only_f_and_gamma_output (bool): Return minimal output if True.
+            is_with_viscous_drag_correction (bool): Enable viscous corrections.
+            reference_point (list): Reference point for moments.
+            mu (float): Dynamic viscosity.
+            rho (float): Fluid density.
+            is_smooth_circulation (bool): Apply circulation smoothing.
+            smoothness_factor (float): Smoothing factor.
+            is_artificial_damping (bool): Enable artificial damping.
+            artificial_damping (dict): Damping parameters.
+            is_with_simonet_artificial_viscosity (bool): Enable Simonet model.
+            simonet_artificial_viscosity_fva (float): Simonet parameter.
+        """
         self.aerodynamic_model_type = aerodynamic_model_type
         self.max_iterations = int(max_iterations)
         self.allowed_error = allowed_error
@@ -113,15 +110,19 @@ class Solver:
         self.width_array = None
         self.y_coords = None
 
-    def solve(self, body_aero, gamma_distribution=None):
-        """Solve the aerodynamic model
+    def solve(self, body_aero, gamma_distribution: np.ndarray = None) -> dict:
+        """Solve aerodynamic model for circulation distribution and forces.
 
         Args:
-            body_aero (BodyAerodynamics): BodyAerodynamics object
-            gamma_distribution (np.array): Initial gamma distribution (default: None)
+            body_aero: BodyAerodynamics object with configured geometry and flow conditions.
+            gamma_distribution (np.ndarray, optional): Initial circulation guess.
 
         Returns:
-            dict: Results of the aerodynamic model"""
+            dict: Comprehensive results dictionary with forces, moments, and distributions.
+
+        Raises:
+            ValueError: If inflow conditions are not set.
+        """
 
         if body_aero.va is None:
             raise ValueError("Inflow conditions are not set")
@@ -160,7 +161,7 @@ class Solver:
         va_unit_array = self.va_array / va_norm_array[:, None]
 
         # Calculate the new circulation distribution iteratively
-        self.AIC_x, self.AIC_y, self.AIC_z = body_aero.calculate_AIC_matrices(
+        self.AIC_x, self.AIC_y, self.AIC_z = body_aero.compute_AIC_matrices(
             self.aerodynamic_model_type,
             self.core_radius_fraction,
             va_norm_array,
@@ -178,11 +179,9 @@ class Solver:
         ):
             gamma_initial = np.zeros(self.n_panels)
         elif self.gamma_initial_distribution_type == "elliptical":
-            gamma_initial = (
-                body_aero.calculate_circulation_distribution_elliptical_wing()
-            )
+            gamma_initial = body_aero.compute_circulation_distribution_elliptical_wing()
         elif self.gamma_initial_distribution_type == "cosine":
-            gamma_initial = body_aero.calculate_circulation_distribution_cosine()
+            gamma_initial = body_aero.compute_circulation_distribution_cosine()
         elif self.gamma_initial_distribution_type == "zero":
             gamma_initial = np.zeros(self.n_panels)
         else:
@@ -241,7 +240,7 @@ class Solver:
             else:
                 raise ValueError(f"Invalid gamma_loop_type")
         # Calculating results (incl. updating angle of attack for VSM)
-        results = body_aero.calculate_results(
+        results = body_aero.compute_results(
             gamma_new,
             self.rho,
             self.aerodynamic_model_type,
@@ -263,18 +262,18 @@ class Solver:
         )
         return results
 
-    def compute_aerodynamic_quantities(self, gamma):
-        """Compute the aerodynamic quantities based on the aerodynamic model
+    def compute_aerodynamic_quantities(self, gamma: np.ndarray) -> tuple:
+        """Compute aerodynamic quantities from circulation distribution.
 
         Args:
-            - gamma: np.array = Circulation distribution (n x 1)
+            gamma (np.ndarray): Circulation distribution (n x 1).
 
         Returns:
-            alpha_array, Umag_array,cl_array, Umagw_array
-                - alpha_array: np.array = Angle of attack array (n x 1)
-                - Umag_array: np.array = Relative velocity magnitude array (n x 1)
-                - cl_array: np.array = Lift coefficient array (n x 1)
-                - Umagw_array: np.array = Relative velocity magnitude array (n x 1)
+            tuple: (alpha_array, Umag_array, cl_array, Umagw_array)
+                - alpha_array (np.ndarray): Effective angles of attack.
+                - Umag_array (np.ndarray): Effective velocity magnitudes.
+                - cl_array (np.ndarray): Lift coefficients.
+                - Umagw_array (np.ndarray): Reference velocity magnitudes.
         """
         induced_velocity_all = np.array(
             [
@@ -298,20 +297,28 @@ class Solver:
         )  # |v_eff x z|
         Umagw_array = np.linalg.norm(Uinfcrossz_array, axis=1)
         cl_array = np.array(
-            [
-                panel.calculate_cl(alpha)
-                for panel, alpha in zip(self.panels, alpha_array)
-            ]
+            [panel.compute_cl(alpha) for panel, alpha in zip(self.panels, alpha_array)]
         )  # cl(alpha_eff)
         return alpha_array, Umag_array, cl_array, Umagw_array
 
     # should add smooth circulation back
     # could add dynamic relaxation back, although it didnt work
     def gamma_loop(
-        self,
-        gamma_initial,
-        extra_relaxation_factor: float = 1.0,
-    ):
+        self, gamma_initial: np.ndarray, extra_relaxation_factor: float = 1.0
+    ) -> tuple:
+        """Standard fixed-point iteration with under-relaxation.
+
+        Args:
+            gamma_initial (np.ndarray): Initial circulation distribution.
+            extra_relaxation_factor (float): Additional relaxation multiplier.
+
+        Returns:
+            tuple: (converged, gamma_new, alpha_array, Umag_array)
+                - converged (bool): True if converged within tolerance.
+                - gamma_new (np.ndarray): Final circulation distribution.
+                - alpha_array (np.ndarray): Final angle of attack array.
+                - Umag_array (np.ndarray): Final velocity magnitude array.
+        """
 
         # looping untill max_iterations
         converged = False
@@ -358,18 +365,20 @@ class Solver:
             logging.warning(f"NOT Converged after {self.max_iterations} iterations")
         return converged, gamma_new, alpha_array, Umag_array
 
-    def gamma_loop_non_linear(self, gamma_initial):
-        """
-        Nonlinear solver to compute the circulation distribution, i.e. solve
-        F(gamma) = gamma_new(gamma) - gamma = 0
-        using a robust non_linear solver from SciPy.
+    def gamma_loop_non_linear(self, gamma_initial: np.ndarray) -> tuple:
+        """Nonlinear solver using robust SciPy optimization methods.
+
+        Solves F(gamma) = gamma_new(gamma) - gamma = 0 using Broyden methods.
 
         Args:
-            gamma_initial (np.array): Initial guess for the circulation distribution (n,).
+            gamma_initial (np.ndarray): Initial guess for circulation distribution.
 
         Returns:
-            tuple: (converged (bool), final gamma distribution (np.array),
-                    angle of attack array (np.array), relative velocity magnitude array (np.array))
+            tuple: (converged, gamma_new, alpha_array, Umag_array)
+                - converged (bool): True if converged within tolerance.
+                - gamma_new (np.ndarray): Final circulation distribution.
+                - alpha_array (np.ndarray): Final angle of attack array.
+                - Umag_array (np.ndarray): Final velocity magnitude array.
         """
 
         def compute_gamma_residual(gamma):

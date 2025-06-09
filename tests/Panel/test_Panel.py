@@ -263,12 +263,12 @@ def test_va_setter(sample_panel):
     assert np.array_equal(sample_panel.va, test_va)
 
 
-def test_calculate_relative_alpha_and_relative_velocity(sample_panel):
+def test_compute_relative_alpha_and_relative_velocity(sample_panel):
     sample_panel.va = np.array([10, 0, 0])
     induced_velocity = np.array([1, 1, 1])
 
     alpha_calc, relative_velocity_calc = (
-        sample_panel.calculate_relative_alpha_and_relative_velocity(induced_velocity)
+        sample_panel.compute_relative_alpha_and_relative_velocity(induced_velocity)
     )
 
     # Calculate terms of induced corresponding to the airfoil directions
@@ -291,10 +291,10 @@ def test_calculate_relative_alpha_and_relative_velocity(sample_panel):
     assert np.allclose(relative_velocity, relative_velocity_calc)
 
 
-def test_calculate_velocity_induced_bound_2D(sample_panel):
+def test_compute_velocity_induced_bound_2D(sample_panel):
     control_point = np.array([0.5, 5, 0])
     gamma = 1.0
-    induced_velocity = sample_panel.calculate_velocity_induced_bound_2D(control_point)
+    induced_velocity = sample_panel.compute_velocity_induced_bound_2D(control_point)
 
     assert isinstance(induced_velocity, np.ndarray)
     assert induced_velocity.shape == (3,)  # 2D velocity
@@ -305,7 +305,7 @@ def test_velocity_induced_single_ring_semiinfinite(sample_panel):
     gamma = 1.0
     va_norm = 1
     va_unit = np.array([1, 0, 0])
-    induced_velocity = sample_panel.calculate_velocity_induced_single_ring_semiinfinite(
+    induced_velocity = sample_panel.compute_velocity_induced_single_ring_semiinfinite(
         control_point, False, va_norm, va_unit, gamma, core_radius_fraction=0.01
     )
 
@@ -313,8 +313,8 @@ def test_velocity_induced_single_ring_semiinfinite(sample_panel):
     assert induced_velocity.shape == (3,)  # 3D velocity
 
 
-def test_calculate_filaments_for_plotting(sample_panel):
-    filaments_for_plotting = sample_panel.calculate_filaments_for_plotting()
+def test_compute_filaments_for_plotting(sample_panel):
+    filaments_for_plotting = sample_panel.compute_filaments_for_plotting()
     for filament in filaments_for_plotting:
         assert filament[0].shape == (3,)
         assert filament[1].shape == (3,)
@@ -324,7 +324,7 @@ def test_calculate_filaments_for_plotting(sample_panel):
 # %% Testing cl,cd,cm calculation
 
 
-def test_calculate_cl_and_cd_cm(inviscid_polar_data):
+def test_compute_cl_and_cd_cm(inviscid_polar_data):
     # Generate mock polar data, using inviscid standards
     aoa = np.arange(-100, 31, 1)
     airfoil_data = np.empty((len(aoa), 4))
@@ -354,20 +354,20 @@ def test_calculate_cl_and_cd_cm(inviscid_polar_data):
         alpha_rad = np.deg2rad(alpha)
 
         # inviscid panel
-        cl_inviscid = inviscid_panel_instance.calculate_cl(alpha_rad)
+        cl_inviscid = inviscid_panel_instance.compute_cl(alpha_rad)
         expected_cl_inviscid = 2 * np.pi * alpha_rad
         assert np.isclose(cl_inviscid, expected_cl_inviscid)
 
-        cd_cm_inviscid = inviscid_panel_instance.calculate_cd_cm(alpha_rad)
+        cd_cm_inviscid = inviscid_panel_instance.compute_cd_cm(alpha_rad)
         expected_cm_cd_inviscid = [0.0, 0.0]
         assert np.isclose(cd_cm_inviscid[0], expected_cm_cd_inviscid[1])
 
         # polar data panel
-        cl_polar_data = polar_data_panel_instance.calculate_cl(alpha_rad)
+        cl_polar_data = polar_data_panel_instance.compute_cl(alpha_rad)
         expected_cl_polar_data = 2 * np.pi * alpha_rad
         assert np.isclose(cl_polar_data, expected_cl_polar_data)
 
-        cd_cm_polar_data = polar_data_panel_instance.calculate_cd_cm(alpha_rad)
+        cd_cm_polar_data = polar_data_panel_instance.compute_cd_cm(alpha_rad)
         expected_cm_cd_polar_data = [0.05, 0.01]
         assert np.isclose(cd_cm_polar_data[0], expected_cm_cd_polar_data[0])
         assert np.isclose(cd_cm_polar_data[1], expected_cm_cd_polar_data[1])
@@ -399,8 +399,8 @@ def test_lei_airfoil_breukels_polynomial_new_against_old(atol=1e-3):
         cd_expected = 0.5 * (cd1 + cd2)
         cm_expected = 0.5 * (cm1 + cm2)
         alpha_rad = np.deg2rad(alpha)
-        cl_panel = panel.calculate_cl(alpha_rad)
-        cd_panel, cm_panel = panel.calculate_cd_cm(alpha_rad)
+        cl_panel = panel.compute_cl(alpha_rad)
+        cd_panel, cm_panel = panel.compute_cd_cm(alpha_rad)
         assert np.isclose(cl_panel, cl_expected, atol=atol)
         assert np.isclose(cd_panel, cd_expected, atol=atol)
         assert np.isclose(cm_panel, cm_expected, atol=atol)
@@ -449,7 +449,7 @@ def get_v3_case_params():
         data_airf[j, 2] = Cd
         data_airf[j, 3] = Cm
 
-    Atot = test_utils.calculate_projected_area(coord)
+    Atot = test_utils.compute_projected_area(coord)
     coord_input_params = [coord, LE_thicc, camber]
     case_parameters = [
         coord_input_params,
@@ -517,8 +517,8 @@ def get_v3_case_params():
 #         cl_expected = 0.5 * (cl1 + cl2)
 #         cd_expected = 0.5 * (cd1 + cd2)
 #         cm_expected = 0.5 * (cm1 + cm2)
-#         cl_polynomial_new = panel_v3_polynomial.calculate_cl(alpha_rad)
-#         cd_cm_polynomial_new = panel_v3_polynomial.calculate_cd_cm(alpha_rad)
+#         cl_polynomial_new = panel_v3_polynomial.compute_cl(alpha_rad)
+#         cd_cm_polynomial_new = panel_v3_polynomial.compute_cd_cm(alpha_rad)
 #         assert np.isclose(cl_expected, cl_polynomial_new, atol=atol)
 #         assert np.isclose(cd_expected, cd_cm_polynomial_new[0], atol=atol)
 #         assert np.isclose(cm_expected, cd_cm_polynomial_new[1], atol=atol)
@@ -526,8 +526,8 @@ def get_v3_case_params():
 #         cl_polar_old = np.interp(alpha, data_airf[:, 0], data_airf[:, 1])
 #         cd_polar_old = np.interp(alpha, data_airf[:, 0], data_airf[:, 2])
 #         cm_polar_old = np.interp(alpha, data_airf[:, 0], data_airf[:, 3])
-#         cl_polar_new = panel_v3_polar.calculate_cl(alpha_rad)
-#         cd_cm_polar_new = panel_v3_polar.calculate_cd_cm(alpha_rad)
+#         cl_polar_new = panel_v3_polar.compute_cl(alpha_rad)
+#         cd_cm_polar_new = panel_v3_polar.compute_cd_cm(alpha_rad)
 #         assert np.isclose(cl_polar_old, cl_polar_new, atol=atol)
 #         assert np.isclose(cd_polar_old, cd_cm_polar_new[0], atol=atol)
 #         assert np.isclose(cm_polar_old, cd_cm_polar_new[1], atol=1e-6)
@@ -541,7 +541,7 @@ def get_v3_case_params():
 
 def test_lei_airfoil_panel_cl_consistency_vs_polar(atol=1e-3):
     """
-    Test that the Panel calculates the same cl for a given alpha
+    Test that the Panel computes the same cl for a given alpha
     when using a polar generated from Breukels regression and when using direct Breukels input.
     This uses the same logic as the main code (AirfoilAerodynamics.from_yaml_entry).
     """
@@ -574,8 +574,8 @@ def test_lei_airfoil_panel_cl_consistency_vs_polar(atol=1e-3):
     test_alphas = np.linspace(-10, 10, 21)
     for alpha in test_alphas:
         alpha_rad = np.deg2rad(alpha)
-        cl_polar = panel_polar.calculate_cl(alpha_rad)
-        cl_breukels = panel_breukels.calculate_cl(alpha_rad)
+        cl_polar = panel_polar.compute_cl(alpha_rad)
+        cl_breukels = panel_breukels.compute_cl(alpha_rad)
         # They should be identical (since both use the same polar array)
         assert np.isclose(
             cl_polar, cl_breukels, atol=atol
@@ -618,8 +618,8 @@ def test_lei_airfoil_breukels_polynomial_vs_analytic(atol=1e-3):
         cl_expected, cd_expected, cm_expected = thesis_functions.LEI_airf_coeff(
             t, k, alpha
         )
-        cl_panel = panel.calculate_cl(alpha_rad)
-        cd_panel, cm_panel = panel.calculate_cd_cm(alpha_rad)
+        cl_panel = panel.compute_cl(alpha_rad)
+        cd_panel, cm_panel = panel.compute_cd_cm(alpha_rad)
         logging.info(
             f"alpha: {alpha}, cl_panel: {cl_panel}, cl_expected: {cl_expected}, "
         )
@@ -668,10 +668,10 @@ def test_lei_airfoil_panel_vs_polar_input(atol=1e-3):
     test_angles = aoas
     for alpha in test_angles:
         alpha_rad = np.deg2rad(alpha)
-        cl_breukels = panel_breukels.calculate_cl(alpha_rad)
-        cd_breukels, cm_breukels = panel_breukels.calculate_cd_cm(alpha_rad)
-        cl_polar = panel_polar.calculate_cl(alpha_rad)
-        cd_polar, cm_polar = panel_polar.calculate_cd_cm(alpha_rad)
+        cl_breukels = panel_breukels.compute_cl(alpha_rad)
+        cd_breukels, cm_breukels = panel_breukels.compute_cd_cm(alpha_rad)
+        cl_polar = panel_polar.compute_cl(alpha_rad)
+        cd_polar, cm_polar = panel_polar.compute_cd_cm(alpha_rad)
         assert np.isclose(cl_breukels, cl_polar, atol=atol)
         assert np.isclose(cd_breukels, cd_polar, atol=atol)
         assert np.isclose(cm_breukels, cm_polar, atol=atol)

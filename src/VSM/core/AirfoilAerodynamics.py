@@ -5,27 +5,47 @@ import neuralfoil as nf
 
 
 class AirfoilAerodynamics:
-    """
-    Class to encapsulate 2D airfoil aerodynamic data and interpolation.
+    """Class to encapsulate 2D airfoil aerodynamic data and interpolation.
 
     Use AirfoilAerodynamics.from_yaml_entry(...) to instantiate.
     """
 
     def __init__(self):
+        """Initialize AirfoilAerodynamics instance.
+
+        Note:
+            Do not use this constructor directly. Use from_yaml_entry() instead.
+
+        Raises:
+            RuntimeError: Always raised to prevent direct instantiation.
+        """
         raise RuntimeError(
             "Use AirfoilAerodynamics.from_yaml_entry(...) to instantiate."
         )
 
-    @staticmethod
+    @classmethod
     def from_yaml_entry(
-        airfoil_type,
-        airfoil_params,
-        alpha_range=None,
-        reynolds=None,
-        file_path=None,
+        cls,
+        airfoil_type: str,
+        airfoil_params: dict,
+        alpha_range: list = None,
+        reynolds: float = None,
+        file_path: str = None,
     ):
-        """
-        Factory to create AirfoilAerodynamics from a YAML airfoil entry.
+        """Create AirfoilAerodynamics instance from configuration parameters.
+
+        Args:
+            airfoil_type (str): Type of airfoil model ('breukels_regression', 'neuralfoil', 'polars', 'inviscid').
+            airfoil_params (dict): Parameters specific to the airfoil type.
+            alpha_range (list, optional): [min_alpha, max_alpha, step] in degrees. Defaults to None.
+            reynolds (float, optional): Reynolds number for analysis. Defaults to None.
+            file_path (str, optional): Base path for relative file references. Defaults to None.
+
+        Returns:
+            AirfoilAerodynamics: Instance with populated polar data.
+
+        Raises:
+            ValueError: If airfoil_type is not supported or required parameters are missing.
         """
         obj = object.__new__(AirfoilAerodynamics)
         obj.source = airfoil_type.lower()
@@ -48,6 +68,21 @@ class AirfoilAerodynamics:
         return obj
 
     def _from_neuralfoil(self, airfoil_params, alpha_range, reynolds, file_path):
+        """Generate polar data using NeuralFoil analysis.
+
+        Args:
+            airfoil_params (dict): Dictionary containing 'dat_file_path' and optional NeuralFoil parameters.
+            alpha_range (list): [min_alpha, max_alpha, step] in degrees.
+            reynolds (float): Reynolds number for analysis.
+            file_path (str): Base path for resolving relative file paths.
+
+        Returns:
+            None: Populates self._polar_data.
+
+        Raises:
+            ImportError: If NeuralFoil is not installed.
+            FileNotFoundError: If airfoil .dat file is not found.
+        """
         if file_path is None:
             raise ValueError("file_path must be provided for airfoil type 'polars'.")
         file_path = Path(file_path)
@@ -72,7 +107,16 @@ class AirfoilAerodynamics:
         self.CD = aero["CD"]
         self.CM = aero["CM"]
 
-    def _from_breukels_regression(self, airfoil_params, alpha_range):
+    def _from_breukels_regression(self, airfoil_params: dict, alpha_range: list):
+        """Generate polar data using Breukels regression model for LEI kite airfoils.
+
+        Args:
+            airfoil_params (dict): Dictionary containing 't' (thickness ratio) and 'kappa' (camber).
+            alpha_range (list): [min_alpha, max_alpha, step] in degrees.
+
+        Returns:
+            None: Populates self._polar_data.
+        """
         t = airfoil_params["t"]
         kappa = airfoil_params["kappa"]
         alpha_deg = np.arange(
@@ -96,8 +140,20 @@ class AirfoilAerodynamics:
         self.CD = CD
         self.CM = CM
 
-    def _from_polars(self, airfoil_params, alpha_range, file_path):
+    def _from_polars(self, airfoil_params: dict, file_path: str):
+        """Load polar data from CSV file.
 
+        Args:
+            airfoil_params (dict): Dictionary containing 'polar_file_path'.
+            file_path (str): Base path for resolving relative file paths.
+
+        Returns:
+            None: Populates self._polar_data.
+
+        Raises:
+            FileNotFoundError: If polar CSV file is not found.
+            ValueError: If CSV format is invalid.
+        """
         if file_path is None:
             raise ValueError("file_path must be provided for airfoil type 'polars'.")
         file_path = Path(file_path)
@@ -128,7 +184,15 @@ class AirfoilAerodynamics:
             self.CD = CD_orig
             self.CM = CM_orig
 
-    def _from_inviscid(self, alpha_range):
+    def _from_inviscid(self, alpha_range: list):
+        """Generate inviscid polar data using thin airfoil theory.
+
+        Args:
+            alpha_range (list): [min_alpha, max_alpha, step] in degrees.
+
+        Returns:
+            None: Populates self._polar_data with theoretical values.
+        """
         alpha = np.arange(
             alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
         )
@@ -140,7 +204,7 @@ class AirfoilAerodynamics:
     def _instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(self, t, kappa):
         """
         Instantiate the coefficients for the LEI airfoil Breukels regression model.
-        This method calculates the coefficients for lift (CL), drag (CD), and moment (CM)
+        This method computes the coefficients for lift (CL), drag (CD), and moment (CM)
         based on the given thickness (t) and camber (kappa) parameters.
         """
 
@@ -224,5 +288,10 @@ class AirfoilAerodynamics:
         self._cm_coefficients = [cm_2_deg, cm_1_deg, cm_0_deg]
 
     def to_polar_array(self):
-        """Returns the polar data as a (N, 4) array: [alpha(rad), CL, CD, CM]."""
+        """Convert airfoil data to standardized numpy array format.
+
+        Returns:
+            np.ndarray: Array of shape (N, 4) with columns [alpha, CL, CD, CM].
+                Alpha values are in radians.
+        """
         return np.column_stack([self.alpha, self.CL, self.CD, self.CM])

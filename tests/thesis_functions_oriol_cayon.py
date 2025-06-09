@@ -29,7 +29,7 @@ def run_VSM(coord, Uinf, Gamma0, data_airf, conv_crit, A, rho=1.225):
         "VSM",
         rho=rho,
     )
-    # Process VSM results to calculate global coefficients and forces
+    # Process VSM results to compute global coefficients and forces
     F_rel, F_gl, Ltot, Dtot, CL, CD, CS = output_results(
         Fmag, aero_coeffs, ringvec, Uinf, controlpoints, A, rho=rho
     )
@@ -415,7 +415,7 @@ def solve_lifting_line_system_matrix_approach_semiinfinite(
     rings : List of list with the definition of each vortex filament
     Uinf : Wind speed velocity vector
     data_airf : 2D airfoil data with alpha, Cl, Cd, Cm
-    recalc_alpha : True if you want to recalculate the induced angle of attack at 1/4 of the chord (VSM)
+    recalc_alpha : True if you want to recompute the induced angle of attack at 1/4 of the chord (VSM)
     Gamma0 : Initial Guess of Gamma
     model : VSM: Vortex Step method/ LLT: Lifting Line Theory
 
@@ -564,7 +564,7 @@ def solve_lifting_line_system_matrix_approach_semiinfinite(
     if converged == False:
         print("Not converged after " + str(Niterations) + " iterations")
 
-    # In case VSM, calculate the effective angle of attack at a 1/4 chord
+    # In case VSM, compute the effective angle of attack at a 1/4 chord
     if model == "VSM":
 
         for ig in range(len(Gamma)):
@@ -629,7 +629,7 @@ def solve_lifting_line_system_matrix_approach_art_visc(
     rings : List of list with the definition of each vortex filament
     Uinf : Wind speed velocity vector
     data_airf : 2D airfoil data with alpha, Cl, Cd, Cm
-    recalc_alpha : True if you want to recalculate the induced angle of attack at 1/4 of the chord (VSM)
+    recalc_alpha : True if you want to recompute the induced angle of attack at 1/4 of the chord (VSM)
     Gamma0 : Initial Guess of Gamma
     model : VSM: Vortex Step method/ LLT: Lifting Line Theory
 
@@ -797,7 +797,7 @@ def solve_lifting_line_system_matrix_approach_art_visc(
     if converged == False:
         print("Not converged after " + str(Niterations) + " iterations")
 
-    # In case VSM, calculate the effective angle of attack at a 1/4 chord
+    # In case VSM, compute the effective angle of attack at a 1/4 chord
     if model == "VSM":
 
         for ig in range(len(Gamma)):
@@ -914,7 +914,7 @@ def solve_lifting_line_system_newton_approach(
     rings : List of list with the definition of each vortex filament
     Uinf : Wind speed velocity vector
     data_airf : 2D airfoil data with alpha, Cl, Cd, Cm
-    recalc_alpha : True if you want to recalculate the induced angle of attack at 1/4 of the chord (VSM)
+    recalc_alpha : True if you want to recompute the induced angle of attack at 1/4 of the chord (VSM)
     Gamma0 : Initial Guess of Gamma
     model : VSM: Vortex Step method/ LLT: Lifting Line Theory
 
@@ -1051,7 +1051,7 @@ def solve_lifting_line_system_newton_approach(
         Drag[icp] = 0.5 * rho * Umag**2 * cd[icp] * chord[icp]
         Ma[icp] = 0.5 * rho * Umag**2 * cm[icp] * chord[icp] ** 2
 
-    # In case VSM, calculate the effective angle of attack at a 1/4 chord
+    # In case VSM, compute the effective angle of attack at a 1/4 chord
     if model == "VSM":
 
         for icp in range(len(controlpoints)):
@@ -2373,7 +2373,7 @@ def refine_LEI_mesh_ballooning(wingpanels, ball_angle, N_split):
 
 def velocity_3D_from_vortex_filament(XV1, XV2, XVP, GAMMA, CORE):
 
-    # function to calculate the velocity induced by a straight 3D vortex filament
+    # function to compute the velocity induced by a straight 3D vortex filament
     # with circulation GAMMA at a point VP1. The geometry of the vortex filament
     # is defined by its edges: the filaments start at XV1 and ends at XV2.
     # the input CORE defines a vortex core radius, inside which the velocity
@@ -2389,11 +2389,11 @@ def velocity_3D_from_vortex_filament(XV1, XV2, XVP, GAMMA, CORE):
     X2 = XV2[0]
     Y2 = XV2[1]
     Z2 = XV2[2]  # end point of vortex filament
-    # read coordinates of target point where the velocity is calculated
+    # read coordinates of target point where the velocity is computed
     XP = XVP[0]
     YP = XVP[1]
     ZP = XVP[2]
-    # calculate geometric relations for integral of the velocity induced by filament
+    # compute geometric relations for integral of the velocity induced by filament
     R1 = np.sqrt((XP - X1) ** 2 + (YP - Y1) ** 2 + (ZP - Z1) ** 2)
     R2 = np.sqrt((XP - X2) ** 2 + (YP - Y2) ** 2 + (ZP - Z2) ** 2)
     R1XR2_X = (YP - Y1) * (ZP - Z2) - (ZP - Z1) * (YP - Y2)
@@ -2461,7 +2461,7 @@ def velocity_induced_single_ring_semiinfinite_nocore(ring, controlpoint, model):
 
 def velocity_3D_from_vortex_filament_semiinfinite(XV1, Vf, XVP, GAMMA, CORE):
 
-    # function to calculate the velocity induced by a straight 3D vortex filament
+    # function to compute the velocity induced by a straight 3D vortex filament
     # with circulation GAMMA at a point VP1. The geometry of the vortex filament
     # is defined by its edges: the filaments start at XV1 and ends at XV2.
     # the input CORE defines a vortex core radius, inside which the velocity
@@ -2477,11 +2477,11 @@ def velocity_3D_from_vortex_filament_semiinfinite(XV1, Vf, XVP, GAMMA, CORE):
     Vfx = Vf[0]
     Vfy = Vf[1]
     Vfz = Vf[2]  # end point of vortex filament
-    # read coordinates of target point where the velocity is calculated
+    # read coordinates of target point where the velocity is computed
     XP = XVP[0]
     YP = XVP[1]
     ZP = XVP[2]
-    # calculate geometric relations for integral of the velocity induced by filament
+    # compute geometric relations for integral of the velocity induced by filament
     R1 = np.sqrt((XP - X1) ** 2 + (YP - Y1) ** 2 + (ZP - Z1) ** 2)
 
     R1XV_X = (YP - Y1) * Vfz - (ZP - Z1) * Vfy

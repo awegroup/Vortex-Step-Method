@@ -1,19 +1,10 @@
 import numpy as np
-import logging
 import time
 import matplotlib.pyplot as plt
-
 import pandas as pd
 from pathlib import Path
-from VSM.core.WingGeometry import Wing
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
-from VSM.plotting import (
-    plot_polars,
-    plot_geometry,
-    creating_geometry_plot,
-)
-from VSM.interactive import interactive_plot
 from VSM.fitting import fit_and_evaluate_model
 
 

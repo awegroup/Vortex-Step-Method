@@ -2,6 +2,7 @@ from typing import List, Tuple, Dict, Any
 import numpy as np
 import plotly.graph_objects as go
 from VSM.core.Solver import Solver
+import yaml
 
 
 def add_panel_edges(fig: go.Figure, panel: Any, is_first: bool, is_last: bool) -> None:
@@ -119,7 +120,7 @@ def add_panel_surface(fig: go.Figure, panel: Any, is_first: bool) -> None:
 
 def add_filaments(fig: go.Figure, panel: Any, is_first: bool = False) -> None:
     """Add aerodynamic visualization details to the figure."""
-    filaments = panel.calculate_filaments_for_plotting()
+    filaments = panel.compute_filaments_for_plotting()
     colors = ["blue", "blue", "blue", "blue", "blue"]
     names = ["Bound Vortex", "Side 1", "Side 2", "Wake 1", "Wake 2"]
 
@@ -237,19 +238,211 @@ def add_aerodynamic_vectors(
     )
 
 
+def add_bridle_nodes(
+    fig: go.Figure, bridle_data: Dict[str, Any], is_first: bool = True
+) -> None:
+    """
+    Add bridle nodes (pulleys and knots) to the figure with distinct visualization.
+
+    Args:
+        fig: Plotly figure object
+        bridle_data: Dictionary containing bridle visualization data
+        is_first: Whether to show legend entries
+    """
+    if not bridle_data:
+        return
+
+    nodes = bridle_data["nodes"]
+    node_types = bridle_data["node_types"]
+
+    # Separate nodes by type
+    pulleys = []
+    knots = []
+
+    for node_id, coords in nodes.items():
+        node_type = node_types.get(node_id, "knot")
+        if node_type.lower() == "pulley":
+            pulleys.append(coords)
+        else:
+            knots.append(coords)
+
+    # Add pulleys with distinct visualization (larger, different color/shape)
+    if pulleys:
+        pulleys = np.array(pulleys)
+        fig.add_trace(
+            go.Scatter3d(
+                x=pulleys[:, 0],
+                y=pulleys[:, 1],
+                z=pulleys[:, 2],
+                mode="markers",
+                marker=dict(
+                    color="orange",
+                    size=8,
+                    symbol="diamond",  # Distinct shape for pulleys
+                    line=dict(color="black", width=2),
+                ),
+                name="Pulleys",
+                showlegend=is_first,
+            )
+        )
+
+    # Add knots with standard visualization
+    if knots:
+        knots = np.array(knots)
+        fig.add_trace(
+            go.Scatter3d(
+                x=knots[:, 0],
+                y=knots[:, 1],
+                z=knots[:, 2],
+                mode="markers",
+                marker=dict(
+                    color="darkblue",
+                    size=5,
+                    symbol="circle",  # Standard shape for knots
+                    line=dict(color="black", width=1),
+                ),
+                name="Knots",
+                showlegend=is_first,
+            )
+        )
+
+
+def add_bridle_lines(
+    fig: go.Figure, bridle_data: Dict[str, Any], is_first: bool = True
+) -> None:
+    """
+    Add bridle lines to the figure with thickness based on diameter.
+
+    Args:
+        fig: Plotly figure object
+        bridle_data: Dictionary containing bridle visualization data
+        is_first: Whether to show legend entries
+    """
+    if not bridle_data:
+        return
+
+    nodes = bridle_data["nodes"]
+    connections = bridle_data["connections"]
+
+    # Calculate diameter range for scaling line thickness
+    diameters = [conn["properties"]["diameter"] for conn in connections]
+    if not diameters:
+        return
+
+    min_diameter = min(diameters)
+    max_diameter = max(diameters)
+    diameter_range = max_diameter - min_diameter if max_diameter > min_diameter else 1.0
+
+    # Define line thickness range (min 2, max 12)
+    min_thickness = 2
+    max_thickness = 12
+
+    for i, connection in enumerate(connections):
+        ci = connection["ci"]
+        cj = connection["cj"]
+        diameter = connection["properties"]["diameter"]
+        material = connection["properties"].get("material", "default")
+
+        # Skip if nodes don't exist
+        if ci not in nodes or cj not in nodes:
+            continue
+
+        p1 = nodes[ci]
+        p2 = nodes[cj]
+
+        # Calculate line thickness based on diameter
+        if diameter_range > 0:
+            thickness_factor = (diameter - min_diameter) / diameter_range
+        else:
+            thickness_factor = 0.5
+        thickness = min_thickness + thickness_factor * (max_thickness - min_thickness)
+
+        # Choose color based on material
+        color_map = {
+            "steel": "gray",
+            "dyneema": "green",
+            "spectra": "blue",
+            "kevlar": "yellow",
+            "default": "black",
+        }
+        line_color = color_map.get(material.lower(), "black")
+
+        # Add the bridle line
+        fig.add_trace(
+            go.Scatter3d(
+                x=[p1[0], p2[0]],
+                y=[p1[1], p2[1]],
+                z=[p1[2], p2[2]],
+                mode="lines",
+                line=dict(
+                    color=line_color,
+                    width=thickness,
+                ),
+                name=f"Bridle Lines ({material})" if i == 0 or is_first else None,
+                showlegend=(i == 0 and is_first),
+                hovertemplate=(
+                    f"<b>Line:</b> {connection['name']}<br>"
+                    f"<b>Diameter:</b> {diameter:.3f}mm<br>"
+                    f"<b>Material:</b> {material}<br>"
+                    f"<b>From:</b> {ci} → {cj}<br>"
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+
+def add_bridle_system(fig: go.Figure, wing_aero: object, is_first: bool = True) -> None:
+    """
+    Add complete bridle system visualization to the figure.
+
+    Args:
+        fig: Plotly figure object
+        wing_aero: BodyAerodynamics object that may contain bridle data
+        is_first: Whether to show legend entries
+    """
+    # Check if wing_aero has bridle visualization data
+    if hasattr(wing_aero, "get_bridle_visualization_data"):
+        bridle_data = wing_aero.get_bridle_visualization_data()
+        if bridle_data:
+            add_bridle_nodes(fig, bridle_data, is_first)
+            add_bridle_lines(fig, bridle_data, is_first)
+    # Fallback: check for basic bridle line system
+    elif hasattr(wing_aero, "_bridle_line_system") and wing_aero._bridle_line_system:
+        # Handle basic bridle line system (backward compatibility)
+        for i, bridle_line in enumerate(wing_aero._bridle_line_system):
+            p1, p2, diameter = bridle_line
+
+            # Calculate thickness based on diameter (simple scaling)
+            thickness = max(2, min(12, diameter * 1000))  # Assume diameter in meters
+
+            fig.add_trace(
+                go.Scatter3d(
+                    x=[p1[0], p2[0]],
+                    y=[p1[1], p2[1]],
+                    z=[p1[2], p2[2]],
+                    mode="lines",
+                    line=dict(color="black", width=thickness),
+                    name="Bridle Lines" if i == 0 else None,
+                    showlegend=(i == 0 and is_first),
+                )
+            )
+
+
 def create_3D_plot(
     fig: go.Figure,
     wing_aero: object,
     forces_of_panels: List[np.ndarray],
     is_with_aerodynamic_details: bool,
+    is_with_bridles: bool = False,
 ) -> go.Figure:
     """
     Creates an interactive 3D plot of wing geometry using Plotly.
 
     Args:
         wing_aero: WingAerodynamics object containing panels
-        title: Title of the plot
+        forces_of_panels: List of force vectors for each panel
         is_with_aerodynamic_details: Boolean to show/hide aerodynamic visualization details
+        is_with_bridles: Boolean to show/hide bridle system visualization
 
     Returns:
         plotly.graph_objects.Figure
@@ -261,6 +454,10 @@ def create_3D_plot(
 
     if is_with_aerodynamic_details:
         add_control_and_aero_centers(fig, panels)
+
+    # Add bridle system if requested
+    if is_with_bridles:
+        add_bridle_system(fig, wing_aero, is_first=True)
 
     # Add geometric elements
     for i, panel in enumerate(panels):
@@ -288,7 +485,7 @@ def create_3D_plot(
     return fig
 
 
-def calculate_kite_geometry_ranges(panels: List[Any]) -> Tuple[Dict[str, float], float]:
+def compute_kite_geometry_ranges(panels: List[Any]) -> Tuple[Dict[str, float], float]:
     """Calculate axis ranges and tick spacing."""
     all_points = []
     for panel in panels:
@@ -305,7 +502,7 @@ def calculate_kite_geometry_ranges(panels: List[Any]) -> Tuple[Dict[str, float],
     return kite_geometry_ranges
 
 
-def calculate_axis_parameters_from_fig(
+def compute_axis_parameters_from_fig(
     fig: go.Figure,
 ) -> Tuple[Dict[str, float], float]:
     """Calculate axis ranges and tick spacing based on the figure's data."""
@@ -339,8 +536,8 @@ def calculate_axis_parameters_from_fig(
 def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figure:
 
     # Calculate axis parameters
-    kite_geometry_ranges = calculate_kite_geometry_ranges(panels)
-    ranges, tick_spacing = calculate_axis_parameters_from_fig(fig)
+    kite_geometry_ranges = compute_kite_geometry_ranges(panels)
+    ranges, tick_spacing = compute_axis_parameters_from_fig(fig)
     padding = tick_spacing * 0.5  # padding of half a tick spacing
 
     # Update layout
@@ -474,7 +671,7 @@ def add_case_information(
     yaw_rate: float,
     results: Dict[str, Any],
 ) -> go.Figure:
-    kite_geometry_ranges = calculate_kite_geometry_ranges(panels)
+    kite_geometry_ranges = compute_kite_geometry_ranges(panels)
     chord = kite_geometry_ranges["x"][1] - kite_geometry_ranges["x"][0]
     span = kite_geometry_ranges["y"][1] - kite_geometry_ranges["y"][0]
     height = kite_geometry_ranges["z"][1] - kite_geometry_ranges["z"][0]
@@ -537,6 +734,7 @@ def update_plot(
     side_slip: float,
     yaw_rate: float,
     is_with_aerodynamic_details: bool,
+    is_with_bridles: bool,
     title: str,
 ):
     # Update AoA and rerun VSM
@@ -545,7 +743,11 @@ def update_plot(
     # Populating the plot with updated aerodynamic details
     fig.data = []  # Clear the previous plot data
     fig = create_3D_plot(
-        fig, wing_aero, results["F_distribution"], is_with_aerodynamic_details
+        fig,
+        wing_aero,
+        results["F_distribution"],
+        is_with_aerodynamic_details,
+        is_with_bridles,
     )
     fig = add_case_information(
         fig, wing_aero.panels, vel, angle_of_attack, side_slip, yaw_rate, results
@@ -562,6 +764,7 @@ def interactive_plot(
     yaw_rate: float = 0,
     title: str = "Interactive plot",
     is_with_aerodynamic_details: bool = False,
+    is_with_bridles: bool = False,
     save_path: str = None,
     is_save: bool = False,
     filename="wing_geometry",
@@ -569,6 +772,20 @@ def interactive_plot(
 ):
     """
     Creates and optionally saves multiple views of the wing geometry with interactive AoA slider.
+
+    Args:
+        wing_aero: BodyAerodynamics object containing wing and optional bridle data
+        vel: Velocity magnitude
+        angle_of_attack: Angle of attack in degrees
+        side_slip: Side slip angle in degrees
+        yaw_rate: Yaw rate in rad/s
+        title: Plot title
+        is_with_aerodynamic_details: Show aerodynamic visualization details
+        is_with_bridles: Show bridle system visualization
+        save_path: Path to save the plot files
+        is_save: Whether to save the plot
+        filename: Base filename for saved files
+        is_show: Whether to display the plot
     """
 
     # Create the figure with a default orientation
@@ -590,6 +807,7 @@ def interactive_plot(
         side_slip,
         yaw_rate,
         is_with_aerodynamic_details,
+        is_with_bridles,
         title,
     )
 

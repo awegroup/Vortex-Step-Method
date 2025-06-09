@@ -6,7 +6,7 @@ import pprint
 from VSM.core.Filament import SemiInfiniteFilament, BoundFilament
 
 
-def calculate_induced_vel_3_horsheshoes():
+def compute_induced_vel_3_horsheshoes():
     # Gamma values for the filaments
     Uinf = np.array([1, 0, 0])
     va_norm = np.linalg.norm(Uinf)
@@ -192,7 +192,7 @@ def test_induced_velocity_3_horsehoes():
         horseshoe,
         horseshoes_trailing,
         va_unit,
-    ) = calculate_induced_vel_3_horsheshoes()
+    ) = compute_induced_vel_3_horsheshoes()
     for i, _ in enumerate(solution):
         assert solution[gammas[i]] == pytest.approx(
             analytical_solutions[gammas[i]], abs=1e-4
@@ -246,7 +246,7 @@ def set_axes_equal(ax):
     return ax
 
 
-def calculate_filaments_for_plotting(filaments, chord, va_unit):
+def compute_filaments_for_plotting(filaments, chord, va_unit):
     filaments_new = []
     for i, filament in enumerate(filaments):
         logging.debug(f"filament: {filament}")
@@ -288,7 +288,7 @@ def plot(horseshoes, va_unit):
     # Plot each panel
     for i, _ in enumerate(horseshoes):
         logging.debug(f"i: {i}, horseshoes[i]: {horseshoes[i]}")
-        filaments_for_plotting = calculate_filaments_for_plotting(
+        filaments_for_plotting = compute_filaments_for_plotting(
             horseshoes[i], max_chord, va_unit
         )
         legends = ["Bound Vortex", "wake_1", "wake_2"]
@@ -327,7 +327,7 @@ if __name__ == "__main__":
         horseshoes,
         horseshoes_trailing,
         va_unit,
-    ) = calculate_induced_vel_3_horsheshoes()
+    ) = compute_induced_vel_3_horsheshoes()
     plot(horseshoes, va_unit)
     plot(horseshoes_trailing, va_unit)
     print(f"GAMMA order has changed due to pprint")

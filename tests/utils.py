@@ -302,7 +302,7 @@ def create_ring_vec_from_wing_object(wing, model):
         r2 = evaluation_point - bound_2
         r3 = evaluation_point - (bound_2 + bound_1) / 2
 
-        # Add the calculated vectors to the result
+        # Add the computed vectors to the result
         result.append({"r0": r0, "r1": r1, "r2": r2, "r3": r3})
 
     return result
@@ -342,7 +342,7 @@ def print_matrix(matrix, name="Matrix"):
     print(f"{name}:\n{matrix_str}")
 
 
-def calculate_old_for_alpha_range(case_params):
+def compute_old_for_alpha_range(case_params):
     (
         coord_input_params,
         aoas,
@@ -443,7 +443,7 @@ def calculate_old_for_alpha_range(case_params):
     return CL1, CD1, CL2, CD2, Gamma_LLT, Gamma_VSM
 
 
-def calculate_new_for_alpha_range(
+def compute_new_for_alpha_range(
     case_params,
     is_plotting=False,
 ):
@@ -696,10 +696,10 @@ def plotting_CL_CD_gamma_LLT_VSM_old_new_comparison(
     )
 
 
-def calculate_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
+def compute_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
     """Calculates the projected area of the wing onto a specified plane.
 
-    The projected area is calculated based on the leading and trailing edge points of each section
+    The projected area is computed based on the leading and trailing edge points of each section
     projected onto a plane defined by a normal vector (default is z-plane).
 
     Args:

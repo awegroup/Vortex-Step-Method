@@ -9,46 +9,16 @@ logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class Wing:
-    """
-    Class to define a wing object for aerodynamic analysis.
+    """Wing geometry class for aerodynamic analysis.
 
-    The Wing class represents a wing geometry composed of multiple sections and provides methods
-    to update, refine, and analyze the aerodynamic mesh as well as compute geometric properties.
+    Represents wing geometry composed of multiple sections with configurable
+    panel distributions and mesh refinement capabilities.
 
     Attributes:
-        n_panels (int): Number of panels used in the aerodynamic mesh (the number of sections is n_panels + 1).
-        spanwise_panel_distribution (str): Spanwise panel distribution type. Options include:
-            - "uniform": Linear spacing.
-            - "cosine": Cosine spacing.
-            - "cosine_van_Garrel": Cosine spacing based on the van Garrel method.
-            - "split_provided": Split provided sections to achieve the desired number of panels.
-            - "unchanged": Keep the provided sections unchanged.
-        spanwise_direction (np.ndarray): Unit vector representing the wing's spanwise direction.
-        sections (List[Section]): List of Section objects that define the wing geometry.
-
-    Methods:
-        update_wing_from_points(le_arr, te_arr, polar_data_arr, aero_input_type):
-            Updates the wing geometry using arrays of leading edge points, trailing edge points,
-            and polar data arrays.
-        add_section(LE_point, TE_point, polar_data):
-            Adds a new section to the wing with the given leading edge, trailing edge, and polar data.
-        find_farthest_point_and_sort(sections):
-            Determines a starting section and sorts all sections based on proximity for mesh refinement.
-        refine_aerodynamic_mesh():
-            Refines the wing's aerodynamic mesh according to the selected spanwise panel distribution.
-        refine_mesh_for_uniform_or_cosine_distribution(spanwise_panel_distribution, n_sections, LE, TE, polar_data):
-            Refines the mesh using linear or cosine spacing by interpolating leading/trailing edge points
-            and polar data.
-        calculate_new_polar_data(polar_data, section_index, left_weight, right_weight):
-            Interpolates polar data between adjacent sections.
-        refine_mesh_by_splitting_provided_sections():
-            Splits the provided sections into additional sections to match the desired number of panels.
-        calculate_cosine_van_Garrel(new_sections):
-            Applies the van Garrel cosine distribution correction to the sections.
-        span (property):
-            Computes the wing span along the specified spanwise direction.
-        calculate_projected_area(z_plane_vector):
-            Calculates the projected area of the wing onto a plane defined by the given normal vector.
+        n_panels (int): Number of panels in aerodynamic mesh.
+        spanwise_panel_distribution (str): Panel distribution strategy.
+        spanwise_direction (np.ndarray): Wing spanwise unit vector.
+        sections (List[Section]): Ordered list of wing sections.
     """
 
     n_panels: int
@@ -58,19 +28,21 @@ class Wing:
 
     def update_wing_from_points(
         self,
-        le_arr,
-        te_arr,
-        aero_input_type,
-        polar_data_arr,
+        le_arr: np.ndarray,
+        te_arr: np.ndarray,
+        aero_input_type: str,
+        polar_data_arr: list,
     ):
-        """
-        Update the wing geometry from points and polar data arrays.
+        """Update wing geometry from coordinate and polar data arrays.
 
         Args:
             le_arr (np.ndarray): Array of leading edge points.
             te_arr (np.ndarray): Array of trailing edge points.
-            aero_input_type (str): Type of aerodynamic input. Only "reuse_initial_polar_data" is supported.
-            polar_data_arr (list): List of polar_data arrays for each section.
+            aero_input_type (str): Type of aerodynamic input ('reuse_initial_polar_data').
+            polar_data_arr (list): List of polar data arrays for each section.
+
+        Raises:
+            ValueError: If aero_input_type is not supported.
         """
         if aero_input_type == "reuse_initial_polar_data":
             self.sections.clear()
@@ -82,31 +54,36 @@ class Wing:
             )
 
     def add_section(
-        self, LE_point: np.array, TE_point: np.array, polar_data: np.ndarray
+        self, LE_point: np.ndarray, TE_point: np.ndarray, polar_data: np.ndarray
     ):
-        """
-        Add a section to the wing.
+        """Add section to wing geometry.
 
         Args:
-            LE_point (np.array): Leading edge point of the section.
-            TE_point (np.array): Trailing edge point of the section.
-            polar_data (np.ndarray): Polar data array for the section ([alpha, CL, CD, CM]).
+            LE_point (np.ndarray): Leading edge coordinates [x, y, z].
+            TE_point (np.ndarray): Trailing edge coordinates [x, y, z].
+            polar_data (np.ndarray): Airfoil polar data (N×4: [α, CL, CD, CM]).
         """
         self.sections.append(
             Section(np.array(LE_point), np.array(TE_point), np.array(polar_data))
         )
 
-    def find_farthest_point_and_sort(self, sections):
-        """Sorts the sections based on their proximity to each other
+    def find_farthest_point_and_sort(self, sections: list) -> list:
+        """Sort sections based on proximity for proper mesh ordering.
+
+        Determines starting section with positive y-coordinate that is farthest
+        from all others, then sorts remaining sections by proximity.
+
         Args:
-            sections (list): List of Section objects to be sorted
+            sections (list): List of Section objects to sort.
+
         Returns:
-            sorted_sections (list): Sorted list of Section objects
-        Example:
-            sorted_sections = wing.find_farthest_point_and_sort(sections)
+            list: Sorted list of Section objects.
+
+        Raises:
+            ValueError: If no section has positive y-coordinate.
         """
 
-        # Helper function to calculate radial distance
+        # Helper function to compute radial distance
         def radial_distance(point1, point2):
             return np.linalg.norm(np.array(point1) - np.array(point2))
 
@@ -150,14 +127,17 @@ class Wing:
 
         return sorted_sections
 
-    def refine_aerodynamic_mesh(self):
-        """Refine the aerodynamic mesh of the wing based on the specified spanwise panel distribution
+    def refine_aerodynamic_mesh(self) -> list:
+        """Refine wing aerodynamic mesh according to specified distribution.
+
         Args:
             None
+
         Returns:
-            new_sections (list): List of Section objects with refined aerodynamic mesh
-        Example:
-            new_sections = wing.refine_aerodynamic_mesh()
+            list: List of Section objects with refined mesh (n_panels + 1 sections).
+
+        Raises:
+            ValueError: If spanwise_panel_distribution is not supported.
         """
         if self.spanwise_panel_distribution not in [
             "uniform",
@@ -214,21 +194,27 @@ class Wing:
             )
 
     def refine_mesh_for_uniform_or_cosine_distribution(
-        self, spanwise_panel_distribution, n_sections, LE, TE, polar_data
-    ):
-        """Refine the aerodynamic mesh of the wing based on uniform or cosine spacing
+        self,
+        spanwise_panel_distribution: str,
+        n_sections: int,
+        LE: np.ndarray,
+        TE: np.ndarray,
+        polar_data: list,
+    ) -> list:
+        """Refine mesh using uniform or cosine spacing with interpolation.
+
         Args:
-            spanwise_panel_distribution (str): Spanwise panel distribution type
-            n_sections (int): Number of sections to create
-            LE (np.ndarray): Leading edge points
-            TE (np.ndarray): Trailing edge points
-            polar_data (list): Aerodynamic input for each section
+            spanwise_panel_distribution (str): Distribution type ('uniform' or 'cosine').
+            n_sections (int): Number of sections to create.
+            LE (np.ndarray): Leading edge points array.
+            TE (np.ndarray): Trailing edge points array.
+            polar_data (list): List of polar data arrays.
+
         Returns:
-            new_sections (list): List of Section objects with refined aerodynamic mesh
-        Example:
-            new_sections = wing.refine_mesh_for_uniform_or_cosine_distribution(
-                "uniform", 5, LE, TE, polar_data
-            )
+            list: List of refined Section objects.
+
+        Raises:
+            ValueError: If distribution type is not supported.
         """
         if n_sections == 2:
             return [
@@ -310,7 +296,7 @@ class Wing:
             new_TE[i] = new_quarter_chord[i] + 0.75 * avg_chord
 
             # Interpolate aero_input
-            new_polar_data[i] = self.calculate_new_polar_data(
+            new_polar_data[i] = self.compute_new_polar_data(
                 polar_data, section_index, left_weight, right_weight
             )
 
@@ -328,18 +314,23 @@ class Wing:
                 )
         return new_sections
 
-    def calculate_new_polar_data(
-        self, polar_data, section_index, left_weight, right_weight
-    ):
-        """
-        Interpolates the polar_data of two sections.
+    def compute_new_polar_data(
+        self,
+        polar_data: list,
+        section_index: int,
+        left_weight: float,
+        right_weight: float,
+    ) -> np.ndarray:
+        """Interpolate polar data between adjacent sections.
+
         Args:
             polar_data (list): List of (N,4) polar arrays.
-            section_index (int): Index of the section to interpolate.
-            left_weight (float): Weight for the left section.
-            right_weight (float): Weight for the right section.
+            section_index (int): Index of left section for interpolation.
+            left_weight (float): Weight for left section.
+            right_weight (float): Weight for right section.
+
         Returns:
-            new_polar (np.ndarray): Interpolated polar data (N,4).
+            np.ndarray: Interpolated polar data (N,4) array.
         """
         polar_left = polar_data[section_index]
         polar_right = polar_data[section_index + 1]
@@ -376,14 +367,17 @@ class Wing:
         new_polar = np.column_stack((alpha_common, CL_interp, CD_interp, CM_interp))
         return new_polar
 
-    def refine_mesh_by_splitting_provided_sections(self):
-        """Refine the aerodynamic mesh of the wing by splitting the provided sections
+    def refine_mesh_by_splitting_provided_sections(self) -> list:
+        """Refine mesh by splitting existing sections uniformly.
+
         Args:
             None
+
         Returns:
-            new_sections (list): List of Section objects with refined aerodynamic mesh
-        Example:
-            new_sections = wing.refine_mesh_by_splitting_provided_sections()
+            list: List of Section objects with split sections.
+
+        Raises:
+            ValueError: If n_panels is not multiple of provided panels.
         """
 
         n_sections_provided = len(self.sections)
@@ -468,16 +462,11 @@ class Wing:
 
     # TODO: add test here, assessing for example the types of the inputs
     @property
-    def span(self):
-        """Calculates the span of the wing along the specified spanwise direction.
-        The span is defined as the distance between the leading edge points of the first and last sections
-        projected onto the spanwise direction.
-        Args:
-            None
+    def span(self) -> float:
+        """Calculate wing span along spanwise direction.
+
         Returns:
-            - span (float): The span of the wing along the specified spanwise direction.
-        Example:
-            span = wing.span
+            float: Wing span distance along spanwise direction.
         """
         # Normalize the vector_axis to ensure it's a unit vector
         vector_axis = self.spanwise_direction / np.linalg.norm(self.spanwise_direction)
@@ -494,16 +483,16 @@ class Wing:
         span = np.max(projections) - np.min(projections)
         return span
 
-    def calculate_projected_area(self, z_plane_vector=np.array([0, 0, 1])):
-        """Calculates the projected area of the wing onto a specified plane.
-        The plane is defined by a normal vector (z_plane_vector).
+    def compute_projected_area(
+        self, z_plane_vector: np.ndarray = np.array([0, 0, 1])
+    ) -> float:
+        """Calculate projected area onto specified plane.
+
         Args:
-            z_plane_vector (np.ndarray): Normal vector defining the plane onto which the area is projected.
-                Default is the z-axis [0, 0, 1].
+            z_plane_vector (np.ndarray): Normal vector defining projection plane.
+
         Returns:
-            - projected_area (float): The projected area of the wing onto the specified plane.
-        Example:
-            projected_area = wing.calculate_projected_area()
+            float: Projected wing area onto the specified plane.
         """
         # Normalize the z_plane_vector
         z_plane_vector = z_plane_vector / jit_norm(z_plane_vector)
@@ -542,18 +531,32 @@ class Wing:
 
 @dataclass
 class Section:
-    """
-    Section class representing the geometry of a wing section.
+    """Wing section geometry representation.
 
-    Parameters:
-        LE_point (np.ndarray): The leading edge coordinate.
-        TE_point (np.ndarray): The trailing edge coordinate.
-        polar_data (np.ndarray): The aerodynamic polar data as an (N,4) array: [alpha, CL, CD, CM].
-
-    Returns:
-        Section: An instance representing the wing section.
+    Attributes:
+        LE_point (np.ndarray): Leading edge coordinates.
+        TE_point (np.ndarray): Trailing edge coordinates.
+        polar_data (np.ndarray): Aerodynamic polar data (N×4: [α, CL, CD, CM]).
     """
 
     LE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     TE_point: np.ndarray = field(default_factory=lambda: np.array([0, 1, 0]))
     polar_data: np.ndarray = field(default_factory=lambda: np.zeros((0, 4)))
+
+    @property
+    def chord_vector(self) -> np.ndarray:
+        """Calculate chord vector from leading to trailing edge.
+
+        Returns:
+            np.ndarray: Chord vector (TE - LE).
+        """
+        return self.TE_point - self.LE_point
+
+    @property
+    def chord_length(self) -> float:
+        """Calculate chord length.
+
+        Returns:
+            float: Magnitude of chord vector.
+        """
+        return np.linalg.norm(self.chord_vector)

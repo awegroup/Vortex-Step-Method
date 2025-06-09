@@ -87,7 +87,7 @@ def test_curved():
     CD_Maneia = polars_Maneia[:, 2]
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -99,7 +99,7 @@ def test_curved():
         gamma_VSM_new,
         panel_y,
         AR_projected,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     )
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -159,7 +159,7 @@ if __name__ == "__main__":
         gamma_VSM_new,
         panel_y,
         AR_projected,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )

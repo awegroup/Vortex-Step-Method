@@ -7,42 +7,37 @@ logging.basicConfig(level=logging.INFO)
 
 
 class Filament(ABC):
-    """
-    A class to represent a filament.
+    """Abstract base class for vortex filaments.
 
-    Args:
-        - two points defining the filament
-
-    Returns:
-        - a filament object
+    Attributes:
+        _alpha0 (float): Oseen parameter for viscous diffusion (1.25643).
+        _nu (float): Kinematic viscosity of air in m²/s (1.48e-5).
     """
 
     @abstractmethod
     def __init__(self):
+        """Initialize filament with physical constants."""
         self._alpha0 = 1.25643  # Oseen parameter
         self._nu = 1.48e-5  # Kinematic viscosity of air
 
 
 class BoundFilament(Filament):
-    """
-    A class to represent a bound vortex filament.
+    """Bound vortex filament between two points along quarter-chord line.
 
-    Args:
-        - two points defining the filament
-
-    Returns:
-        - a bound vortex filament object
-
-    Methods:
-        - velocity_3D_bound_vortex: calculate the induced velocity of a bound vortex filament
-
-    Properties:
-        - x1: the first point defining the filament
-        - x2: the second point defining the filament
-
+    Attributes:
+        _x1 (np.ndarray): First endpoint of the filament.
+        _x2 (np.ndarray): Second endpoint of the filament.
+        _length (float): Filament length.
+        _r0 (np.ndarray): Filament vector (x2 - x1).
     """
 
-    def __init__(self, x1, x2):
+    def __init__(self, x1: np.ndarray, x2: np.ndarray):
+        """Initialize bound filament with two endpoints.
+
+        Args:
+            x1 (np.ndarray): First endpoint coordinates.
+            x2 (np.ndarray): Second endpoint coordinates.
+        """
         self._x1 = np.array(x1)
         self._x2 = np.array(x2)
         self._length = jit_norm(self._x2 - self._x1)
@@ -50,26 +45,38 @@ class BoundFilament(Filament):
         super().__init__()
 
     @property
-    def x1(self):
+    def x1(self) -> np.ndarray:
+        """Get first endpoint of the filament.
+
+        Returns:
+            np.ndarray: First endpoint coordinates.
+        """
         return self._x1
 
     @property
-    def x2(self):
-        return self._x2
-
-    def velocity_3D_bound_vortex(self, XVP, gamma, core_radius_fraction):
-        """
-        Calculate the velocity induced by a bound vortex filament in a point in space
-
-        "Vortex core correction from: Rick Damiani et al. “A vortex step method for nonlinear airfoil polar data as implemented in KiteAeroDyn”.
-
-        Args:
-            - XVP : Controlpoint (array)
-            - gamma : Strength of the vortex (scalar)
-            - core_radius_fraction : Fraction of the core radius (scalar)
+    def x2(self) -> np.ndarray:
+        """Get second endpoint of the filament.
 
         Returns:
-            - vel_ind : induced velocity by the bound fil. (array)
+            np.ndarray: Second endpoint coordinates.
+        """
+        return self._x2
+
+    def velocity_3D_bound_vortex(
+        self, XVP: np.ndarray, gamma: float, core_radius_fraction: float
+    ) -> np.ndarray:
+        """Calculate velocity induced by bound vortex filament using Vatistas core model.
+
+        Vortex core correction from: Rick Damiani et al. "A vortex step method for nonlinear
+        airfoil polar data as implemented in KiteAeroDyn".
+
+        Args:
+            XVP (np.ndarray): Evaluation point coordinates.
+            gamma (float): Vortex strength (circulation).
+            core_radius_fraction (float): Core radius as fraction of filament length.
+
+        Returns:
+            np.ndarray: Induced velocity vector [vx, vy, vz].
         """
         XV1 = self.x1
         XV2 = self.x2
@@ -125,19 +132,21 @@ class BoundFilament(Filament):
             )
             return jit_norm(r1Xr0) / (jit_norm(r0) * epsilon) * vel_ind_proj
 
-    def velocity_3D_trailing_vortex(self, XVP, gamma, Uinf):
-        """
-        Calculate the velocity induced by a trailing vortex filament in a point in space
+    def velocity_3D_trailing_vortex(
+        self, XVP: np.ndarray, gamma: float, Uinf: float
+    ) -> np.ndarray:
+        """Calculate velocity induced by trailing vortex filament with viscous core correction.
 
-        Vortex core correction from: Rick Damiani et al. “A vortex step method for nonlinear airfoil polar data as implemented in KiteAeroDyn”.
+        Vortex core correction from: Rick Damiani et al. "A vortex step method for nonlinear
+        airfoil polar data as implemented in KiteAeroDyn".
 
         Args:
-            - XVP : Controlpoint (array)
-            - gamma : Strength of the vortex (scalar)
-            - Uinf : Inflow velocity modulus (scalar)
+            XVP (np.ndarray): Evaluation point coordinates.
+            gamma (float): Vortex strength.
+            Uinf (float): Inflow velocity magnitude.
 
         Returns:
-            - vel_ind : induced velocity by the trailing fil. (array)
+            np.ndarray: Induced velocity vector.
         """
         XV1 = self.x1
         XV2 = self.x2
@@ -197,28 +206,30 @@ class BoundFilament(Filament):
 
 
 class SemiInfiniteFilament(Filament):
-    """
-    A class to represent a filament.
+    """Semi-infinite trailing vortex extending to infinity in wake direction.
 
-    Args:
-        - x1: the trailing edge point, of which the trailing vortex starts
-        - direction: unit vector of apparent wind speed
-        - vel_mag: the magnitude of the apparent wind speed
-        - filament_direction: -1 or 1, indicating if its with or against the direction of the apparent wind speed
-
-    Returns:
-        - a filament object
-
-    Methods:
-        - velocity_3D_trailing_vortex_semiinfinite: calculate the induced velocity of a semi-infinite trailing vortex filament
-
-    Properties:
-        - x1: the trailing edge point, of which the trailing vortex starts
-        - filament_direction: -1 or 1, indicating if its with or against the direction of the apparent wind speed
-
+    Attributes:
+        _x1 (np.ndarray): Starting point (trailing edge).
+        _direction (np.ndarray): Unit vector of wake direction.
+        _vel_mag (float): Wake velocity magnitude.
+        _filament_direction (int): ±1 indicating filament orientation.
     """
 
-    def __init__(self, x1, direction, vel_mag, filament_direction):
+    def __init__(
+        self,
+        x1: np.ndarray,
+        direction: np.ndarray,
+        vel_mag: float,
+        filament_direction: int,
+    ):
+        """Initialize semi-infinite filament.
+
+        Args:
+            x1 (np.ndarray): Starting point (trailing edge).
+            direction (np.ndarray): Unit vector of apparent wind speed.
+            vel_mag (float): Magnitude of apparent wind speed.
+            filament_direction (int): -1 or 1, indicating direction relative to apparent wind.
+        """
         self._x1 = x1  # the trailing edge point, of which the trailing vortex starts
         # x2 is a point far away from the filament, defined here for plotting purposes
         # self._x2 = x1 + filament_direction * direction * 0.5
@@ -228,31 +239,39 @@ class SemiInfiniteFilament(Filament):
         super().__init__()
 
     @property
-    def x1(self):
+    def x1(self) -> np.ndarray:
+        """Get starting point of the semi-infinite filament.
+
+        Returns:
+            np.ndarray: Starting point coordinates.
+        """
         return self._x1
 
     @property
-    def filament_direction(self):
+    def filament_direction(self) -> int:
+        """Get filament direction multiplier.
+
+        Returns:
+            int: Direction multiplier (±1).
+        """
         return self._filament_direction
 
-    def velocity_3D_trailing_vortex_semiinfinite(self, Vf, XVP, GAMMA, Uinf):
-        """
-            Calculate the velocity induced by a semiinfinite trailing vortex filament in a point in space
+    def velocity_3D_trailing_vortex_semiinfinite(
+        self, Vf: np.ndarray, XVP: np.ndarray, GAMMA: float, Uinf: float
+    ) -> np.ndarray:
+        """Calculate velocity induced by semi-infinite trailing vortex filament.
 
-            Vortex core correction from:
-                Rick Damiani et al. “A vortex step method for nonlinear airfoil polar data as implemented in
-        KiteAeroDyn”.
-            ----------
-            XV1 : Point A of the vortex filament (array)
-            XV2 : Point B of the vortex filament (array)
-            XVP : Controlpoint (array)
-            gamma : Strength of the vortex (scalar)
-            Uinf : Inflow velocity modulus (scalar)
+        Vortex core correction from: Rick Damiani et al. "A vortex step method for nonlinear
+        airfoil polar data as implemented in KiteAeroDyn".
 
-            Returns
-            -------
-            vel_ind : induced velocity by the trailing fil. (array)
+        Args:
+            Vf (np.ndarray): Wake velocity vector.
+            XVP (np.ndarray): Evaluation point.
+            GAMMA (float): Circulation strength.
+            Uinf (float): Inflow velocity magnitude.
 
+        Returns:
+            np.ndarray: Induced velocity vector.
         """
         XV1 = self.x1
         GAMMA = -GAMMA * self.filament_direction

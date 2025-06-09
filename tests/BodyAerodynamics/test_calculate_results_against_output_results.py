@@ -18,12 +18,12 @@ from tests.utils import (
     generate_coordinates_rect_wing,
     generate_coordinates_curved_wing,
     flip_created_coord_in_pairs,
-    calculate_projected_area,
+    compute_projected_area,
 )
 import tests.thesis_functions_oriol_cayon as thesis_functions
 
 
-def test_calculate_results():
+def test_compute_results():
     # Setup
     density = 1.225
     N = 40
@@ -107,7 +107,7 @@ def test_calculate_results():
     results_NEW = solver_object.solve(wing_aero)
 
     # Check the type and structure of the output
-    assert isinstance(results_NEW, dict), "calculate_results should return a dictionary"
+    assert isinstance(results_NEW, dict), "compute_results should return a dictionary"
 
     ### OLD FROM WING OUTPUT ###
     # Calculating Fmag, using UNCORRECTED alpha
@@ -116,9 +116,9 @@ def test_calculate_results():
     n_panels = len(wing_aero.panels)
     lift, drag, moment = np.zeros(n_panels), np.zeros(n_panels), np.zeros(n_panels)
     for i, panel in enumerate(wing_aero.panels):
-        cl_val = np.asarray(panel.calculate_cl(alpha[i])).item()
-        cd_val = np.asarray(panel.calculate_cd_cm(alpha[i])[0]).item()
-        cm_val = np.asarray(panel.calculate_cd_cm(alpha[i])[1]).item()
+        cl_val = np.asarray(panel.compute_cl(alpha[i])).item()
+        cd_val = np.asarray(panel.compute_cd_cm(alpha[i])[0]).item()
+        cm_val = np.asarray(panel.compute_cd_cm(alpha[i])[1]).item()
         lift[i] = dyn_visc * cl_val * panel.chord
         drag[i] = dyn_visc * cd_val * panel.chord
         moment[i] = dyn_visc * cm_val * (panel.chord**2)
@@ -130,13 +130,13 @@ def test_calculate_results():
     aero_coeffs = np.column_stack(
         (
             [alpha[i] for i, panel in enumerate(wing_aero.panels)],
-            [panel.calculate_cl(alpha[i]) for i, panel in enumerate(wing_aero.panels)],
+            [panel.compute_cl(alpha[i]) for i, panel in enumerate(wing_aero.panels)],
             [
-                panel.calculate_cd_cm(alpha[i])[0]
+                panel.compute_cd_cm(alpha[i])[0]
                 for i, panel in enumerate(wing_aero.panels)
             ],
             [
-                panel.calculate_cd_cm(alpha[i])[1]
+                panel.compute_cd_cm(alpha[i])[1]
                 for i, panel in enumerate(wing_aero.panels)
             ],
         )
@@ -146,7 +146,7 @@ def test_calculate_results():
         {"tangential": panel.y_airf, "normal": panel.x_airf}
         for panel in wing_aero.panels
     ]
-    Atot = calculate_projected_area(coord)
+    Atot = compute_projected_area(coord)
 
     # Calculate results using the reference function
     F_rel_ref, F_gl_ref, Ltot_ref, Dtot_ref, CL_ref, CD_ref, CS_ref = (
@@ -156,28 +156,28 @@ def test_calculate_results():
     )
 
     # Debug: Print the compared results
-    cl_calculated = results_NEW["cl"]
-    cd_calculated = results_NEW["cd"]
-    cs_calculated = results_NEW["cs"]
-    L_calculated = results_NEW["lift"]
-    D_calculated = results_NEW["drag"]
+    cl_computed = results_NEW["cl"]
+    cd_computed = results_NEW["cd"]
+    cs_computed = results_NEW["cs"]
+    L_computed = results_NEW["lift"]
+    D_computed = results_NEW["drag"]
 
-    logging.info(f"cl_calculated: {cl_calculated}, CL_ref: {CL_ref}")
-    logging.info(f"cd_calculated: {cd_calculated}, CD_ref: {CD_ref}")
-    logging.info(f"cs_calculated: {cs_calculated}, CS_ref: {CS_ref}")
-    logging.info(f"L_calculated: {L_calculated}, Ltot_ref: {Ltot_ref}")
-    logging.info(f"D_calculated: {D_calculated}, Dtot_ref: {Dtot_ref}")
+    logging.info(f"cl_computed: {cl_computed}, CL_ref: {CL_ref}")
+    logging.info(f"cd_computed: {cd_computed}, CD_ref: {CD_ref}")
+    logging.info(f"cs_computed: {cs_computed}, CS_ref: {CS_ref}")
+    logging.info(f"L_computed: {L_computed}, Ltot_ref: {Ltot_ref}")
+    logging.info(f"D_computed: {D_computed}, Dtot_ref: {Dtot_ref}")
 
     ##########################
     ### COMPARING
     ##########################
 
     # Assert that the results are close
-    np.testing.assert_allclose(cl_calculated, CL_ref, rtol=1e-4)
-    np.testing.assert_allclose(cd_calculated, CD_ref, rtol=1e-4)
-    np.testing.assert_allclose(cs_calculated, CS_ref, rtol=1e-4)
-    np.testing.assert_allclose(L_calculated, Ltot_ref, rtol=1e-4)
-    np.testing.assert_allclose(D_calculated, Dtot_ref, rtol=1e-4)
+    np.testing.assert_allclose(cl_computed, CL_ref, rtol=1e-4)
+    np.testing.assert_allclose(cd_computed, CD_ref, rtol=1e-4)
+    np.testing.assert_allclose(cs_computed, CS_ref, rtol=1e-4)
+    np.testing.assert_allclose(L_computed, Ltot_ref, rtol=1e-4)
+    np.testing.assert_allclose(D_computed, Dtot_ref, rtol=1e-4)
 
     # Check the shape of array outputs
     assert len(results_NEW["cl_distribution"]) == len(wing_aero.panels)

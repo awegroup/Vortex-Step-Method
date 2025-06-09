@@ -14,7 +14,7 @@ def gamma():
     return 1.0
 
 
-def test_calculate_induced_velocity_semi_infinite(core_radius_fraction):
+def test_compute_induced_velocity_semi_infinite(core_radius_fraction):
     # Define a simple filament and control point
     x1 = np.array([0, 0, 0])
     direction = np.array([1, 0, 0])

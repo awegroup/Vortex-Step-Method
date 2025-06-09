@@ -5,89 +5,56 @@ from . import jit_cross, jit_norm, jit_dot
 
 
 class Panel:
-    """
-    Class for Panel object
+    """Panel representing a discrete wing section bounded by two wing sections.
 
-    This class represents a panel defined by two sections, and it calculates various
-    aerodynamic properties and induced velocities related to the panel.
+    This class encapsulates geometric properties, aerodynamic characteristics, and vortex
+    filament system for computing induced velocities and aerodynamic forces.
 
-    Args:
-        section_1 (Section Object): First section of the panel.
-        section_2 (Section Object): Second section of the panel.
-        aerodynamic_center (np.ndarray): Aerodynamic center of the panel.
-        control_point (np.ndarray): Control point of the panel.
-        bound_point_1 (np.ndarray): First bound point of the panel.
-        bound_point_2 (np.ndarray): Second bound point of the panel.
-        x_airf (np.ndarray): Unit vector pointing upwards from the chord-line, perpendicular to the panel.
-        y_airf (np.ndarray): Unit vector pointing parallel to the chord-line, from leading edge to trailing edge.
-        z_airf (np.ndarray): Unit vector in the airfoil plane, pointing towards the left tip in spanwise direction.
-
-    Attributes / Properties:
-        x_airf (np.ndarray): Unit vector pointing upwards from the chord-line.
-        y_airf (np.ndarray): Unit vector pointing along the chord-line from LE-to-TE.
-        z_airf (np.ndarray): Unit vector in the airfoil plane, towards the left tip.
-        va (np.ndarray): Relative velocity of the panel (can be set externally).
-        aerodynamic_center (np.ndarray): Aerodynamic center of the panel (typically at 1/4 chord).
-        control_point (np.ndarray): Control point of the panel (typically at 3/4 chord).
-        corner_points (np.ndarray): Array of the corner points of the panel.
-        bound_point_1 (np.ndarray): First bound point of the panel.
-        bound_point_2 (np.ndarray): Second bound point of the panel.
-        width (float): Width of the panel, computed as the norm of the bound vortex.
-        chord (float): Average chord length of the panel.
-        TE_point_1 (np.ndarray): Trailing edge point from section 1.
-        TE_point_2 (np.ndarray): Trailing edge point from section 2.
-        LE_point_1 (np.ndarray): Leading edge point from section 1.
-        LE_point_2 (np.ndarray): Leading edge point from section 2.
-        filaments (list): List of vortex filament objects defining the panel.
-        panel_polar_data (np.ndarray or None): Polar data for aerodynamic properties if provided.
-
-    Methods:
-        calculate_relative_alpha_and_relative_velocity(induced_velocity: np.ndarray):
-            Calculates the relative angle of attack and relative velocity of the panel by combining
-            its own velocity with an induced velocity.
-
-        instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(section_1, section_2):
-            Instantiates the lift (Cl), drag (Cd), and moment (Cm) coefficients for the lei_airfoil_breukels model,
-            based on the aerodynamic inputs of the two sections.
-
-        calculate_cl(alpha):
-            Returns the lift coefficient (Cl) for a given angle of attack. The calculation method depends on
-            the panel aerodynamic model.
-
-        calculate_cd_cm(alpha):
-            Returns the drag (Cd) and moment (Cm) coefficients for a given angle of attack. The calculation
-            method depends on the panel aerodynamic model.
-
-        calculate_velocity_induced_bound_2D(evaluation_point: np.ndarray):
-            Computes the velocity induced by the bound vortex filaments at a specified evaluation point.
-
-        calculate_velocity_induced_single_ring_semiinfinite(
-            evaluation_point: np.ndarray,
-            evaluation_point_on_bound: bool,
-            va_norm: float,
-            va_unit: np.ndarray,
-            gamma: float,
-            core_radius_fraction: float
-        ):
-            Calculates the velocity induced by a vortex ring (including semi-infinite trailing vortices)
-            at a given evaluation point.
-
-        calculate_filaments_for_plotting():
-            Prepares and returns the filament data for plotting, including filament start/end points and colors.
+    Attributes:
+        _TE_point_1 (np.ndarray): Trailing edge point from section 1.
+        _LE_point_1 (np.ndarray): Leading edge point from section 1.
+        _TE_point_2 (np.ndarray): Trailing edge point from section 2.
+        _LE_point_2 (np.ndarray): Leading edge point from section 2.
+        _chord (float): Average chord length of the panel.
+        _va (np.ndarray): Relative velocity of the panel.
+        _corner_points (np.ndarray): Array of corner points defining the panel.
+        _panel_polar_data (np.ndarray): Interpolated polar data for the panel.
+        _aerodynamic_center (np.ndarray): Aerodynamic center (1/4 chord).
+        _control_point (np.ndarray): Control point (3/4 chord).
+        _bound_point_1 (np.ndarray): First bound vortex point.
+        _bound_point_2 (np.ndarray): Second bound vortex point.
+        _x_airf (np.ndarray): Normal unit vector.
+        _y_airf (np.ndarray): Chordwise unit vector.
+        _z_airf (np.ndarray): Spanwise unit vector.
+        _width (float): Panel width at bound vortex.
+        _filaments (list): List of vortex filament objects.
     """
 
     def __init__(
         self,
         section_1,
         section_2,
-        aerodynamic_center,
-        control_point,
-        bound_point_1,
-        bound_point_2,
-        x_airf,
-        y_airf,
-        z_airf,
+        aerodynamic_center: np.ndarray,
+        control_point: np.ndarray,
+        bound_point_1: np.ndarray,
+        bound_point_2: np.ndarray,
+        x_airf: np.ndarray,
+        y_airf: np.ndarray,
+        z_airf: np.ndarray,
     ):
+        """Initialize panel from two sections and geometric parameters.
+
+        Args:
+            section_1: First section object defining panel boundary.
+            section_2: Second section object defining panel boundary.
+            aerodynamic_center (np.ndarray): Aerodynamic center coordinates.
+            control_point (np.ndarray): Control point coordinates.
+            bound_point_1 (np.ndarray): First bound vortex point.
+            bound_point_2 (np.ndarray): Second bound vortex point.
+            x_airf (np.ndarray): Normal unit vector.
+            y_airf (np.ndarray): Chordwise unit vector.
+            z_airf (np.ndarray): Spanwise unit vector.
+        """
         self._TE_point_1 = section_1.TE_point
         self._LE_point_1 = section_1.LE_point
         self._TE_point_2 = section_2.TE_point
@@ -214,17 +181,18 @@ class Panel:
     ## CALCULATE FUNCTIONS      # All this return something
     ###########################
 
-    def calculate_relative_alpha_and_relative_velocity(
-        self, induced_velocity: np.array
-    ):
-        """Calculates the relative angle of attack and relative velocity of the panel
+    def compute_relative_alpha_and_relative_velocity(
+        self, induced_velocity: np.ndarray
+    ) -> tuple:
+        """Calculate relative angle of attack and velocity including induced effects.
 
         Args:
-            induced_velocity (np.array): Induced velocity at the control point
+            induced_velocity (np.ndarray): Induced velocity at the evaluation point.
 
         Returns:
-            alpha (float): Relative angle of attack of the panel
-            relative_velocity (np.array): Relative velocity of the panel
+            tuple: (alpha, relative_velocity)
+                - alpha (float): Relative angle of attack in radians.
+                - relative_velocity (np.ndarray): Total relative velocity vector.
         """
         # Calculate relative velocity and angle of attack
         # Constant throughout the iterations: self.va, self.x_airf, self.y_airf
@@ -234,9 +202,14 @@ class Panel:
         alpha = np.arctan(v_normal / v_tangential)
         return alpha, relative_velocity
 
-    def calculate_cl(self, alpha):
-        """
-        Get the lift coefficient (Cl) for a given angle of attack in radians.
+    def compute_cl(self, alpha: float) -> float:
+        """Get lift coefficient for given angle of attack.
+
+        Args:
+            alpha (float): Angle of attack in radians.
+
+        Returns:
+            float: Lift coefficient.
         """
         return np.interp(
             alpha,
@@ -244,9 +217,16 @@ class Panel:
             self._panel_polar_data[:, 1],
         )
 
-    def calculate_cd_cm(self, alpha):
-        """
-        Get the drag and moment coefficients (Cd, Cm) for a given angle of attack in radians.
+    def compute_cd_cm(self, alpha: float) -> tuple:
+        """Get drag and moment coefficients for given angle of attack.
+
+        Args:
+            alpha (float): Angle of attack in radians.
+
+        Returns:
+            tuple: (cd, cm)
+                - cd (float): Drag coefficient.
+                - cm (float): Moment coefficient.
         """
         cd = np.interp(
             alpha, self._panel_polar_data[:, 0], self._panel_polar_data[:, 2]
@@ -256,15 +236,18 @@ class Panel:
         )
         return cd, cm
 
-    def calculate_velocity_induced_bound_2D(self, evaluation_point):
-        """Calculates velocity induced by bound vortex filaments at the control point
-            Only needed for VSM, as LLT bound and filament align, thus no induced velocity
+    def compute_velocity_induced_bound_2D(
+        self, evaluation_point: np.ndarray
+    ) -> np.ndarray:
+        """Calculate 2D bound vortex induced velocity for VSM correction.
+
+        Only needed for VSM, as LLT bound and filament align, thus no induced velocity.
 
         Args:
-            self: Panel object
+            evaluation_point (np.ndarray): Point where velocity is evaluated.
 
         Returns:
-            np.array: Induced velocity at the control point
+            np.ndarray: Induced velocity vector from 2D bound vortex.
         """
         ### DIRECTION
         # r3 perpendicular to the bound vortex
@@ -280,29 +263,27 @@ class Panel:
             * jit_norm(r0)
         )
 
-    def calculate_velocity_induced_single_ring_semiinfinite(
+    def compute_velocity_induced_single_ring_semiinfinite(
         self,
-        evaluation_point,
-        evaluation_point_on_bound,
-        va_norm,
-        va_unit,
-        gamma,
-        core_radius_fraction,
-    ):
-        """
-        Calculates the velocity induced by a ring at a certain controlpoint
+        evaluation_point: np.ndarray,
+        evaluation_point_on_bound: bool,
+        va_norm: float,
+        va_unit: np.ndarray,
+        gamma: float,
+        core_radius_fraction: float,
+    ) -> np.ndarray:
+        """Calculate velocity induced by complete vortex ring system.
 
-        Parameters
-        ----------
-        ring : List of dictionaries defining the filaments of a vortex ring
-        controlpoint : Dictionary defining a controlpoint
-        model : VSM: Vortex Step method/ LLT: Lifting Line Theory
-        Uinf : Wind speed vector
+        Args:
+            evaluation_point (np.ndarray): Point where velocity is computed.
+            evaluation_point_on_bound (bool): True for LLT, False for VSM treatment.
+            va_norm (float): Apparent velocity magnitude.
+            va_unit (np.ndarray): Apparent velocity unit vector.
+            gamma (float): Circulation strength.
+            core_radius_fraction (float): Vortex core radius parameter.
 
-        Returns
-        -------
-        velind : Induced velocity
-
+        Returns:
+            np.ndarray: Total induced velocity from all filaments.
         """
         velind = [0, 0, 0]
 
@@ -338,15 +319,13 @@ class Panel:
 
         return np.array(velind)
 
-    def calculate_filaments_for_plotting(self):
-        """Calculates the filaments for plotting
-            It calculates right direction, filament length and appends a color
+    def compute_filaments_for_plotting(self) -> list:
+        """Prepare filament data for 3D visualization.
 
-        Args:
-            self: Panel object
+        Computes filament endpoints, directions, and assigns colors for plotting.
 
         Returns:
-            list: List of lists containing the filaments for plotting
+            list: List of [start_point, end_point, color] for each filament.
         """
         filaments = []
         for i, filament in enumerate(self.filaments):

@@ -61,7 +61,7 @@ def thesis_induction_matrix_creation(
     rings : List of list with the definition of each vortex filament
     Uinf : Wind speed velocity vector
     data_airf : 2D airfoil data with alpha, Cl, Cd, Cm
-    recalc_alpha : True if you want to recalculate the induced angle of attack at 1/4 of the chord (VSM)
+    recalc_alpha : True if you want to recompute the induced angle of attack at 1/4 of the chord (VSM)
     Gamma0 : Initial Guess of Gamma
     model : VSM: Vortex Step method/ LLT: Lifting Line Theory
 
@@ -233,7 +233,7 @@ def test_induction_matrix_creation():
     ### NEW ###
     va_norm_array = np.array([vec_norm(Uinf)] * len(coord))
     va_unit_array = np.array([Uinf / vec_norm(Uinf)] * len(coord))
-    AIC_x, AIC_y, AIC_z = wing_aero.calculate_AIC_matrices(
+    AIC_x, AIC_y, AIC_z = wing_aero.compute_AIC_matrices(
         model, core_radius_fraction, va_norm_array, va_unit_array
     )
 
@@ -273,7 +273,7 @@ def test_induction_matrix_creation():
     ### NEW ###
 
     # wing_aero.va = Uinf
-    AIC_x, AIC_y, AIC_z = wing_aero.calculate_AIC_matrices(
+    AIC_x, AIC_y, AIC_z = wing_aero.compute_AIC_matrices(
         model, core_radius_fraction, va_norm_array, va_unit_array
     )
     # Check if the matrices are the same
