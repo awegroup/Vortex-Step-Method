@@ -203,9 +203,3 @@ All airfoil data is standardized to the following format:
 - **Inviscid**: Very fast, simple theory
 - **Polars**: Fast, pre-computed data
 - **NeuralFoil**: Slower, high accuracy neural network predictions
-
-## References
-
-- Breukels, J. (2011). "An Engineering Model for Kite-Power Systems"
-- NeuralFoil: Machine learning airfoil analysis tool
-- Classical thin airfoil theory for inviscid approximations

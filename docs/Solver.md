@@ -339,10 +339,3 @@ results = [solver.solve(body_aero) for solver in solvers]
 1. **Negative lift**: Check angle of attack and airfoil data
 2. **Excessive circulation**: Verify geometry and flow conditions
 3. **Stall behavior**: Enable appropriate stall modeling
-
-## References
-
-1. Katz, J. & Plotkin, A. "Low-Speed Aerodynamics" (2001)
-2. Gaunaa, M. et al. "A correction model for the effect of spanwise flow..." (2024)
-3. Anderson, J.D. "Fundamentals of Aerodynamics" (2017)
-4. Numerical methods: SciPy optimization documentation

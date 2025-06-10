@@ -6,8 +6,11 @@ The software presented here includes examples for: a rectangular wing and a lead
 ## Documentation
 For detailed documentation, please refer to the following resources.
 
-**code core**
+**Explanatory Notes**
 - [Aerodynamic Model](docs/Aerodynamic_model.pdf)
+- [Paper: Fast Aero-Structural Model of a Leading-Edge Inflatable Kite](https://doi.org/10.3390/en16073061)
+
+**Code Core**
 - [Airfoil Aerodynamics](docs/AirfoilAerodynamics.md)
 - [Body Aerodynamics](docs/BodyAerodynamics.md)
 - [Filament](docs/Filament.md)

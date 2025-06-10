@@ -321,10 +321,3 @@ cd, cm = panel.compute_cd_cm(alpha)
 # 5. Compute dimensional forces
 force = 0.5 * rho * ||v_rel||² * area * [cd, cl, cs]
 ```
-
-## References
-
-1. Katz, J. & Plotkin, A. "Low-Speed Aerodynamics" (2001)
-2. Anderson, J.D. "Fundamentals of Aerodynamics" (2017)  
-3. Drela, M. "Flight Vehicle Aerodynamics" (2014)
-4. Bertin, J.J. & Smith, M.L. "Aerodynamics for Engineers" (1998)

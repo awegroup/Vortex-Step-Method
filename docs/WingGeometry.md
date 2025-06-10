@@ -543,11 +543,3 @@ interactive_plot(
     is_show=True
 )
 ```
-
-## References
-
-1. **Mesh Generation**: Thompson, J.F. et al. "Handbook of Grid Generation" (1999)
-2. **Geometric Modeling**: Farin, G. "Curves and Surfaces for CAGD" (2002)
-3. **Aerodynamic Applications**: Katz, J. & Plotkin, A. "Low-Speed Aerodynamics" (2001)
-4. **Computational Geometry**: de Berg, M. et al. "Computational Geometry" (2008)
-5. **Panel Method Theory**: Hess, J.L. & Smith, A.M.O. "Calculation of potential flow about arbitrary bodies" (1967)
