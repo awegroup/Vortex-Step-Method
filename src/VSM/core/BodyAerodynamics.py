@@ -443,8 +443,16 @@ class BodyAerodynamics:
         # --- Add bridle lines if requested ---
         if is_with_bridles:
             # Parse bridle nodes from YAML
-            node_headers = config["bridle_nodes"]["headers"]
-            node_data = config["bridle_nodes"]["data"]
+            try:
+                reading_bridle_nodes = config["bridle_nodes"]
+            except KeyError:
+                # Raise the error but continue execution (skip bridle processing)
+                print(
+                    "Warning: You cannot have `is_with_bridles=True` without a 'bridle_nodes' section in the YAML config.\n\n--> a BodyAerodynamics instance is returned that does NOT contain bridles, as these are not provided."
+                )
+                return cls([wing_instance])
+            node_headers = reading_bridle_nodes["headers"]
+            node_data = reading_bridle_nodes["data"]
             node_id_idx = node_headers.index("id")
             node_x_idx = node_headers.index("x")
             node_y_idx = node_headers.index("y")
