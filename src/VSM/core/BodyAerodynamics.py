@@ -1304,31 +1304,40 @@ class BodyAerodynamics:
 
         ##TODO: if bridle not none add lift, drag...
         if self._bridle_line_system is not None:
-            fa_bridle = 0
-            # TODO: Calculate induced va at each point of the bridle
-            # TODO: Calculate moments at each point of the bridle
+            # Calculate forces and moments for each bridle line individually
             for bridle_line in self._bridle_line_system:
-                fa_bridle += self.compute_line_aerodynamic_force(va, bridle_line)
+                # Calculate force for this individual bridle line
+                fa_bridle_line = self.compute_line_aerodynamic_force(va, bridle_line)
 
-            fx_global_3D_sum += fa_bridle[0]
-            fy_global_3D_sum += fa_bridle[1]
-            fz_global_3D_sum += fa_bridle[2]
-            lift_wing_3D_sum += jit_dot(fa_bridle, dir_lift_prescribed_va)
-            drag_wing_3D_sum += jit_dot(fa_bridle, va_unit)
-            side_wing_3D_sum += jit_dot(fa_bridle, dir_side)
+                # Add bridle forces to global force totals
+                fx_global_3D_sum += fa_bridle_line[0]
+                fy_global_3D_sum += fa_bridle_line[1]
+                fz_global_3D_sum += fa_bridle_line[2]
+                lift_wing_3D_sum += jit_dot(fa_bridle_line, dir_lift_prescribed_va)
+                drag_wing_3D_sum += jit_dot(fa_bridle_line, va_unit)
+                side_wing_3D_sum += jit_dot(fa_bridle_line, dir_side)
 
-            # sum up
+                # Calculate moment for this bridle line
+                # Bridle line midpoint as moment application point
+                bridle_midpoint = 0.5 * (bridle_line[0] + bridle_line[1])
 
-            # add to the total lift, drag, not the distributions of the wing
+                # Vector from reference point to bridle midpoint
+                r_bridle = bridle_midpoint - np.array(reference_point)
 
-        # Find center of pressure
+                # Moment contribution from this bridle line
+                M_bridle_line = np.cross(r_bridle, fa_bridle_line)
+
+                # Add to global moment totals
+                mx_global_3D_sum += M_bridle_line[0]
+                my_global_3D_sum += M_bridle_line[1]
+                mz_global_3D_sum += M_bridle_line[2]
+
+        # Find center of pressure (now uses consistent force and moment data)
         x_cp = self.find_center_of_pressure(
             [fx_global_3D_sum, fy_global_3D_sum, fz_global_3D_sum],
             [mx_global_3D_sum, my_global_3D_sum, mz_global_3D_sum],
             reference_point,
         )
-
-        ##TODO: if KCU, use Va, find a force.
 
         ### Storing results in a dictionary
         results_dict = {}
