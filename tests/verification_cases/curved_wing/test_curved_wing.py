@@ -40,6 +40,7 @@ def get_curved_case_params():
     relaxation_factor = 0.03
     core_radius_fraction = 1e-20
 
+    # Load polar data as [alpha(rad), CL, CD, CM]
     data_airf = np.loadtxt(
         r"./polars/clarky_maneia.csv",
         delimiter=",",
@@ -61,6 +62,15 @@ def get_curved_case_params():
     return case_parameters
 
 
+def safe_add_section(wing, LE, TE, polar_data):
+    # Accepts both ["polar_data", array] and plain array
+    if isinstance(polar_data, (list, tuple)) and isinstance(polar_data[0], str):
+        polar_data = np.array(polar_data[1])
+    else:
+        polar_data = np.array(polar_data)
+    wing.add_section(LE, TE, polar_data)
+
+
 def test_curved():
     case_params = get_curved_case_params()
     # making sure not too many points are tested
@@ -77,7 +87,7 @@ def test_curved():
     CD_Maneia = polars_Maneia[:, 2]
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -89,7 +99,7 @@ def test_curved():
         gamma_VSM_new,
         panel_y,
         AR_projected,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
@@ -137,7 +147,7 @@ if __name__ == "__main__":
     )
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -149,7 +159,7 @@ if __name__ == "__main__":
         gamma_VSM_new,
         panel_y,
         AR_projected,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )

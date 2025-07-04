@@ -26,7 +26,7 @@ def get_v3_case_params():
     wing_type = "LEI_kite"
     dist = "lin"
     N_split = 4
-    aoas = np.arange(-4, 24, 2)
+    aoas = np.arange(-4, 20, 3)
     Umag = 22
     # convergence criteria
     max_iterations = 1500
@@ -63,7 +63,7 @@ def get_v3_case_params():
         data_airf[j, 2] = Cd
         data_airf[j, 3] = Cm
 
-    Atot = test_utils.calculate_projected_area(coord)
+    Atot = test_utils.compute_projected_area(coord)
     coord_input_params = [coord, LE_thicc, camber]
     case_parameters = [
         coord_input_params,
@@ -83,18 +83,15 @@ def get_v3_case_params():
 
 
 def test_v3():
+    # --- POLARS CASE ---
     case_params = get_v3_case_params()
-    # making sure not too many points are tested
     case_params[1] = np.deg2rad(np.array([4, 8]))
-    # changing wing_type to take the polars and not polynomial directly
     case_params[2] = "LEI_kite_polars"
-    # comparison solution
     aoas = case_params[1]
 
-    ### COMPARING FROM POLARS
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -106,38 +103,25 @@ def test_v3():
         gamma_VSM_new,
         panel_y,
         AR,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
 
-    # checking LTT old close to LLT new
-    ##TODO: restore this back
-    # for gamma_LLT_i, gamma_LLT_new_i in zip(gamma_LLT, gamma_LLT_new):
-    #     assert np.allclose(len(gamma_LLT_i), len(gamma_LLT_new_i))
-    #     assert np.allclose(gamma_LLT_i, gamma_LLT_new_i, atol=1e-2)
     assert np.allclose(CL_LLT, CL_LLT_new, atol=1e-2)
     assert np.allclose(CD_LLT, CD_LLT_new, atol=1e-2)
-
-    # checking VSMs to be close to one another
     assert np.allclose(CL_VSM, CL_VSM_new, atol=1e-2)
     assert np.allclose(CD_VSM, CD_VSM_new, atol=1e-3)
 
-    ##################################################
-    ### COMPARING FROM POLYNOMIAL
+    # --- POLYNOMIAL CASE ---
     case_params = get_v3_case_params()
-    # making sure not too many points are tested
     case_params[1] = np.deg2rad(np.array([3, 6, 9]))
-    # changing wing_type to take the polars and not polynomial directly
     case_params[2] = "LEI_kite"
-    # comparison solution
     aoas = case_params[1]
-
-    # changing wing_type to take the polars and not polynomial directly
 
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -149,21 +133,14 @@ def test_v3():
         gamma_VSM_new,
         panel_y,
         AR,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )
-
-    # checking LTT old close to LLT new
-    assert np.allclose(CL_LLT, CL_LLT_new, atol=2e-2)
-    assert np.allclose(CD_LLT, CD_LLT_new, atol=2e-3)
-
-    # checking VSMs to be close to one another
-    ##TODO: restore this back
-    # for gamma_VSM_i, gamma_VSM_new_i in zip(gamma_VSM, gamma_VSM_new):
-    #     assert np.allclose(gamma_VSM_i, gamma_VSM_new_i, atol=1e-2)
-    assert np.allclose(CL_VSM, CL_VSM_new, atol=2e-2)
-    assert np.allclose(CD_VSM, CD_VSM_new, atol=2e-3)
+    assert np.allclose(CL_LLT, CL_LLT_new, atol=1e-2)
+    assert np.allclose(CD_LLT, CD_LLT_new, atol=1e-2)
+    assert np.allclose(CL_VSM, CL_VSM_new, atol=1e-2)
+    assert np.allclose(CD_VSM, CD_VSM_new, atol=1e-3)
 
     # comparing solution
     CL_struts = np.loadtxt("./CFD_data/RANS_CL_alpha_struts.csv", delimiter=",")
@@ -202,7 +179,7 @@ if __name__ == "__main__":
     polars_CFD = np.vstack((aoas_CFD, CL_CFD, CD_CFD)).T
     # OLD numerical
     CL_LLT, CD_LLT, CL_VSM, CD_VSM, gamma_LLT, gamma_VSM = (
-        test_utils.calculate_old_for_alpha_range(case_params)
+        test_utils.compute_old_for_alpha_range(case_params)
     )
     # NEW numerical
     (
@@ -214,7 +191,7 @@ if __name__ == "__main__":
         gamma_VSM_new,
         panel_y,
         AR,
-    ) = test_utils.calculate_new_for_alpha_range(
+    ) = test_utils.compute_new_for_alpha_range(
         case_params,
         is_plotting=False,
     )

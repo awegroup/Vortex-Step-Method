@@ -1,91 +1,136 @@
-import numpy as np
-import logging
-import matplotlib.pyplot as plt
-
-import pandas as pd
 from pathlib import Path
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
-    plot_geometry,
 )
-from VSM.interactive import interactive_plot
+from VSM.plot_geometry_matplotlib import plot_geometry
+from VSM.plot_geometry_plotly import interactive_plot
 
 
 def main():
     """
-    This script demonstrates how to use the VSM library to perform a 3D aerodynamic analysis of the TUDELFT_V3_KITE.
-    
-    The example covers the following steps:
-    1. Define file paths for the kite geometry, 2D polars, and bridle geometry.
-    2. Load the kite geometry from a CSV file.
-    3. Create three BodyAerodynamics objects:
-       - One using the baseline Breukels input.
-       - One with corrected polar data.
-       - One with corrected polar data and bridles.
-    4. Initialize the aerodynamic model with a specific wind speed, angle of attack, side slip angle, and yaw rate.
-    5. Plot the kite geometry using Matplotlib.
-    6. Generate an interactive plot using Plotly.
-    7. Plot and save polar curves (both angle of attack and side slip sweeps) for different settings, comparing them to literature data.
-    """
+    Example: 3D Aerodynamic Analysis of TUDELFT_V3_KITE using VSM
 
+    This script demonstrates the workflow for performing a 3D aerodynamic analysis of the TUDELFT_V3_KITE
+    using the Vortex Step Method (VSM) library. The workflow is structured as follows:
+
+    Step 1: Instantiate BodyAerodynamics objects from different YAML configuration files.
+        - Each YAML config defines the geometry and airfoil/polar data for a specific modeling approach.
+        - Supported approaches include:
+            - Breukels regression (empirical model)
+            - CFD-based polars
+            - NeuralFoil-based polars
+            - Inviscid theory
+
+    Step 2: Set inflow conditions for each aerodynamic object.
+        - Specify wind speed (Umag), angle of attack, side slip, and yaw rate.
+        - Initialize the apparent wind for each BodyAerodynamics object.
+
+    Step 3: Plot the kite geometry using Matplotlib.
+        - Visualize the panel mesh, control points, and aerodynamic centers.
+
+    Step 4: Create an interactive 3D plot using Plotly.
+        - Allows for interactive exploration of the geometry and panel arrangement.
+
+    Step 5: Plot and save polar curves for different angles of attack and side slip angles.
+        - Compare the results of different aerodynamic models.
+        - Optionally include literature/CFD data for validation.
+
+    Step 5a: Plot alpha sweep (angle of attack variation).
+    Step 5b: Plot beta sweep (side slip variation).
+
+    Returns:
+        None
+    """
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    file_path = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_surfplan.csv"
-    polar_data_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
-    )
-    bridle_data_path = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
-    )
-
     ### 2. defining settings
-    n_panels = 40
+    n_panels = 36
     spanwise_panel_distribution = "uniform"
     solver_base_version = Solver()
 
-
-    ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
-    print(f"\nCreating breukels input")
-    body_aero_breukels = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=False,
+    # Step 1: Instantiate BodyAerodynamics objects from different YAML configs
+    body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_CAD_CFD_polars.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
     )
-    print(f"\nCreating corrected polar input")
-    body_aero_polar = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=True,
-        polar_data_dir=polar_data_dir,
-    )
-    print(f"\nCreating corrected polar input with bridles")
-    body_aero_polar_with_bridles = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=True,
-        polar_data_dir=polar_data_dir,
+    body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_CAD_CFD_polars.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
         is_with_bridles=True,
-        bridle_data_path=bridle_data_path,
     )
 
-    ### 4. Setting va
+    body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_CAD_neuralfoil.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
+    )
+    body_aero_breukels_regression = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_surfplan_breukels_regression.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
+    )
+    body_aero_inviscid = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_surfplan_inviscid.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
+    )
+
+    # Step 2: Set inflow conditions for each aerodynamic object
+    """
+    Set the wind speed, angle of attack, side slip, and yaw rate for each BodyAerodynamics object.
+    This initializes the apparent wind vector and prepares the objects for analysis.
+    """
     Umag = 3.15
     angle_of_attack = 6.8
     side_slip = 0
     yaw_rate = 0
-    body_aero_breukels.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_polar.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    body_aero_breukels_regression.va_initialize(
+        Umag, angle_of_attack, side_slip, yaw_rate
+    )
+    body_aero_CAD_CFD_polars.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    body_aero_CAD_neuralfoil.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    body_aero_inviscid.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
 
-    #### 5. Plotting the kite geometry using Matplotlib
+    # Step 3: Plot the kite geometry using Matplotlib
+    """
+    Visualize the panel mesh, control points, and aerodynamic centers for the selected BodyAerodynamics object.
+    """
     plot_geometry(
-        body_aero_polar,
+        body_aero_CAD_CFD_polars,
         title="TUDELFT_V3_KITE",
         data_type=".pdf",
         save_path=".",
@@ -93,68 +138,94 @@ def main():
         is_show=True,
     )
 
-    #### 6. Creating an interactive plot using Plotly
+    # Step 4: Create an interactive plot using Plotly
+    """
+    Generate an interactive 3D plot for the selected BodyAerodynamics object.
+    This allows for interactive exploration of the geometry and panel arrangement.
+    """
     interactive_plot(
-        body_aero_breukels,
+        body_aero_CAD_CFD_polars_with_bridles,
         vel=Umag,
         angle_of_attack=angle_of_attack,
         side_slip=side_slip,
         yaw_rate=yaw_rate,
         is_with_aerodynamic_details=True,
         title="TUDELFT_V3_KITE",
+        is_with_bridles=False,
     )
 
-    ### 7. Plotting the polar curves for different angles of attack and side slip angles
-    # and saving in results with literature
+    # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
+    """
+    Compare the aerodynamic performance of different models by plotting lift, drag, and side force coefficients
+    as a function of angle of attack (alpha sweep) and side slip (beta sweep).
+    Literature/CFD data can be included for validation.
+    """
     save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE"
 
-    ### plotting alpha-polar
+    # Step 5a: Plot alpha sweep (angle of attack)
     path_cfd_lebesque = (
         Path(PROJECT_DIR)
         / "data"
         / "TUDELFT_V3_KITE"
         / "3D_polars_literature"
-        / "CFD_V3_CL_CD_RANS_Vire2022_Rey_10e5.csv"
+        / "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0.csv"
     )
     plot_polars(
-        solver_list=[solver_base_version, solver_base_version, solver_base_version],
+        solver_list=[
+            solver_base_version,
+            solver_base_version,
+            solver_base_version,
+            solver_base_version,
+            solver_base_version,
+        ],
         body_aero_list=[
-            body_aero_breukels,
-            body_aero_polar,
-            body_aero_polar_with_bridles,
+            body_aero_breukels_regression,
+            body_aero_CAD_CFD_polars,
+            body_aero_CAD_CFD_polars_with_bridles,
+            body_aero_CAD_neuralfoil,
+            body_aero_inviscid,
         ],
         label_list=[
-            "VSM Breukels",
-            "VSM Polar",
-            "VSM Polar with Bridles",
-            "CFD_Lebesque Rey 30e5",
+            "VSM Breukels Regression",
+            "VSM CAD CFD Polars",
+            "VSM CAD CFD Polars with Bridles",
+            "VSM CAD NeuralFoil",
+            "VSM Inviscid",
+            "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0",
         ],
         literature_path_list=[path_cfd_lebesque],
-        angle_range=[5, 15, 20, 25],  # np.linspace(-10, 25, 10),
+        angle_range=[5, 15, 20, 25],
         angle_type="angle_of_attack",
         angle_of_attack=0,
         side_slip=0,
         yaw_rate=0,
         Umag=Umag,
-        title=f"alphasweep",
+        title="alphasweep",
         data_type=".pdf",
         save_path=Path(save_folder),
         is_save=True,
         is_show=False,
     )
-    ### plot beta sweep
+
+    # Step 5b: Plot beta sweep (side slip)
     plot_polars(
         solver_list=[
             solver_base_version,
             solver_base_version,
+            solver_base_version,
+            solver_base_version,
         ],
         body_aero_list=[
-            body_aero_breukels,
-            body_aero_polar,
+            body_aero_breukels_regression,
+            body_aero_CAD_CFD_polars,
+            body_aero_CAD_neuralfoil,
+            body_aero_inviscid,
         ],
         label_list=[
-            "VSM Breukels",
-            "VSM Corrected",
+            "VSM Breukels Regression",
+            "VSM CAD CFD Polars",
+            "VSM CAD NeuralFoil",
+            "VSM Inviscid",
         ],
         literature_path_list=[],
         angle_range=[0, 3, 6, 9, 12],
@@ -163,7 +234,7 @@ def main():
         side_slip=0,
         yaw_rate=0,
         Umag=3.15,
-        title=f"betasweep",
+        title="betasweep",
         data_type=".pdf",
         save_path=Path(save_folder),
         is_save=True,

@@ -1,19 +1,10 @@
 import numpy as np
-import logging
 import time
 import matplotlib.pyplot as plt
-
 import pandas as pd
 from pathlib import Path
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
-from VSM.plotting import (
-    plot_polars,
-    plot_geometry,
-    creating_geometry_plot,
-)
-from VSM.interactive import interactive_plot
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
 from VSM.fitting import fit_and_evaluate_model
 
 
@@ -82,7 +73,6 @@ def main():
 
     angle_of_attack_range = np.linspace(0, 20, 12)
     gamma = None
-    begin_time = time.time()
     center_of_pressure = np.zeros((len(angle_of_attack_range), 3))
     total_force = np.zeros((len(angle_of_attack_range), 3))
     cl = np.zeros((len(angle_of_attack_range)))

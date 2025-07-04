@@ -1,7 +1,27 @@
 # Vortex Step Method
 The Vortex Step Method (VSM) is an enhanced lifting line method that improves upon the classic approach by solving the circulation system at the three-quarter chord position, among the most important details. This adjustment allows for more accurate calculations of lift and drag forces, particularly addressing the shortcomings in induced drag prediction. VSM is further refined by coupling it with 2D viscous airfoil polars, making it well-suited for complex geometries, including low aspect ratio wings, as well as configurations with sweep, dihedral, and anhedral angles.
 
-The software presented here includes a couple of examples: a rectangular wing and a leading-edge inflatable kite.
+The software presented here includes examples for: a rectangular wing and a leading-edge inflatable kite.
+
+## Documentation
+For detailed documentation, please refer to the following resources.
+
+**Explanatory Notes**
+- [Aerodynamic Model](docs/Aerodynamic_model.pdf)
+- [Paper: Fast Aero-Structural Model of a Leading-Edge Inflatable Kite](https://doi.org/10.3390/en16073061)
+
+**Code Core**
+- [Airfoil Aerodynamics](docs/AirfoilAerodynamics.md)
+- [Body Aerodynamics](docs/BodyAerodynamics.md)
+- [Filament](docs/Filament.md)
+- [Panel](docs/Panel.md)
+- [Solver](docs/Solver.md)
+- [Wake](docs/Wake.md)
+- [WingGeometry](docs/WingGeometry.md)
+
+**Other**
+- [Nomenclature](docs/nomenclature.md)
+- [Style Guide](docs/style_guide.md)
 
 ## Installation Instructions
 1. Clone the repository:
@@ -52,7 +72,7 @@ The software presented here includes a couple of examples: a rectangular wing an
     
     For ubuntu add:
     ```
-    pip instal pyqt5
+    pip install pyqt5
     sudo apt install cm-super
     sudo apt install dvipng
    ```

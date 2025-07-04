@@ -3,9 +3,9 @@ import time as time
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
 from VSM.plotting import plot_polars, plot_distribution
 from VSM.plot_styling import set_plot_style
 
@@ -109,10 +109,19 @@ def testing_single_solver_setting(
                 begin_time = time.time()
                 results_list.append(solver.solve(body_aero))
                 run_time_list.append(time.time() - begin_time)
-
+            # Prepare inputs for plot_distribution
+            alpha_list = [alpha]
+            solver_list_for_plot = solver_list
+            body_aero_list_for_plot = body_aero_list
+            # plot_distribution expects:
+            # (alpha_list, Umag, side_slip, yaw_rate, solver_list, body_aero_list, label_list, ...)
             plot_distribution(
-                y_coordinates_list=y_coords_list,
-                results_list=results_list,
+                alpha_list=alpha_list,
+                Umag=Umag,
+                side_slip=side_slip,
+                yaw_rate=yaw_rate,
+                solver_list=solver_list_for_plot,
+                body_aero_list=body_aero_list_for_plot,
                 label_list=label_list,
                 title=f"spanwise_distribution_{parameter}_{side_slip}_alpha_{alpha}",
                 data_type=".pdf",
@@ -155,15 +164,13 @@ def testing_n_panels_effect(
     y_coords_list = []
 
     for n_panels in n_panels_list:
-        body_aero = BodyAerodynamics.from_file(
+        # Use the new instantiate method
+        body_aero = BodyAerodynamics.instantiate(
             n_panels=n_panels,
-            spanwise_panel_distribution=spanwise_panel_distribution,
             file_path=file_path,
-            is_with_corrected_polar=is_with_corrected_polar,
-            polar_data_dir=polar_data_dir,
-            is_half_wing=True,
+            spanwise_panel_distribution=spanwise_panel_distribution,
+            is_with_bridles=False,
         )
-
         body_aero_list.append(body_aero)
         label_list.append(f"n_panels = {n_panels}")
         y_coords_list.append([panel.control_point[1] for panel in body_aero.panels])
@@ -234,9 +241,19 @@ def testing_n_panels_effect(
                 results_list.append(solver.solve(body_aero))
                 run_time_list.append(time.time() - begin_time)
 
+            # Prepare inputs for plot_distribution
+            alpha_list = [alpha]
+            solver_list_for_plot = solver_list
+            body_aero_list_for_plot = body_aero_list
+            # plot_distribution expects:
+            # (alpha_list, Umag, side_slip, yaw_rate, solver_list, body_aero_list, label_list, ...)
             plot_distribution(
-                y_coordinates_list=y_coords_list,
-                results_list=results_list,
+                alpha_list=alpha_list,
+                Umag=Umag,
+                side_slip=side_slip,
+                yaw_rate=yaw_rate,
+                solver_list=solver_list_for_plot,
+                body_aero_list=body_aero_list_for_plot,
                 label_list=label_list,
                 title=f"spanwise_distribution_n_panels_beta_{side_slip}_alpha_{alpha}",
                 data_type=".pdf",
@@ -299,13 +316,12 @@ def testing_all_solver_settings(
         n_panels_list,
         relaxation_factor_list,
     ]
-    body_aero = BodyAerodynamics.from_file(
+    # Use instantiate for the base object
+    body_aero = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        spanwise_panel_distribution=spanwise_panel_distribution,
         file_path=geometry_path,
-        is_with_corrected_polar=is_with_corrected_polar,
-        polar_data_dir=polar_data_dir,
-        is_half_wing=True,
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
     )
 
     for parameter, value_list in zip(parameter_list, value_list_list):

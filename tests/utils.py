@@ -12,9 +12,10 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, root_path)
 import tests.thesis_functions_oriol_cayon as thesis_functions
 
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.Solver import Solver
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Solver import Solver
+from VSM.core.AirfoilAerodynamics import AirfoilAerodynamics
 
 
 def cosspace(min, max, n_points):
@@ -301,7 +302,7 @@ def create_ring_vec_from_wing_object(wing, model):
         r2 = evaluation_point - bound_2
         r3 = evaluation_point - (bound_2 + bound_1) / 2
 
-        # Add the calculated vectors to the result
+        # Add the computed vectors to the result
         result.append({"r0": r0, "r1": r1, "r2": r2, "r3": r3})
 
     return result
@@ -341,7 +342,7 @@ def print_matrix(matrix, name="Matrix"):
     print(f"{name}:\n{matrix_str}")
 
 
-def calculate_old_for_alpha_range(case_params):
+def compute_old_for_alpha_range(case_params):
     (
         coord_input_params,
         aoas,
@@ -442,7 +443,7 @@ def calculate_old_for_alpha_range(case_params):
     return CL1, CD1, CL2, CD2, Gamma_LLT, Gamma_VSM
 
 
-def calculate_new_for_alpha_range(
+def compute_new_for_alpha_range(
     case_params,
     is_plotting=False,
 ):
@@ -495,11 +496,17 @@ def calculate_new_for_alpha_range(
     wing = Wing(N, "unchanged")
     for idx in range(int(len(coord_left_to_right) / 2)):
         logging.debug(f"coord_left_to_right[idx] = {coord_left_to_right[idx]}")
-        wing.add_section(
+        safe_add_section(
+            wing,
             coord_left_to_right[2 * idx],
             coord_left_to_right[2 * idx + 1],
             airfoil_input,
         )
+        # wing.add_section(
+        #     coord_left_to_right[2 * idx],
+        #     coord_left_to_right[2 * idx + 1],
+        #     airfoil_input,
+        # )
 
     wing_aero = BodyAerodynamics([wing])
 
@@ -689,10 +696,10 @@ def plotting_CL_CD_gamma_LLT_VSM_old_new_comparison(
     )
 
 
-def calculate_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
+def compute_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
     """Calculates the projected area of the wing onto a specified plane.
 
-    The projected area is calculated based on the leading and trailing edge points of each section
+    The projected area is computed based on the leading and trailing edge points of each section
     projected onto a plane defined by a normal vector (default is z-plane).
 
     Args:
@@ -734,3 +741,44 @@ def calculate_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
         projected_area += area
 
     return projected_area
+
+
+def safe_add_section(wing, LE, TE, polar_data):
+    """
+    Helper to add a section to a Wing, handling ["polar_data", array], plain array, ["inviscid"], or ["lei_airfoil_breukels", [t, kappa]].
+    """
+    if (
+        isinstance(polar_data, (list, tuple))
+        and len(polar_data) == 1
+        and polar_data[0] == "inviscid"
+    ):
+        alpha_range = [-10, 30, 1]
+        alpha = np.arange(
+            alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
+        )
+        alpha_rad = np.deg2rad(alpha)
+        cl = 2 * np.pi * alpha_rad
+        cd = np.zeros_like(alpha_rad)
+        cm = np.zeros_like(alpha_rad)
+        polar_data = np.column_stack((alpha_rad, cl, cd, cm))
+    elif (
+        isinstance(polar_data, (list, tuple))
+        and len(polar_data) == 2
+        and polar_data[0] == "lei_airfoil_breukels"
+    ):
+        t, kappa = polar_data[1]
+        alpha_range = [-10, 30, 1]
+        aero = AirfoilAerodynamics.from_yaml_entry(
+            "breukels_regression", {"t": t, "kappa": kappa}, alpha_range=alpha_range
+        )
+        polar_data = aero.to_polar_array()
+    elif isinstance(polar_data, (list, tuple)) and isinstance(polar_data[0], str):
+        polar_data = np.array(polar_data[1])
+    else:
+        polar_data = np.array(polar_data)
+    # Ensure polar_data is 2D
+    if polar_data.ndim != 2 or polar_data.shape[1] != 4:
+        raise ValueError(
+            f"polar_data must be (N,4) array, got shape {polar_data.shape}"
+        )
+    wing.add_section(LE, TE, polar_data)

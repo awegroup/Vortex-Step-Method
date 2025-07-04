@@ -42,9 +42,9 @@ def set_plot_style():
     # plt.style.use("seaborn-v0_8-whitegrid")
     plt.rcParams.update(
         {
-            "text.usetex": True,
-            "font.family": "serif",
-            "font.serif": ["Computer Modern Roman"],
+            "text.usetex": False,
+            # "font.family": "serif",
+            # "font.serif": ["Computer Modern Roman"],
             ## Axes settings
             "axes.titlesize": 15,
             "axes.labelsize": 13,
