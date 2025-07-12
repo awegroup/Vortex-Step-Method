@@ -21,6 +21,7 @@ def main():
             - Breukels regression (empirical model)
             - CFD-based polars
             - NeuralFoil-based polars
+            - Masure regression (machine learning model)
             - Inviscid theory
 
     Step 2: Set inflow conditions for each aerodynamic object.
@@ -108,6 +109,17 @@ def main():
         spanwise_panel_distribution=spanwise_panel_distribution,
         is_with_bridles=False,
     )
+    body_aero_masure_regression = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_CAD_masure_regression.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
+    )
 
     # Step 2: Set inflow conditions for each aerodynamic object
     """
@@ -124,6 +136,9 @@ def main():
     body_aero_CAD_CFD_polars.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
     body_aero_CAD_neuralfoil.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
     body_aero_inviscid.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    body_aero_masure_regression.va_initialize(
+        Umag, angle_of_attack, side_slip, yaw_rate
+    )
 
     # Step 3: Plot the kite geometry using Matplotlib
     """
@@ -177,12 +192,14 @@ def main():
             solver_base_version,
             solver_base_version,
             solver_base_version,
+            solver_base_version,
         ],
         body_aero_list=[
             body_aero_breukels_regression,
             body_aero_CAD_CFD_polars,
             body_aero_CAD_CFD_polars_with_bridles,
             body_aero_CAD_neuralfoil,
+            body_aero_masure_regression,
             body_aero_inviscid,
         ],
         label_list=[
@@ -190,6 +207,7 @@ def main():
             "VSM CAD CFD Polars",
             "VSM CAD CFD Polars with Bridles",
             "VSM CAD NeuralFoil",
+            "VSM CAD Masure Regression",
             "VSM Inviscid",
             "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0",
         ],
@@ -214,17 +232,20 @@ def main():
             solver_base_version,
             solver_base_version,
             solver_base_version,
+            solver_base_version,
         ],
         body_aero_list=[
             body_aero_breukels_regression,
             body_aero_CAD_CFD_polars,
             body_aero_CAD_neuralfoil,
+            body_aero_masure_regression,
             body_aero_inviscid,
         ],
         label_list=[
             "VSM Breukels Regression",
             "VSM CAD CFD Polars",
             "VSM CAD NeuralFoil",
+            "VSM CAD Masure Regression",
             "VSM Inviscid",
         ],
         literature_path_list=[],

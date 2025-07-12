@@ -6,6 +6,12 @@ old_code/
 venv/
 V9_KITE/
 
+# Data directories - exclude files but keep README.md
+data/models/*
+!data/models/README.md
+data/cache/*
+!data/cache/README.md
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

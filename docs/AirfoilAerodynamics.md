@@ -4,6 +4,13 @@
 
 The `AirfoilAerodynamics` class provides a factory interface for generating 2D airfoil aerodynamic polar data from various sources. It encapsulates airfoil coefficients (CL, CD, CM) as functions of angle of attack and supports multiple data generation methods.
 
+**Supported Methods:**
+- `breukels_regression`: LEI kite airfoil correlation model
+- `neuralfoil`: Neural network-based analysis from geometry files
+- `polars`: Direct import from CSV polar data
+- `inviscid`: Theoretical thin airfoil approximation
+- `masure_regression`: Machine learning predictions using trained models
+
 ## Class: AirfoilAerodynamics
 
 ### Instantiation
@@ -121,6 +128,54 @@ aero = AirfoilAerodynamics.from_yaml_entry(
 )
 ```
 
+### 5. Masure Regression (`"masure_regression"`)
+
+Machine learning-based airfoil prediction using trained scikit-learn models. This method uses Extra Trees regression models trained on a comprehensive dataset of airfoil geometries and their aerodynamic coefficients.
+
+**Required Parameters:**
+- `t` (float): Thickness parameter
+- `eta` (float): Geometric parameter (cx)
+- `kappa` (float): Geometric parameter (cy)
+- `delta` (float): Geometric parameter (r)
+- `lambda` (float): Leading edge parameter (LE)
+- `phi` (float): Camber/trailing edge parameter (camTE)
+
+**Dependencies:**
+- Requires scikit-learn
+- Requires trained model files (.pkl) in `data/models/` directory
+
+**Model Files:**
+- `ET_re5e6.pkl`: Model for Reynolds number 5×10⁶
+- `ET_re1e6.pkl`: Model for Reynolds number 1×10⁶
+- `ET_re2e7.pkl`: Model for Reynolds number 2×10⁷
+
+**Example:**
+```python
+aero = AirfoilAerodynamics.from_yaml_entry(
+    "masure_regression",
+    {
+        "t": 0.07,
+        "eta": 0.2,
+        "kappa": 0.95,
+        "delta": -2,
+        "lambda": 0.65,
+        "phi": 0.25
+    },
+    alpha_range=[-10, 25, 1],
+    reynolds=1e6,
+    file_path="/path/to/config"
+)
+```
+
+**Features:**
+- High accuracy predictions based on geometric parameters
+- Supports multiple Reynolds numbers
+- Includes compatibility patches for different scikit-learn versions
+- Fast prediction once models are loaded
+
+**Model Installation:**
+The required .pkl model files are not included in the repository due to size constraints. They must be installed separately in the `data/models/` directory. See `data/models/README.md` for installation instructions.
+
 ## Key Methods
 
 ### `to_polar_array()`
@@ -146,6 +201,18 @@ Loads and processes CSV polar data files.
 #### `_from_inviscid(alpha_range)`
 Generates theoretical inviscid polar data.
 
+#### `_from_masure_regression(airfoil_params, alpha_range, reynolds, file_path)`
+Implements the Masure regression model using trained machine learning models.
+
+#### `_load_regression_model(reynolds, file_path)`
+Loads the appropriate scikit-learn model based on Reynolds number.
+
+#### `_patch_sklearn_compatibility(model)`
+Applies compatibility patches to handle different scikit-learn versions.
+
+#### `_predict_aerodynamics(X_input, reynolds, file_path)`
+Predicts aerodynamic coefficients using the loaded regression model.
+
 #### `_instantiate_lei_airfoil_breukels_cl_cd_cm_coefficients(t, kappa)`
 Computes polynomial coefficients for the Breukels model.
 
@@ -162,16 +229,26 @@ wing_airfoils:
   data:
     - [root, breukels_regression, {t: 0.15, kappa: 0.10}]
     - [tip, breukels_regression, {t: 0.10, kappa: 0.06}]
+    - [mid, masure_regression, {t: 0.07, eta: 0.2, kappa: 0.95, delta: -2, lambda: 0.65, phi: 0.25}]
 ```
 
 ### Direct Usage
 
 ```python
-# Create airfoil data
+# Create airfoil data with Breukels regression
 aero = AirfoilAerodynamics.from_yaml_entry(
     "breukels_regression",
     {"t": 0.12, "kappa": 0.08},
     alpha_range=[-10, 20, 1]
+)
+
+# Or create with Masure regression  
+aero = AirfoilAerodynamics.from_yaml_entry(
+    "masure_regression",
+    {"t": 0.07, "eta": 0.2, "kappa": 0.95, "delta": -2, "lambda": 0.65, "phi": 0.25},
+    alpha_range=[-10, 20, 1],
+    reynolds=1e6,
+    file_path="/path/to/config"
 )
 
 # Convert to array format
@@ -196,10 +273,12 @@ All airfoil data is standardized to the following format:
 - **Invalid parameters**: ValueError for out-of-range values
 - **Format errors**: ValueError for malformed CSV data
 - **Import errors**: ImportError for missing dependencies (NeuralFoil)
+- **Model files**: FileNotFoundError for missing .pkl model files (masure_regression)
 
 ## Performance Considerations
 
 - **Breukels**: Fastest, analytical polynomials
 - **Inviscid**: Very fast, simple theory
 - **Polars**: Fast, pre-computed data
-- **NeuralFoil**: Slower, high accuracy neural network predictions
+- **Masure Regression**: Fast (after initial model loading), high accuracy ML predictions
+- **NeuralFoil**: Fast, high accuracy neural network predictions

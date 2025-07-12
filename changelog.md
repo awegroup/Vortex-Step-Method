@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - updating doscstrings
 - changing tutorial, sensivitiy, convergence
 - etc.
+- added new test functions to AirfoilAerodynamics.
+- Added AirfoilAerodynamics class, which is the parent class for all airfoil types.
+- Added masure_regression, and caching functionality, to increase performance of the masure_regression airfoil type.
+- Added .yaml input
+- Added documentation
+- Improved convergence plotting functionality
 
 # dealing with Simonet Stall Model
 - [x] plotting.py: inside the generate_3D_polar_data, 
