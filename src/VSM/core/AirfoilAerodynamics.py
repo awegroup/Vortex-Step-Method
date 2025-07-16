@@ -63,6 +63,7 @@ class AirfoilAerodynamics:
 
         Raises:
             ValueError: If airfoil_type is not supported or required parameters are missing.
+            Error: If .dat file not structured correctly: should contain "x, y" coordinates ONLY.
         """
         obj = object.__new__(AirfoilAerodynamics)
         obj.source = airfoil_type.lower()

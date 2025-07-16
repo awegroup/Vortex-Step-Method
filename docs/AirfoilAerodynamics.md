@@ -88,6 +88,15 @@ aero = AirfoilAerodynamics.from_yaml_entry(
 )
 ```
 
+**Example .dat file:**
+If structure deviates from expected, an error will be raised.
+```
+0.0000, 0.0000
+0.0010, 0.0015
+0.0020, 0.0030
+```
+
+
 ### 3. Polar Data (`"polars"`)
 
 Direct import of pre-computed polar data from CSV files.
