@@ -48,6 +48,7 @@ class AirfoilAerodynamics:
         alpha_range: list = None,
         reynolds: float = None,
         file_path: str = None,
+        ml_models_dir: str = None,
     ):
         """Create AirfoilAerodynamics instance from configuration parameters.
 
@@ -57,6 +58,7 @@ class AirfoilAerodynamics:
             alpha_range (list, optional): [min_alpha, max_alpha, step] in degrees. Defaults to None.
             reynolds (float, optional): Reynolds number for analysis. Defaults to None.
             file_path (str, optional): Base path for relative file references. Defaults to None.
+            ml_models_dir (str, optional): Base path for ML model files (required for masure_regression). Defaults to None.
 
         Returns:
             AirfoilAerodynamics: Instance with populated polar data.
@@ -82,7 +84,7 @@ class AirfoilAerodynamics:
             obj._from_inviscid(alpha_range)
         elif obj.source == "masure_regression":
             obj._from_masure_regression(
-                airfoil_params, alpha_range, reynolds, file_path
+                airfoil_params, alpha_range, reynolds, ml_models_dir
             )
         else:
             raise ValueError(f"Unknown airfoil type: {airfoil_type}")
@@ -309,7 +311,9 @@ class AirfoilAerodynamics:
 
         self._cm_coefficients = [cm_2_deg, cm_1_deg, cm_0_deg]
 
-    def _from_masure_regression(self, airfoil_params, alpha_range, reynolds, file_path):
+    def _from_masure_regression(
+        self, airfoil_params, alpha_range, reynolds, ml_models_dir
+    ):
         """Generate polar data using Masure regression model.
 
         Args:
@@ -317,7 +321,7 @@ class AirfoilAerodynamics:
                                    't', 'eta', 'kappa', 'delta', 'lambda', 'phi'.
             alpha_range (list): [min_alpha, max_alpha, step] in degrees.
             reynolds (float): Reynolds number for analysis.
-            file_path (str): Base path for resolving relative file paths.
+            ml_models_dir (str): Base path for resolving relative model file paths.
 
         Returns:
             None: Populates self.alpha, self.CL, self.CD, self.CM.
@@ -344,8 +348,11 @@ class AirfoilAerodynamics:
         for i, alpha in enumerate(alpha_deg):
             X_input[i, :] = [t, eta, kappa, delta, lambda_param, phi, alpha]
 
-        # Get predictions from regression model
-        predictions = self._predict_aerodynamics(X_input, reynolds, file_path)
+        # Load the trained model
+        model = self._load_masure_regression_model(reynolds, ml_models_dir)
+
+        # Make predictions
+        predictions = model.predict(X_input)
 
         # Store results
         self.alpha = np.deg2rad(alpha_deg)
@@ -353,18 +360,16 @@ class AirfoilAerodynamics:
         self.CL = predictions[:, 1]  # Cl
         self.CM = predictions[:, 2]  # Cm
 
-    def _load_masure_regression_model(self, reynolds, file_path):
+    def _load_masure_regression_model(self, reynolds, ml_models_dir):
         """Load the trained regression model for a given Reynolds number.
 
         Args:
             reynolds (float): Reynolds number (5e6, 1e6, or 2e7)
-            file_path (str): Base path for resolving relative file paths.
+            ml_models_dir (str): Directory containing the model files.
 
         Returns:
             sklearn model: Trained regression model
         """
-        if file_path is None:
-            raise ValueError("file_path must be provided for masure_regression.")
 
         # Check if the model is already cached
         if reynolds in self._masure_model_cache:
@@ -382,13 +387,11 @@ class AirfoilAerodynamics:
                 f"No model available for Re={reynolds}. Available: 5e6, 1e6, 2e7"
             )
 
-        # Construct full path to model file
-        # Navigate to the project root and then to data/models
-        base_path = Path(file_path).parent
-        project_root = (
-            base_path.parent.parent
-        )  # Go up from TUDELFT_V3_KITE/data to project root
-        model_path = project_root / "data" / "models" / model_name
+        # Construct path
+        if ml_models_dir is None:
+            raise ValueError("ml_models_dir must be provided for masure_regression.")
+
+        model_path = Path(ml_models_dir) / model_name
 
         try:
             # Suppress sklearn version warnings during unpickling
@@ -462,26 +465,6 @@ class AirfoilAerodynamics:
 
         return model
 
-    def _predict_aerodynamics(self, X_input, reynolds, file_path):
-        """Predict aerodynamic coefficients for given input parameters.
-
-        Args:
-            X_input (np.ndarray): Input parameters array with shape (n_samples, 7)
-                                  Columns: [t, cx, cy, r, LE, camTE, a]
-            reynolds (float): Reynolds number
-            file_path (str): Base path for resolving relative file paths.
-
-        Returns:
-            np.ndarray: Predicted aerodynamic coefficients [Cd, Cl, CmPitch]
-        """
-        # Load the trained model
-        model = self._load_masure_regression_model(reynolds, file_path)
-
-        # Make predictions
-        y_pred = model.predict(X_input)
-
-        return y_pred
-
     def to_polar_array(self):
         """Convert airfoil data to standardized numpy array format.
 
@@ -500,6 +483,7 @@ class AirfoilAerodynamics:
         alpha_range: list = None,
         reynolds: float = None,
         file_path: str = None,
+        ml_models_dir: str = None,
     ):
         """Create multiple AirfoilAerodynamics instances with batch optimization and caching.
 
@@ -515,7 +499,8 @@ class AirfoilAerodynamics:
             airfoil_params_list (list): List of parameter dictionaries for each airfoil.
             alpha_range (list, optional): [min_alpha, max_alpha, step] in degrees.
             reynolds (float, optional): Reynolds number for analysis.
-            file_path (str, optional): Base path for relative file references.
+            file_path (str, optional): Base path for resolving relative file references.
+            ml_models_dir (str, optional): Base path for ML model files (required for masure_regression).
 
         Returns:
             dict: Dictionary mapping airfoil_id to polar data arrays.
@@ -527,11 +512,11 @@ class AirfoilAerodynamics:
             raise ValueError("All input lists must have the same length")
 
         # Check cache first
-        if cls._cache_enabled and file_path is not None:
+        if cls._cache_enabled and ml_models_dir is not None:
             config_hash = cls._get_cache_config_hash(
                 airfoil_ids, airfoil_types, airfoil_params_list, alpha_range, reynolds
             )
-            cache_dir = cls._get_cache_dir(file_path)
+            cache_dir = cls._get_cache_dir(ml_models_dir)
             cache_file = cls._get_cache_filename(config_hash, cache_dir)
 
             # Try to load from cache
@@ -558,7 +543,7 @@ class AirfoilAerodynamics:
             if airfoil_type == "masure_regression":
                 # Batch process masure_regression airfoils
                 batch_results = cls._batch_process_masure_regression(
-                    group_items, alpha_range, reynolds, file_path
+                    group_items, alpha_range, reynolds, ml_models_dir
                 )
                 for airfoil_id, polar_data in batch_results.items():
                     airfoil_polar_map[airfoil_id] = polar_data
@@ -580,11 +565,12 @@ class AirfoilAerodynamics:
                         alpha_range=alpha_range,
                         reynolds=reynolds,
                         file_path=file_path,
+                        ml_models_dir=ml_models_dir,
                     )
                     airfoil_polar_map[airfoil_id] = aero.to_polar_array()
 
         # Save to cache if enabled and we have cacheable types
-        if cls._cache_enabled and file_path is not None:
+        if cls._cache_enabled and ml_models_dir is not None:
             cacheable_types_present = any(
                 airfoil_type.lower() in cls._cacheable_types
                 for airfoil_type in airfoil_types
@@ -618,7 +604,7 @@ class AirfoilAerodynamics:
         group_items: list,
         alpha_range: list,
         reynolds: float,
-        file_path: str,
+        ml_models_dir: str,
     ):
         """Batch process masure_regression airfoils for efficiency.
 
@@ -626,7 +612,7 @@ class AirfoilAerodynamics:
             group_items (list): List of (index, airfoil_id, airfoil_params) tuples.
             alpha_range (list): [min_alpha, max_alpha, step] in degrees.
             reynolds (float): Reynolds number for analysis.
-            file_path (str): Base path for resolving relative file paths.
+            ml_models_dir (str): Base path for resolving relative model file paths.
 
         Returns:
             dict: Dictionary mapping airfoil_id to polar data arrays.
@@ -672,7 +658,7 @@ class AirfoilAerodynamics:
 
         # Load model once (uses caching)
         obj = object.__new__(cls)
-        model = obj._load_masure_regression_model(reynolds, file_path)
+        model = obj._load_masure_regression_model(reynolds, ml_models_dir)
 
         # Make batch prediction
         y_batch = model.predict(X_batch)
@@ -793,24 +779,20 @@ class AirfoilAerodynamics:
         ]  # Use first 16 chars
 
     @classmethod
-    def _get_cache_dir(cls, file_path):
+    def _get_cache_dir(cls, ml_models_dir):
         """Get the cache directory path.
 
         Args:
-            file_path (str): Base file path for resolving project root
+            ml_models_dir (str): Base directory for resolving model paths
 
         Returns:
             Path: Cache directory path
         """
-        if file_path is None:
-            raise ValueError("file_path is required for cache operations")
+        if ml_models_dir is None:
+            raise ValueError("ml_models_dir is required for cache operations")
 
-        # Navigate to project root from config file location
-        base_path = Path(file_path).parent
-        project_root = (
-            base_path.parent.parent
-        )  # Go up from TUDELFT_V3_KITE/data to project root
-        cache_dir = project_root / "data" / "cache"
+        # Create cache directory inside ml_models_dir
+        cache_dir = Path(ml_models_dir) / "cache"
 
         # Ensure cache directory exists
         cache_dir.mkdir(parents=True, exist_ok=True)

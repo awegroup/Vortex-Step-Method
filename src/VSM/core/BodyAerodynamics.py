@@ -326,6 +326,7 @@ class BodyAerodynamics:
         wing_instance=None,
         spanwise_panel_distribution="uniform",
         is_with_bridles=False,
+        ml_models_dir=None,
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -427,6 +428,13 @@ class BodyAerodynamics:
                 airfoil_types.append(airfoil_type)
                 airfoil_params_list.append(airfoil_params)
 
+            # Check if a masure_regression model is specified
+            if "masure_regression" in airfoil_types:
+                if ml_models_dir is None:
+                    raise ValueError(
+                        "ml_models_dir must be provided for masure_regression."
+                    )
+
             # --- Batch process all airfoils using optimized method ---
             airfoil_polar_map = AirfoilAerodynamics.from_yaml_entry_batch(
                 airfoil_ids=airfoil_ids,
@@ -435,6 +443,7 @@ class BodyAerodynamics:
                 alpha_range=alpha_range,
                 reynolds=reynolds,
                 file_path=file_path,
+                ml_models_dir=ml_models_dir,
             )
 
             wing_instance = Wing(

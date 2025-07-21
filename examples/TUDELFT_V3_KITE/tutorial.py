@@ -117,6 +117,7 @@ def main():
             / "TUDELFT_V3_KITE"
             / "config_kite_CAD_masure_regression.yaml"
         ),
+        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
         spanwise_panel_distribution=spanwise_panel_distribution,
         is_with_bridles=False,
     )

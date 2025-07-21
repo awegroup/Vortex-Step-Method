@@ -67,6 +67,7 @@ Factory class for generating airfoil polar data from various sources.
 - **`"neuralfoil"`**: Neural network-based airfoil analysis  
 - **`"polars"`**: Direct CSV polar data import
 - **`"inviscid"`**: Thin airfoil theory (2π slope, zero drag)
+- **`"masure_regression"`**: Machine learning predictions using trained models
 
 #### Usage:
 ```python
@@ -75,6 +76,16 @@ aero = AirfoilAerodynamics.from_yaml_entry(
     {"t": 0.12, "kappa": 0.08}, 
     alpha_range=[-10, 20, 1]
 )
+
+# For masure_regression, ml_models_dir is required
+aero = AirfoilAerodynamics.from_yaml_entry(
+    "masure_regression",
+    {"t": 0.07, "eta": 0.2, "kappa": 0.95, "delta": -2, "lambda": 0.65, "phi": 0.25},
+    alpha_range=[-10, 20, 1],
+    reynolds=1e6,
+    ml_models_dir="/path/to/ml_models"
+)
+
 polar_data = aero.to_polar_array()  # Returns [alpha, cl, cd, cm] array
 ```
 
@@ -85,7 +96,18 @@ Main class that orchestrates the aerodynamic analysis by combining wing geometry
 #### Initialization:
 
 - **`__init__(wings, bridle_line_system=None)`**: Creates BodyAerodynamics from Wing objects and optional bridle lines
-- **`instantiate(n_panels, file_path=None, wing_instance=None)`**: Factory method to create from YAML config or Wing instance
+- **`instantiate(n_panels, file_path=None, wing_instance=None, spanwise_panel_distribution="uniform", is_with_bridles=False, ml_models_dir=None)`**: Factory method to create from YAML config or Wing instance
+
+#### Factory Method Parameters:
+
+- **`n_panels`** (int): Number of panels (required if wing_instance is not provided)
+- **`file_path`** (str, optional): Path to the YAML config file. If None, wing_instance must be provided
+- **`wing_instance`** (Wing, optional): Pre-built Wing instance. If None, file_path must be provided
+- **`spanwise_panel_distribution`** (str): Panel distribution type (default: 'uniform')
+- **`is_with_bridles`** (bool): Whether to include bridle lines (default: False)
+- **`ml_models_dir`** (str, optional): Path to ML model files directory (**required if any airfoil uses masure_regression**)
+
+**Important**: When using `masure_regression` airfoil type in your YAML configuration, you must provide the `ml_models_dir` parameter pointing to the directory containing the trained model files (ET_re5e6.pkl, ET_re1e6.pkl, ET_re2e7.pkl).
 
 #### Key Analysis Methods:
 
@@ -171,11 +193,12 @@ The `.solve` method returns a comprehensive dictionary with the following struct
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
 
-# Create from YAML configuration
+# Create from YAML configuration (with masure_regression airfoils)
 body_aero = BodyAerodynamics.instantiate(
     n_panels=8,
     file_path="config_kite.yaml",
-    spanwise_panel_distribution="cosine"
+    spanwise_panel_distribution="cosine",
+    ml_models_dir="/path/to/ml_models"  # Required for masure_regression
 )
 
 # Set flight conditions  
@@ -219,6 +242,8 @@ wing_airfoils:
   data:
     - [tip, breukels_regression, {t: 0.10, kappa: 0.06}]
     - [mid, breukels_regression, {t: 0.15, kappa: 0.10}]
+    # For masure_regression, ensure ml_models_dir is provided to instantiate()
+    - [root, masure_regression, {t: 0.07, eta: 0.2, kappa: 0.95, delta: -2, lambda: 0.65, phi: 0.25}]
 
 # Optional bridle system
 bridle_nodes:
@@ -237,5 +262,10 @@ bridle_connections:
   data:
     - [main_line, n1, n2, null]
 ```
+
+**Note**: When using `masure_regression` airfoil type in your YAML configuration, you must provide the `ml_models_dir` parameter to the `BodyAerodynamics.instantiate()` method. This directory must contain the required model files:
+- `ET_re5e6.pkl` (Reynolds 5×10⁶)
+- `ET_re1e6.pkl` (Reynolds 1×10⁶)  
+- `ET_re2e7.pkl` (Reynolds 2×10⁷)
 
 This framework provides a complete aerodynamic analysis capability for complex wing geometries with support for various airfoil models, panel distributions, and advanced features like bridle line modeling and viscous corrections.
