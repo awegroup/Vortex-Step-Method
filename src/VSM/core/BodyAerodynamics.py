@@ -326,6 +326,7 @@ class BodyAerodynamics:
         wing_instance=None,
         spanwise_panel_distribution="uniform",
         is_with_bridles=False,
+        ml_models_dir=None,
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -413,23 +414,40 @@ class BodyAerodynamics:
                     "Missing required 'reynolds' in 'wing_airfoils' section of YAML config."
                 )
 
-            # --- Build all airfoil polars first using AirfoilAerodynamics.from_yaml_entry ---
-            airfoil_polar_map = {}
+            # --- Collect all airfoil data for batch processing ---
+            airfoil_ids = []
+            airfoil_types = []
+            airfoil_params_list = []
+
             for airfoil_row in airfoil_data:
                 airfoil_id = airfoil_row[airfoil_headers.index("airfoil_id")]
                 airfoil_type = airfoil_row[airfoil_headers.index("type")]
                 airfoil_params = airfoil_row[airfoil_headers.index("info_dict")]
-                aero = AirfoilAerodynamics.from_yaml_entry(
-                    airfoil_type,
-                    airfoil_params,
-                    alpha_range=alpha_range,
-                    reynolds=reynolds,
-                    file_path=file_path,
-                )
-                airfoil_polar_map[airfoil_id] = aero.to_polar_array()
+
+                airfoil_ids.append(airfoil_id)
+                airfoil_types.append(airfoil_type)
+                airfoil_params_list.append(airfoil_params)
+
+            # Check if a masure_regression model is specified
+            if "masure_regression" in airfoil_types:
+                if ml_models_dir is None:
+                    raise ValueError(
+                        "ml_models_dir must be provided for masure_regression."
+                    )
+
+            # --- Batch process all airfoils using optimized method ---
+            airfoil_polar_map = AirfoilAerodynamics.from_yaml_entry_batch(
+                airfoil_ids=airfoil_ids,
+                airfoil_types=airfoil_types,
+                airfoil_params_list=airfoil_params_list,
+                alpha_range=alpha_range,
+                reynolds=reynolds,
+                file_path=file_path,
+                ml_models_dir=ml_models_dir,
+            )
 
             wing_instance = Wing(
-                n_panels=len(section_data) - 1,
+                n_panels=n_panels,
                 spanwise_panel_distribution=spanwise_panel_distribution,
             )
 
@@ -1302,7 +1320,6 @@ class BodyAerodynamics:
         max_chord = max(np.array([panel.chord for panel in self.panels]))
         reynolds_number = rho * va_mag * max_chord / mu
 
-        ##TODO: if bridle not none add lift, drag...
         if self._bridle_line_system is not None:
             # Calculate forces and moments for each bridle line individually
             for bridle_line in self._bridle_line_system:
