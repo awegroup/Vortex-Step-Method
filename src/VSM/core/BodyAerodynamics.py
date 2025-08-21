@@ -792,6 +792,7 @@ class BodyAerodynamics:
 
                 if icp == jring and aerodynamic_model_type == "VSM":
                     U_2D = panel_jring.compute_velocity_induced_bound_2D(ep)
+
                     AIC[:, icp, jring] -= U_2D
 
         return AIC[0], AIC[1], AIC[2]
