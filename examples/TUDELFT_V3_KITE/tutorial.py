@@ -101,14 +101,14 @@ def main():
     """
     Visualize the panel mesh, control points, and aerodynamic centers for the selected BodyAerodynamics object.
     """
-    plot_geometry(
-        body_aero_CAD_CFD_polars,
-        title="TUDELFT_V3_KITE",
-        data_type=".pdf",
-        save_path=".",
-        is_save=False,
-        is_show=True,
-    )
+    # plot_geometry(
+    #     body_aero_CAD_CFD_polars,
+    #     title="TUDELFT_V3_KITE",
+    #     data_type=".pdf",
+    #     save_path=".",
+    #     is_save=False,
+    #     is_show=True,
+    # )
 
     # Step 4: Create an interactive plot using Plotly
     """
@@ -124,8 +124,14 @@ def main():
         is_with_aerodynamic_details=True,
         title="TUDELFT_V3_KITE",
         is_with_bridles=True,
+        is_save=True,
+        # save_path=Path(PROJECT_DIR)
+        # / "results"
+        # / "TUDELFT_V3_KITE"
+        # / "interactive_plot.html",
     )
 
+    breakpoint()
     # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
     """
     Compare the aerodynamic performance of different models by plotting lift, drag, and side force coefficients

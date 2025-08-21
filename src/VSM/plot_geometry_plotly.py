@@ -534,7 +534,9 @@ def compute_axis_parameters_from_fig(
     return ranges, tick_spacing
 
 
-def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figure:
+def update_fig_layout(
+    fig: go.Figure, panels: List[Any], title: str, is_show_legend=False
+) -> go.Figure:
 
     # Calculate axis parameters
     kite_geometry_ranges = compute_kite_geometry_ranges(panels)
@@ -605,7 +607,7 @@ def update_fig_layout(fig: go.Figure, panels: List[Any], title: str) -> go.Figur
             ),
             bgcolor="white",
         ),
-        showlegend=True,
+        showlegend=is_show_legend,
         legend=dict(
             yanchor="top",
             y=1,
@@ -753,7 +755,7 @@ def update_plot(
     fig = add_case_information(
         fig, wing_aero.panels, vel, angle_of_attack, side_slip, yaw_rate, results
     )
-    fig = update_fig_layout(fig, wing_aero.panels, title)
+    fig = update_fig_layout(fig, wing_aero.panels, title, is_show_legend=True)
 
 
 # Define the interactive plot function with slider for AoA
