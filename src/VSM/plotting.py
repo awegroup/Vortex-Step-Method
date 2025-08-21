@@ -592,7 +592,7 @@ def plot_polars(
     for ax_idx, (ax, y_label) in enumerate(zip(axs_flat, y_label_list)):
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
-        ax.grid()
+        ax.grid(True)
 
     # saving plot
     if is_save:
