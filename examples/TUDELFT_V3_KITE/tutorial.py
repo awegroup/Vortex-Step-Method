@@ -60,26 +60,23 @@ def main():
         n_panels=n_panels,
         file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
-        is_with_bridles=False,
     )
     body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
         file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
-        is_with_bridles=True,
+        bridle_path=(cad_derived_geometry_dir / "struc_geometry.yaml"),
     )
     body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
         n_panels=n_panels,
         file_path=(cad_derived_geometry_dir / "config_kite_CAD_neuralfoil.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
-        is_with_bridles=False,
     )
     body_aero_masure_regression = BodyAerodynamics.instantiate(
         n_panels=n_panels,
         file_path=(cad_derived_geometry_dir / "config_kite_CAD_masure_regression.yaml"),
         ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
         spanwise_panel_distribution=spanwise_panel_distribution,
-        is_with_bridles=False,
     )
 
     # Step 2: Set inflow conditions for each aerodynamic object

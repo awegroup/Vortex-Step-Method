@@ -325,7 +325,7 @@ class BodyAerodynamics:
         file_path=None,
         wing_instance=None,
         spanwise_panel_distribution="uniform",
-        is_with_bridles=False,
+        bridle_path=None,
         ml_models_dir=None,
     ):
         """
@@ -459,60 +459,76 @@ class BodyAerodynamics:
                 wing_instance.add_section(LE, TE, polar_data)
 
         # --- Add bridle lines if requested ---
-        if is_with_bridles:
-            # Parse bridle nodes from YAML
-            try:
-                reading_bridle_nodes = config["bridle_nodes"]
-            except KeyError:
-                # Raise the error but continue execution (skip bridle processing)
-                print(
-                    "Warning: You cannot have `is_with_bridles=True` without a 'bridle_nodes' section in the YAML config.\n\n--> a BodyAerodynamics instance is returned that does NOT contain bridles, as these are not provided."
-                )
-                return cls([wing_instance])
-            node_headers = reading_bridle_nodes["headers"]
-            node_data = reading_bridle_nodes["data"]
-            # add wing_nodes to node_data
+        if bridle_path is not None:
+            with open(bridle_path, "r") as f:
+                struc_geometry = yaml.safe_load(f)
 
-            node_id_idx = node_headers.index("id")
-            node_x_idx = node_headers.index("x")
-            node_y_idx = node_headers.index("y")
-            node_z_idx = node_headers.index("z")
-            # Build a mapping from node id to coordinates
-            node_map = {
-                row[node_id_idx]: np.array(
-                    [row[node_x_idx], row[node_y_idx], row[node_z_idx]]
+            # ---- Particles as one big array, index = id ----
+            # KCU (id = 0) from "bridle_point_node" if present, else [0,0,0]
+            kcu_xyz = struc_geometry.get("bridle_point_node", [0.0, 0.0, 0.0])
+
+            # Collect all [id, x, y, z] rows
+            wing_rows = struc_geometry["wing_particles"]["data"]
+            bridle_rows = struc_geometry["bridle_particles"]["data"]
+
+            # Determine array size from max id
+            all_ids = [0] + [r[0] for r in wing_rows] + [r[0] for r in bridle_rows]
+            max_id = int(max(all_ids))
+
+            # Initialize with NaNs and fill by id
+            particles = np.full((max_id + 1, 3), np.nan, dtype=float)
+            particles[0] = np.asarray(kcu_xyz, dtype=float)
+
+            for row in wing_rows:
+                pid, x, y, z = row[0], row[1], row[2], row[3]
+                particles[int(pid)] = [x, y, z]
+
+            for row in bridle_rows:
+                pid, x, y, z = row[0], row[1], row[2], row[3]
+                particles[int(pid)] = [x, y, z]
+
+            # Optional: sanity check for any missing ids (still NaN)
+            if np.isnan(particles).any():
+                missing = np.where(np.isnan(particles).any(axis=1))[0]
+                raise ValueError(
+                    f"Particles missing coordinates for ids: {missing.tolist()}"
                 )
-                for row in node_data
+
+            # ---- Bridle elements (nested dict) ----
+            be_hdr = struc_geometry["bridle_elements"]["headers"][
+                1:
+            ]  # [l0, d, material, linktype]
+            bridle_elements_dict = {
+                row[0]: dict(zip(be_hdr, row[1:]))
+                for row in struc_geometry["bridle_elements"]["data"]
             }
 
-            # Parse bridle lines from YAML (for diameter)
-            line_headers = config["bridle_lines"]["headers"]
-            line_data = config["bridle_lines"]["data"]
-            line_name_idx = line_headers.index("name")
-            line_diameter_idx = line_headers.index("diameter")
-            # Build a mapping from line name to diameter
-            line_diameter_map = {
-                row[line_name_idx]: row[line_diameter_idx] for row in line_data
-            }
+            # ---- Build bridle line segments ----
+            bridle_lines = (
+                []
+            )  # each item: [p_start_xyz (np.array), p_end_xyz (np.array), diameter]
+            for row in struc_geometry["bridle_connections"]["data"]:
+                name = row[0]
+                if name not in bridle_elements_dict:
+                    raise KeyError(
+                        f"Connection '{name}' not found in bridle_elements. "
+                        "Add it there (with diameter 'd') or rename to match."
+                    )
 
-            # Parse bridle connections from YAML
-            conn_headers = config["bridle_connections"]["headers"]
-            conn_data = config["bridle_connections"]["data"]
-            conn_name_idx = conn_headers.index("name")
-            conn_ci_idx = conn_headers.index("ci")
-            conn_cj_idx = conn_headers.index("cj")
-            # Each connection defines a line between two nodes (ci, cj)
-            bridle_lines = []
-            for row in conn_data:
-                name = row[conn_name_idx]
-                ci = row[conn_ci_idx]
-                cj = row[conn_cj_idx]
-                # Only include if both nodes exist and line diameter is defined
-                if ci in node_map and cj in node_map and name in line_diameter_map:
-                    p1 = node_map[ci]
-                    p2 = node_map[cj]
-                    diameter = line_diameter_map[name]
-                    bridle_lines.append([p1, p2, diameter])
+                d = bridle_elements_dict[name]["d"]
+
+                # First segment (ci -> cj)
+                ci = int(row[1])
+                cj = int(row[2])
+                p1 = particles[ci]
+                p2 = particles[cj]
+                bridle_lines.append([p1, p2, d])
+
+                # Pulley segment (cj -> ck), if a 3rd node is present
+                if len(row) == 4:
+                    ck = int(row[3])
+                    p3 = particles[ck]
+                    bridle_lines.append([p2, p3, d])
             return cls([wing_instance], bridle_lines)
         else:
             return cls([wing_instance])

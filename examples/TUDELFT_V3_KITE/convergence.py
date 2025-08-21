@@ -147,7 +147,6 @@ def convergence_relation(
                 n_panels=n_panels,
                 file_path=config_path,
                 spanwise_panel_distribution=spanwise_panel_distribution,
-                is_with_bridles=False,
             )
 
             # Check the actual number of panels created

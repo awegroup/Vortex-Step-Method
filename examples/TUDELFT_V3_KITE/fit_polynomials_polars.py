@@ -23,6 +23,13 @@ def main():
         / "CAD_derived_geometry"
         / "config_kite_CAD_CFD_polars.yaml"
     )
+    bridle_path = Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
+        / "struc_geometry.yaml"
+    )
+
     ### 2. defining settings
     n_panels = 40
     spanwise_panel_distribution = "uniform"
@@ -34,7 +41,7 @@ def main():
         n_panels=n_panels,
         file_path=yaml_config_path,
         spanwise_panel_distribution=spanwise_panel_distribution,
-        is_with_bridles=True,
+        bridle_path=bridle_path,
     )
 
     ### 4. Setting va
