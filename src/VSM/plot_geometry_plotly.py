@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple, Dict, Any
 import numpy as np
 import plotly.graph_objects as go
@@ -817,10 +818,7 @@ def interactive_plot(
             save_path = "."
 
         # Save as HTML for interactivity
-        fig.write_html(f"{save_path}/{filename}.html")
-
-        # Save as static image
-        fig.write_image(f"{save_path}/{filename}.png")
+        fig.write_html(save_path)
 
     if is_show:
         fig.show()
