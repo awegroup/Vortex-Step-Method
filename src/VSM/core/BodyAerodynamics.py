@@ -471,6 +471,8 @@ class BodyAerodynamics:
                 return cls([wing_instance])
             node_headers = reading_bridle_nodes["headers"]
             node_data = reading_bridle_nodes["data"]
+            # add wing_nodes to node_data
+
             node_id_idx = node_headers.index("id")
             node_x_idx = node_headers.index("x")
             node_y_idx = node_headers.index("y")

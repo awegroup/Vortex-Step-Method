@@ -20,6 +20,7 @@ def main():
         Path(PROJECT_DIR)
         / "data"
         / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
         / "config_kite_CAD_CFD_polars.yaml"
     )
     ### 2. defining settings
