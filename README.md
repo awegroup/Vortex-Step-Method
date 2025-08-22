@@ -94,9 +94,9 @@ For detailed documentation, please refer to the following resources.
 
 **Machine Learning**
 
-The code base is adapted to work with a machine learning model trained on more than a hundred thousands Reynolds-average Navier Stokes (RANS) Computational Fluid Dynamics (CFD) simulations made for leading-edge inflatable airfoils, documented in the MSc. thesis of (K.R.G. Masure)[https://resolver.tudelft.nl/uuid:865d59fc-ccff-462e-9bac-e81725f1c0c9], the (code base is also open-source accessible)[https://github.com/awegroup/Pointwise-Openfoam-toolchain].
+The code base is adapted to work with a machine learning model trained on more than a hundred thousands Reynolds-average Navier Stokes (RANS) Computational Fluid Dynamics (CFD) simulations made for leading-edge inflatable airfoils, documented in the MSc. thesis of [K.R.G. Masure](https://resolver.tudelft.nl/uuid:865d59fc-ccff-462e-9bac-e81725f1c0c9), the [code base is also open-source accessible](https://github.com/awegroup/Pointwise-Openfoam-toolchain).
 
-As the three trained models, for Reynolds number = 1e6, 5e6 and 1e7 are too large (~2.3GB) for GitHub, they have to be downloaded separately, and added to the `data/ml_models` folder. They are accessible trough (Zenodo)[10.5281/zenodo.16925759], and so is the (CFD data)[10.5281/zenodo.16925833] on which the models are trained. More description on its usages is found in [Airfoil Aerodynamics](docs/AirfoilAerodynamics.md).
+As the three trained models, for Reynolds number = 1e6, 5e6 and 1e7 are too large (~2.3GB) for GitHub, they have to be downloaded separately, and added to the `data/ml_models` folder. They are accessible trough [Zenodo](10.5281/zenodo.16925759), and so is the [CFD data](10.5281/zenodo.16925833) on which the models are trained. More description on its usages is found in [Airfoil Aerodynamics](docs/AirfoilAerodynamics.md).
 
 ## Usages
 Please look at the tutorial on a rectangular wing, where the code usage and settings are fully detailed.
