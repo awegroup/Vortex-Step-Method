@@ -85,16 +85,14 @@ classifiers = [
 dependencies = [
   "numpy",
   "matplotlib>=3.7.1",
-  "seaborn",
   "scipy",
-  "numba",
-  "screeninfo",
   "plotly",
-  "nbformat",
   "pandas",
   "neuralfoil",
   "PyYAML",
   "scikit-learn",
+  "numba",
+  "screeninfo",
 ]
 
 

@@ -86,13 +86,20 @@ For detailed documentation, please refer to the following resources.
     deactivate
     ```
 ## Dependencies
-- numpy
-- matplotlib>=3.7.1
-- seaborn
-- scipy
-- numba
-- ipykernel
-- screeninfo
+
+-  numpy
+-  matplotlib
+-  scipy
+-  plotly
+-  pandas
+-  neuralfoil
+-  PyYAML
+-  scikit-learn
+-  numba
+-  screeninfo
+
+See also [pyproject.toml](pyproject.toml)
+
 
 **Machine Learning**
 
