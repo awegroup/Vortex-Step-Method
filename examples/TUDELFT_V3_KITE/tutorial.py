@@ -124,14 +124,14 @@ def main():
         is_with_aerodynamic_details=True,
         title="TUDELFT_V3_KITE",
         is_with_bridles=True,
-        is_save=True,
+        ### uncomment the lines below to save
+        # is_save=True,
         # save_path=Path(PROJECT_DIR)
         # / "results"
         # / "TUDELFT_V3_KITE"
         # / "interactive_plot.html",
     )
 
-    breakpoint()
     # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
     """
     Compare the aerodynamic performance of different models by plotting lift, drag, and side force coefficients
