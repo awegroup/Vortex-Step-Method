@@ -54,12 +54,16 @@ def main():
 
     ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
     print(f"\nCreating corrected polar input with bridles")
-    body_aero_polar_with_bridles = BodyAerodynamics.from_file(
-        file_path,
-        n_panels,
-        spanwise_panel_distribution,
-        is_with_corrected_polar=True,
-        polar_data_dir=polar_data_dir,
+    body_aero_polar_with_bridles = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(
+            Path(PROJECT_DIR)
+            / "data"
+            / "TUDELFT_V3_KITE"
+            / "config_kite_CAD_CFD_polars.yaml"
+        ),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+        is_with_bridles=False,
     )
 
     ### 4. Setting va
@@ -71,14 +75,16 @@ def main():
     # and saving in results with literature
     save_folder = Path(PROJECT_DIR) / "results" / "V9_KITE"
 
-    angle_of_attack_range = np.linspace(0, 20, 12)
+    angle_of_attack_range = np.linspace(1, 10, 12)
     gamma = None
     center_of_pressure = np.zeros((len(angle_of_attack_range), 3))
     total_force = np.zeros((len(angle_of_attack_range), 3))
     cl = np.zeros((len(angle_of_attack_range)))
     cd = np.zeros((len(angle_of_attack_range)))
     aero_roll = np.zeros((len(angle_of_attack_range)))
+    begin_time = time.time()
     for i, angle_i in enumerate(angle_of_attack_range):
+
         body_aero_polar_with_bridles.va_initialize(Umag, angle_i, 0, yaw_rate)
 
         results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
