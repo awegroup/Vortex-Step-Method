@@ -32,20 +32,15 @@ def main():
         Path(PROJECT_DIR)
         / "data"
         / "TUDELFT_V3_KITE"
-        / "wing_geometry_from_surfplan.csv"
+        / "CAD_derived_geometry"
+        / "config_kite_CAD_CFD_polars.yaml"
     )
-    polar_data_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_corrected"
+    bridle_path = Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
+        / "struc_geometry.yaml"
     )
-    bridle_data_path = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "bridle_geometry.csv"
-    )
-    # file_path = (
-    #     Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "wing_geometry_from_CAD.csv"
-    # )
-    polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
-    # file_path = Path(PROJECT_DIR) / "data" / "V9_KITE" / "geometry.csv"
-    # polar_data_dir = Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "2D_polars_CFD"
 
     ### 2. defining settings
     n_panels = 40
@@ -63,7 +58,7 @@ def main():
             / "config_kite_CAD_CFD_polars.yaml"
         ),
         spanwise_panel_distribution=spanwise_panel_distribution,
-        is_with_bridles=False,
+        bridle_path=bridle_path,
     )
 
     ### 4. Setting va

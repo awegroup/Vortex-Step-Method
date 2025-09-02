@@ -53,6 +53,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
 
         # Verify basic attributes
@@ -71,6 +72,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
 
         # Calculate expected number of points
@@ -101,6 +103,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
 
         import numpy as np
@@ -127,6 +130,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
 
         # Check that coefficients are within reasonable ranges
@@ -181,6 +185,7 @@ class TestMasureRegressionReal:
                 alpha_range=small_alpha_range,
                 reynolds=test_reynolds,
                 file_path=masure_config_path,
+                ml_models_dir="data/ml_models",
             )
 
             # Verify creation was successful
@@ -210,6 +215,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
 
         # If we get here, model files exist and creation was successful
@@ -231,6 +237,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
         first_call_time = time.time() - start_time
 
@@ -242,6 +249,7 @@ class TestMasureRegressionReal:
             alpha_range=small_alpha_range,
             reynolds=test_reynolds,
             file_path=masure_config_path,
+            ml_models_dir="data/ml_models",
         )
         second_call_time = time.time() - start_time
 

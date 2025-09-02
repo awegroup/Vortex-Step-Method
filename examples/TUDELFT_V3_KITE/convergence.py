@@ -147,7 +147,6 @@ def convergence_relation(
                 n_panels=n_panels,
                 file_path=config_path,
                 spanwise_panel_distribution=spanwise_panel_distribution,
-                is_with_bridles=False,
             )
 
             # Check the actual number of panels created
@@ -449,5 +448,5 @@ if __name__ == "__main__":
         side_slip=0,
         yaw_rate=0,
         spanwise_panel_distribution="uniform",
-        config_file="config_kite_CAD_CFD_polars.yaml",
+        config_file=Path("CAD_derived_geometry") / "config_kite_CAD_CFD_polars.yaml",
     )

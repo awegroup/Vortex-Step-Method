@@ -36,6 +36,7 @@ def create_parameter_variations(percent_variation=10):
         project_dir
         / "data"
         / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
         / "config_kite_CAD_masure_regression.yaml"
     )
     output_base_dir = (
@@ -159,6 +160,7 @@ def verify_parameter_variations(percent_variation=10):
         project_dir
         / "data"
         / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
         / "config_kite_CAD_masure_regression.yaml"
     )
     variations_base_dir = (
@@ -233,7 +235,9 @@ def verify_parameter_variations(percent_variation=10):
         print()
 
 
-def generate_2D_plots(percent_variation=10, alpha_range=(-3, 15, 1), parameters=["t"]):
+def generate_2D_plots(
+    percent_variation=10, alpha_range=(-3, 15, 1), parameters=["t"], ml_models_dir=None
+):
     """
     Generate CL vs alpha plots for each parameter variation using 2D airfoil aerodynamics,
     comparing default, min%, and plus% cases.
@@ -323,12 +327,19 @@ def generate_2D_plots(percent_variation=10, alpha_range=(-3, 15, 1), parameters=
                     if case_name != "Default"
                     else str(config_path)
                 )
+                # Pass ml_models_dir if airfoil_type is masure_regression
+                kwargs = {}
+                if airfoil_type == "masure_regression":
+                    if ml_models_dir is None:
+                        ml_models_dir = project_dir / "data" / "ml_models"
+                    kwargs["ml_models_dir"] = ml_models_dir
                 airfoil_aero = AirfoilAerodynamics.from_yaml_entry(
                     airfoil_type=airfoil_type,
                     airfoil_params=airfoil_params,
                     alpha_range=[alpha_start, alpha_stop, alpha_step],
                     reynolds=config_reynolds,
                     file_path=cache_file_path,
+                    **kwargs,
                 )
 
                 # Extract CL, CD, CM values for the desired alpha range
@@ -451,7 +462,7 @@ def generate_2D_plots(percent_variation=10, alpha_range=(-3, 15, 1), parameters=
 
 
 def generate_2D_and_3D_plots(
-    percent_variation=10, alpha_range=(-3, 15, 1), parameters=["t"]
+    percent_variation=10, alpha_range=(-3, 15, 1), parameters=["t"], ml_models_dir=None
 ):
     """
     Generate combined 2D and 3D CL, CD, CM vs alpha plots for each parameter variation.
@@ -470,6 +481,7 @@ def generate_2D_and_3D_plots(
         project_dir
         / "data"
         / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
         / "config_kite_CAD_masure_regression.yaml"
     )
     variations_base_dir = (
@@ -542,12 +554,18 @@ def generate_2D_and_3D_plots(
                     if case_name != "Default"
                     else str(config_path)
                 )
+                kwargs = {}
+                if airfoil_type == "masure_regression":
+                    if ml_models_dir is None:
+                        ml_models_dir = project_dir / "data" / "ml_models"
+                    kwargs["ml_models_dir"] = ml_models_dir
                 airfoil_aero = AirfoilAerodynamics.from_yaml_entry(
                     airfoil_type=airfoil_type,
                     airfoil_params=airfoil_params,
                     alpha_range=[alpha_start, alpha_stop, alpha_step],
                     reynolds=config_reynolds,
                     file_path=cache_file_path,
+                    **kwargs,
                 )
 
                 # Extract 2D values
@@ -580,11 +598,20 @@ def generate_2D_and_3D_plots(
                     solver_instance = Solver()
 
                     # Create BodyAerodynamics instance
+                    kwargs = {}
+                    # Check if config contains masure_regression and pass ml_models_dir if needed
+                    if any(
+                        entry[1] == "masure_regression"
+                        for entry in config["wing_airfoils"]["data"]
+                    ):
+                        if ml_models_dir is None:
+                            ml_models_dir = project_dir / "data" / "ml_models"
+                        kwargs["ml_models_dir"] = ml_models_dir
                     body_aero = BodyAerodynamics.instantiate(
                         n_panels=n_panels,
                         file_path=config_path,
                         spanwise_panel_distribution=spanwise_panel_distribution,
-                        is_with_bridles=False,
+                        **kwargs,
                     )
 
                     # Initialize aerodynamic model

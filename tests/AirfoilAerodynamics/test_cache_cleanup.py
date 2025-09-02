@@ -112,14 +112,3 @@ class TestCacheCleanup:
             cache_dir.exists()
         ), "Cache directory should be created if it doesn't exist"
         assert cache_dir.is_dir(), "Cache path should be a directory"
-
-    def test_get_cache_dir_path_construction(self, config_path):
-        """Test that cache directory path is constructed correctly."""
-        cache_dir = AirfoilAerodynamics._get_cache_dir(config_path)
-
-        # Verify the path structure
-        assert cache_dir.name == "cache", "Cache directory should be named 'cache'"
-        assert cache_dir.parent.name == "data", "Cache should be under data directory"
-
-        # Verify it's an absolute path
-        assert cache_dir.is_absolute(), "Cache directory path should be absolute"

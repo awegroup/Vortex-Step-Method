@@ -249,19 +249,21 @@ class Panel:
         Returns:
             np.ndarray: Induced velocity vector from 2D bound vortex.
         """
-        ### DIRECTION
-        # r3 perpendicular to the bound vortex
+        # r3 is the vector from evaluation point to bound vortex mid-point
+        # r0 is the direction of the bound vortex, so we take the unit
+        # we take the cross product, r0 x r3,
+        # because of it we do not need to compute the perpendicular distance:
+        #   We do not need to compute the perpendicular direction from
+        #   the evaluation point to the bound vortex, as when taking the cross product
+        #   any contribution that is not perpendicular will fall away.
+        # we use the 1/2pi * ( 1/ r) equation for an infinite vortex.
+        # literature: Rannenberg, Damiani, Cayon etc.
+
         r3 = evaluation_point - (self.bound_point_1 + self.bound_point_2) / 2
-        # r0 should be the direction of the bound vortex
         r0 = self.bound_point_1 - self.bound_point_2
-        cross = jit_cross(r0, r3)
-        return (
-            cross
-            / (cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2)
-            / 2
-            / np.pi
-            * jit_norm(r0)
-        )
+        r0_unit_X_r3 = jit_cross(r0 / jit_norm(r0), r3)
+
+        return (1 / (2 * np.pi)) * (r0_unit_X_r3 / (jit_norm(r0_unit_X_r3) ** 2))
 
     def compute_velocity_induced_single_ring_semiinfinite(
         self,

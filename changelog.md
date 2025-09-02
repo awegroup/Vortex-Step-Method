@@ -4,107 +4,165 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - 2025-03-03
+## 2025-09-22
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-# Unstructured
+### ⚠️ Breaking Changes
+- **Class rename:** `WingAerodynamics` → **`BodyAerodynamics`**.
+- **Dataset path rename:** `TUDELFT_V3_LEI_KITE` → **`TUDELFT_V3_KITE`**.
+- **Polar input format update:**
+  - 3D: `alpha, CL, CD, CM`
+  - 2D: `alpha, Cl, Cd, Cm` (note the capitalization difference)
+- **Defaults & options:**
+  - Default spanwise panel distribution → **`uniform`**
+  - Removed options/attributes: **`using_previous gamma`**, **`min_relaxation_error`**, **`is_new_vector_definition`**.
+- **Stall model refactor:** Simonet-related stall logic moved out of `Solver` into **`solver_functions`** and a dedicated *stall* branch.
 
-- adding half_wing inputs, for both polars and .csv geometry
+---
 
-- changing input format alpha, CL, CD, CM and in 2D alpha, Cl, Cd, Cm
-- updating doscstrings
-- changing tutorial, sensivitiy, convergence
-- etc.
-- added new test functions to AirfoilAerodynamics.
-- Added AirfoilAerodynamics class, which is the parent class for all airfoil types.
-- Added masure_regression, and caching functionality, to increase performance of the masure_regression airfoil type.
-- Added .yaml input
-- Added documentation
-- Improved convergence plotting functionality
-
-# dealing with Simonet Stall Model
-- [x] plotting.py: inside the generate_3D_polar_data, 
-feeding in gamma_distribution `results = solver.solve(body_aero,gamma_distrbution=gamma)`, also changed the way the legends are plotted: is now below the graphs in distribution and polars.
-- [x] BodyAerodynamics, changed `calculate_circulation_distribution_elliptical_wing` and added `calculate_circulation_distribution_cosine`
-- [x] Solver, changed _init_ statement, added artificial viscosity as property and setter, change gamma_initialisation inside solver function, added the gamma_loop types, and added the non_linear gamma loop functions. Also updated the artificial viscosity stall model, changed elliptic to elliptical, rewriting some of the variables inside solver, to become self. to make them callable from anywhere within the class, added min_relaxation_error, adding a compute_aerodynamic_quantities function, further adjusting the simonet functions
-removed: min_relaxation_error
-removed: is_new_vector_definition
-
-moving everything from Solver to solver_functions, that is related to stall models
-
-changing TUDELFT_V3_LEI_KITE, to TUDELFT_V3_KITE
-
--Panel: added panel_polar_data property, added "cl_is_pisinalpha" to the _panel_aero_model options
-
-Added a test function under folder elliptical_wing_planform, from ch 4.1 of Simonet.
-
-Added a rectangular wing test function
-
-Changed spanwise panel distribution to uniform
-
-Removed 'using_previous gamma' option, and added it to the 'initial_gamma_distribution function'
-
-### Bodyaerodynamics
-- Changing hardcoded 0.25 and 0.75 in calculate_panel_properties, to ac and cp.
-
-### solver setting testing
-- "aerodynamic_model_type": LTT (1/4chord evaluation) vs VSM (3/4chord including the angle correction)
-- "allowed_error"
-- "core_radius_fraction"
-- "gamma_initial_distribution_type": "elliptical","cosine","zero"
-- "gamma_loop_type": "base","non_linear"
-- "is_with_gamma_feedback": True or False
-- "max_iterations"
-- "relaxation_factor"
-
-### other
-- adding a sensitivity_analysis.py file
-- git_ignoring results/
-
-=======
->>>>>>> 08138c40cc2f5120d29d46f2ae6b65745976ac87
-=======
->>>>>>> develop
 ### Added
-- **Interactive Visualization:** Introduced an interactive Plotly environment for data visualization.
-- **Moment Calculations:** Added moment calculations and plotting functionality (#89).
-- **Panel Polar Investigation:** Implemented a panel polar investigation function (#92).
-- **User Configuration:** Enabled support for a user-defined reference point in moment calculations.
-- **NeuralFoil Integration:** Integrated NeuralFoil to verify and improve polar predictions.
-- **Plot Enhancements:** Enhanced the interactive plot with additional parameters (span, height, chord) and decimal support.
-- **Bridle Line Forces:** Added aerodynamic force functions for bridle lines (#105), supporting input in the form:
-  - `bridle_line1 = [p1, p2, diameter]` where `p1 = [x, y, z]`
-  - `bridle_lines = [bridle_line1, bridle_line2, ...]`
-- **BodyAerodynamics Enhancements:** 
-  - Renamed `WingAerodynamics` to `BodyAerodynamics`.
-  - Added the `instantiate_body_aerodynamics` function.
-  - Introduced a `from_file` class method for easier input handling (#115).
+- **AirfoilAerodynamics framework**
+  - New base class **`AirfoilAerodynamics`** (parent for all airfoil types).
+  - **`masure_regression`** airfoil with on-disk **caching** for fast reuse.
+  - **YAML** configuration input for airfoil definitions.
+  - New **tests** for `AirfoilAerodynamics`.
+
+- **LEI parametric model (masure_regression_lei_parametric)**
+  - Examples showing how to reconstruct a **LEI airfoil** using 6 parameters:
+    `t, eta, kappa, delta, lambda, phi`.
+  - Utilities for generating **airfoil geometry** and exporting **.csv / .dat**.
+
+- **Half-wing inputs**
+  - Support for *half-wing* inputs in both **polar generation** and **geometry CSV** export.
+
+- **Plotting & tutorials**
+  - Improved **convergence plotting** utilities.
+  - New **sensitivity analysis** examples & script (`sensitivity_analysis.py`).
+  - Updated **tutorials** (usage, sensitivity, convergence workflows).
+
+- **Solver & VSM pipeline**
+  - `Solver` gains **artificial viscosity** (property + setter).
+  - Added **non-linear gamma loop** variants and **gamma loop type** selector.
+  - New `compute_aerodynamic_quantities` helper.
+  - New initial **gamma distribution** options: `elliptical`, `cosine`, `zero`.
+  - `BodyAerodynamics`:
+    - Added/renamed circulation helpers:
+      - `calculate_circulation_distribution_elliptical_wing`
+      - `calculate_circulation_distribution_cosine`
+  - **Panel**:
+    - New property: `panel_polar_data`.
+    - New `_panel_aero_model` option: `"cl_is_pisinalpha"`.
+
+- **Validation & examples**
+  - Added **elliptical wing planform** test (Simonet ch. 4.1).
+  - Added **rectangular wing** test.
+  - Git now **ignores** `results/`.
+
+- **(From develop) Extra analysis tools**
+  - Interactive **Plotly** visualization environment.
+  - **Moment** calculations + plotting (incl. user-defined reference point).
+  - **Panel polar investigation** function.
+  - **NeuralFoil** integration for cross-checking polars.
+  - **Bridle line forces**:
+    - Support for inputs like:
+      - `bridle_line1 = [p1, p2, diameter]` where `p1 = [x, y, z]`
+      - `bridle_lines = [bridle_line1, bridle_line2, ...]`
+  - `BodyAerodynamics` API sugar:
+    - `instantiate_body_aerodynamics` function
+    - `BodyAerodynamics.from_file(...)`
+
+---
 
 ### Changed
-- **Initialization Improvements:** Improved gamma initialization by removing redundant logic (#81).
-- **Force Calculation:** Updated the side force calculation to use the cross product of lift and drag (#83).
-- **Plot Output:** Modified plot outputs to address issues (e.g., issue #85) and improve clarity.
-- **Interactive Environment:** Upgraded the interactive plotting environment.
-- **Moment Calculation:** Revised the moment calculation method and updated tutorial documentation accordingly.
-- **Polar Handling:** Enhanced polar data handling by:
-  - Incorporating a new `va_initialize` function.
-  - Modifying the Panel class to support an (N,4) polar input format.
-- **Aerodynamic Vectors:** Normalized aerodynamic vectors for improved consistency (#91).
-- **Convergence & Sensitivity:** Refined convergence studies on the number of panels (n_panels) and added sensitivity plots.
-- **Damping & Smoothing:** Improved artificial damping and further enhanced the smoothing algorithm.
-- **Polar Engineering:** Updated the polar_engineering module to use Surfplan profiles and adjusted POLAR functionality along with its pytests.
-- **Documentation:** Applied several minor documentation and tutorial updates to reflect these changes.
+- **Polars & plotting**
+  - `plotting.py::generate_3D_polar_data` now passes a **gamma distribution**
+    into the solver:  
+    `results = solver.solve(body_aero, gamma_distrbution=gamma)`
+  - Legends for **distributions** and **polars** are displayed **below** plots.
+  - Improved clarity and formatting of plot outputs.
+
+- **Solver internals**
+  - Revised `__init__`, added artificial viscosity, refactored internal state to `self.*` for broader accessibility.
+  - Revised **gamma initialization** and **feedback** handling.
+  - Adjusted **Simonet** model plumbing and naming (`elliptic` → `elliptical`).
+
+- **BodyAerodynamics**
+  - `calculate_panel_properties`: replaced hardcoded `0.25 / 0.75` with **`ac`** (aerodynamic center) and **`cp`** (center of pressure).
+
+- **Docs & tutorials**
+  - Updated **docstrings**, **tutorials**, and **user guides** to reflect the new APIs and behaviors.
+  - Expanded convergence & sensitivity study guidance (e.g., `n_panels`).
+
+- **Vector conventions**
+  - Normalized aerodynamic vector handling for consistency across modules.
+
+- **Polar engineering**
+  - Updated to use **Surfplan** profiles; adjusted `POLAR` behavior and tests.
+
+---
 
 ### Fixed
-- **Polar Data Input:** Resolved issues related to polar-data input.
-- **Reference Input:** Corrected the reference point input handling.
-- **Testing:** Fixed failing tests within the Panel module.
+- Polar data **input robustness** and format handling.
+- **Reference point** handling in moment computations.
+- Multiple failing tests in **Panel**.
+- Plot output issues (including prior formatting issues, e.g. #85).
+- Numerous **docstring** and minor consistency fixes.
+
+---
 
 ### Removed
-- **Stall Models:** Moved stall models to a dedicated stall branch.
-- **Polar Engineering Branch:** Relocated polar_engineering efforts to its own branch.
-- **Redundant Variables:** Removed `tol_reference_error` as it was no longer necessary.
+- `min_relaxation_error` and `is_new_vector_definition` fields.
+- `using_previous gamma` option (gamma initialization is now explicit/controlled).
+- Consolidated/moved **stall models** into dedicated modules/branch.
+- Extracted **polar_engineering** work to its own branch.
+
+---
+
+### Migration Notes
+- **Imports / classes**
+  - Replace:
+    ```python
+    from VSM.core import WingAerodynamics
+    ```
+    with:
+    ```python
+    from VSM.core import BodyAerodynamics
+    ```
+
+- **Datasets & configs**
+  - Update any paths from:
+    ```
+    TUDELFT_V3_LEI_KITE → TUDELFT_V3_KITE
+    ```
+
+- **Polar files & arrays**
+  - Ensure 3D data is in: `alpha, CL, CD, CM`
+  - Ensure 2D data is in: `alpha, Cl, Cd, Cm`
+  - If you relied on the old format, update your CSV writers/loaders and tests accordingly.
+
+- **Solver usage**
+  - Specify the desired **gamma initialization** and **loop type** explicitly:
+    ```python
+    solver.gamma_initial_distribution_type = "elliptical"  # or "cosine", "zero"
+    solver.gamma_loop_type = "non_linear"                  # or "base"
+    solver.artificial_viscosity =  ...                     # set as needed
+    results = solver.solve(body_aero, gamma_distrbution="cosine")
+    ```
+  - Remove any reliance on `using_previous gamma`.
+
+- **Panel model**
+  - If you used `_panel_aero_model`, you can now set:
+    ```python
+    panel._panel_aero_model = "cl_is_pisinalpha"
+    ```
+
+- **Plotting**
+  - Legends for certain plots are now at the **bottom**; if you have custom layout logic, adjust figure margins accordingly.
+
+- **Half-wing workflows**
+  - When generating polars or exporting geometry, adjust scripts to provide **half-wing** inputs if desired.
+
+- **Caching (masure_regression)**
+  - The regression model caches results on disk; verify your `ml_models_dir` and cache paths are writable in CI.
 
 
 ## [1.0.0] - 2024-09-29
