@@ -102,4 +102,3 @@ wing_airfoils:
     - [17, polars, {csv_file_path: "2D_polars_CFD/17.csv"}]
     - [18, polars, {csv_file_path: "2D_polars_CFD/18.csv"}]
     - [19, polars, {csv_file_path: "2D_polars_CFD/19.csv"}]
-

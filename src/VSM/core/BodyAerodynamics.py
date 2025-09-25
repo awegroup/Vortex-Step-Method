@@ -495,12 +495,12 @@ class BodyAerodynamics:
                 )
 
             # ---- Bridle elements (nested dict) ----
-            be_hdr = struc_geometry["bridle_elements"]["headers"][
+            be_hdr = struc_geometry["bridle_lines"]["headers"][
                 1:
             ]  # [l0, d, material, linktype]
-            bridle_elements_dict = {
+            bridle_lines_dict = {
                 row[0]: dict(zip(be_hdr, row[1:]))
-                for row in struc_geometry["bridle_elements"]["data"]
+                for row in struc_geometry["bridle_lines"]["data"]
             }
 
             # ---- Build bridle line segments ----
@@ -509,13 +509,13 @@ class BodyAerodynamics:
             )  # each item: [p_start_xyz (np.array), p_end_xyz (np.array), diameter]
             for row in struc_geometry["bridle_connections"]["data"]:
                 name = row[0]
-                if name not in bridle_elements_dict:
+                if name not in bridle_lines_dict:
                     raise KeyError(
-                        f"Connection '{name}' not found in bridle_elements. "
+                        f"Connection '{name}' not found in bridle_lines. "
                         "Add it there (with diameter 'd') or rename to match."
                     )
 
-                d = bridle_elements_dict[name]["d"]
+                d = bridle_lines_dict[name]["diameter"]
 
                 # First segment (ci -> cj)
                 ci = int(row[1])

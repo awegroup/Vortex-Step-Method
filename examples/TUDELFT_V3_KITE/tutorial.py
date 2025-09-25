@@ -63,9 +63,11 @@ def main():
     )
     body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+        # file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+        file_path=(cad_derived_geometry_dir / "aero_geometry.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
         bridle_path=(cad_derived_geometry_dir / "struc_geometry.yaml"),
+        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
     )
     body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
         n_panels=n_panels,
@@ -131,6 +133,8 @@ def main():
         # / "TUDELFT_V3_KITE"
         # / "interactive_plot.html",
     )
+
+    breakpoint()
 
     # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
     """
