@@ -10,25 +10,39 @@ from VSM.fitting import fit_and_evaluate_model
 
 def main():
     """
-    Fit and evaluate polynomials for polars using YAML config input.
+    This script demonstrates how to use the VSM library to perform a 3D aerodynamic analysis of the TUDELFT_V3_KITE.
+
+    The example covers the following steps:
+    1. Define file paths for the kite geometry, 2D polars, and bridle geometry.
+    2. Load the kite geometry from a CSV file.
+    3. Create three BodyAerodynamics objects:
+       - One using the baseline Breukels input.
+       - One with corrected polar data.
+       - One with corrected polar data and bridles.
+    4. Initialize the aerodynamic model with a specific wind speed, angle of attack, side slip angle, and yaw rate.
+    5. Plot the kite geometry using Matplotlib.
+    6. Generate an interactive plot using Plotly.
+    7. Plot and save polar curves (both angle of attack and side slip sweeps) for different settings, comparing them to literature data.
     """
 
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    yaml_config_path = (
+    file_path = (
         Path(PROJECT_DIR)
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
         / "config_kite_CAD_CFD_polars.yaml"
     )
-    bridle_path = Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "CAD_derived_geometry"
-        / "struc_geometry.yaml"
-    )
+
+    # bridle_path = (
+    #     Path(PROJECT_DIR)s
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "CAD_derived_geometry"
+    #     / "struc_geometry.yaml"
+    # )
 
     ### 2. defining settings
     n_panels = 40
@@ -36,12 +50,12 @@ def main():
     solver = Solver(reference_point=[0, 0, 0])
 
     ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
-    print(f"\nCreating polar input with bridles from YAML")
+    print(f"\nCreating corrected polar input with bridles")
     body_aero_polar_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=yaml_config_path,
+        file_path=file_path,
         spanwise_panel_distribution=spanwise_panel_distribution,
-        bridle_path=bridle_path,
+        # bridle_path=None,
     )
 
     ### 4. Setting va
@@ -53,15 +67,16 @@ def main():
     # and saving in results with literature
     save_folder = Path(PROJECT_DIR) / "results" / "V9_KITE"
 
-    begin_time = time.time()
-    angle_of_attack_range = np.linspace(0, 15, 12)
+    angle_of_attack_range = np.linspace(0, 20, 21)
     gamma = None
     center_of_pressure = np.zeros((len(angle_of_attack_range), 3))
     total_force = np.zeros((len(angle_of_attack_range), 3))
     cl = np.zeros((len(angle_of_attack_range)))
     cd = np.zeros((len(angle_of_attack_range)))
     aero_roll = np.zeros((len(angle_of_attack_range)))
+    begin_time = time.time()
     for i, angle_i in enumerate(angle_of_attack_range):
+
         body_aero_polar_with_bridles.va_initialize(Umag, angle_i, 0, yaw_rate)
 
         results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
@@ -81,7 +96,7 @@ def main():
         aero_roll[i] = np.arctan2(results["cs"], results["cl"]) * 180 / np.pi
     end_time = time.time()
     print(f"Time taken for calculations: {end_time - begin_time} seconds")
-
+    # angle_of_attack_range = angle_of_attack_range - 1
     dependencies = [
         "np.ones(len(alpha))",
         "alpha",
@@ -95,7 +110,11 @@ def main():
     )
     print("Fitted coefficients for lift coefficient:")
     print(fit_cl["coeffs"])
-
+    dependencies = [
+        "np.ones(len(alpha))",
+        "alpha",
+        "alpha**2",
+    ]
     fit_cd = fit_and_evaluate_model(
         cd,
         dependencies=dependencies,
@@ -178,6 +197,195 @@ def main():
     axs[1].legend()
     axs[1].grid()
     plt.show()
+
+    # --- Save polars to CSV ---
+    polars_df = pd.DataFrame(
+        {
+            "angle_of_attack_deg": angle_of_attack_range,
+            "CL": cl,
+            "CD": cd,
+            "CL_fit": fit_cl["data_est"],
+            "CD_fit": fit_cd["data_est"],
+        }
+    )
+    save_folder.mkdir(parents=True, exist_ok=True)
+    polars_csv_path = save_folder / "polars_VSM.csv"
+    polars_df.to_csv(polars_csv_path, index=False)
+    print(f"Polars saved to {polars_csv_path}")
+
+    # --- Save fit to JSON (according to your structure) ---
+    import json
+
+    fit_json = {
+        "model": "coeffs",
+        "params": {
+            "CD0": float(fit_cd["coeffs"][0]),
+            "CL0": float(fit_cl["coeffs"][0]),
+            "angle_pitch_depower_0": -0.04,
+            "delta_pitch_depower": -0.32,
+        },
+        "coefficients": {
+            "CL": [
+                {"var": "alpha", "power": 1, "coef": float(fit_cl["coeffs"][1])},
+                {"var": "alpha", "power": 2, "coef": float(fit_cl["coeffs"][2])},
+                {"var": "u_s", "power": 1, "coef": 0.0},
+                {"var": "u_p", "power": 1, "coef": -0.0},
+            ],
+            "CD": [
+                {"var": "alpha", "power": 1, "coef": float(fit_cd["coeffs"][1])},
+                {"var": "alpha", "power": 2, "coef": float(fit_cd["coeffs"][2])},
+                {"var": "u_s", "power": 1, "coef": 0.0},
+                {"var": "u_p", "power": 1, "coef": -0.04},
+            ],
+            "CS": [{"var": "u_s", "power": 1, "coef": -0.25}],
+        },
+    }
+    fit_json_path = save_folder / "fit_coeffs.json"
+    with open(fit_json_path, "w") as f:
+        json.dump(fit_json, f, indent=2)
+    print(f"Fit coefficients saved to {fit_json_path}")
+
+    # --- Simulate at alpha=8° for multiple yaw rates and fit a line ---
+    alpha_fixed = 8  # degrees
+    yaw_rates = np.linspace(-2, 2, 9)  # example yaw rates, adjust as needed
+    cs_yaw = np.zeros(len(yaw_rates))
+
+    for i, yaw in enumerate(yaw_rates):
+        body_aero_polar_with_bridles.va_initialize(Umag, alpha_fixed, 0, yaw)
+        results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
+        cs_yaw[i] = results["cs"]
+
+    # Fit a line: CS = a * yaw_rate + b
+    coeffs = np.polyfit(yaw_rates, cs_yaw, 1)
+    cs_fit = np.polyval(coeffs, yaw_rates)
+    print(f"Fitted CS vs yaw_rate: slope={coeffs[0]:.4f}, intercept={coeffs[1]:.4f}")
+
+    # Plot
+    plt.figure()
+    plt.plot(yaw_rates, cs_yaw, "o", label="Simulated CS")
+    plt.plot(yaw_rates, cs_fit, "-", label="Linear fit")
+    plt.xlabel("Yaw rate")
+    plt.ylabel("CS")
+    plt.title(f"CS vs Yaw Rate at alpha={alpha_fixed}°")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    # Save to CSV
+    cs_yaw_df = pd.DataFrame(
+        {
+            "yaw_rate": yaw_rates,
+            "CS": cs_yaw,
+            "CS_fit": cs_fit,
+        }
+    )
+    cs_yaw_csv_path = save_folder / "cs_vs_yawrate.csv"
+    cs_yaw_df.to_csv(cs_yaw_csv_path, index=False)
+    print(f"CS vs yaw rate saved to {cs_yaw_csv_path}")
+
+    # --- Fit Mz vs yaw_rate at alpha=8° ---
+    mz_yaw = np.zeros(len(yaw_rates))
+    for i, yaw in enumerate(yaw_rates):
+        body_aero_polar_with_bridles.va_initialize(Umag, alpha_fixed, 0, yaw)
+        results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
+        mz_yaw[i] = results.get("cmz", np.nan)  # Use .get in case "cmz" is missing
+
+    cmz_coeffs = np.polyfit(yaw_rates, mz_yaw, 1)
+    cmz_fit = np.polyval(cmz_coeffs, yaw_rates)
+    print(
+        f"Fitted Mz vs yaw_rate: slope={cmz_coeffs[0]:.4f}, intercept={cmz_coeffs[1]:.4f}"
+    )
+
+    plt.figure()
+    plt.plot(yaw_rates, mz_yaw, "o", label="Simulated Mz")
+    plt.plot(yaw_rates, cmz_fit, "-", label="Linear fit")
+    plt.xlabel("Yaw rate")
+    plt.ylabel("Mz")
+    plt.title(f"Mz vs Yaw Rate at alpha={alpha_fixed}°")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    mz_yaw_df = pd.DataFrame(
+        {
+            "yaw_rate": yaw_rates,
+            "Mz": mz_yaw,
+            "Mz_fit": cmz_fit,
+        }
+    )
+    mz_yaw_csv_path = save_folder / "mz_vs_yawrate.csv"
+    mz_yaw_df.to_csv(mz_yaw_csv_path, index=False)
+    print(f"Mz vs yaw rate saved to {mz_yaw_csv_path}")
+
+    # --- Sideslip sweep at alpha=8° and fit CS vs sideslip ---
+    beta_range = np.linspace(-15, 15, 11)  # degrees
+    cs_beta = np.zeros(len(beta_range))
+    for i, beta in enumerate(beta_range):
+        body_aero_polar_with_bridles.va_initialize(Umag, alpha_fixed, beta, 0)
+        results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
+        cs_beta[i] = results["cs"]
+
+    # Fit a line: CS = a * beta + b
+    cs_beta_coeffs = np.polyfit(np.deg2rad(beta_range), cs_beta, 1)
+    cs_beta_fit = np.polyval(cs_beta_coeffs, np.deg2rad(beta_range))
+    print(
+        f"Fitted CS vs sideslip: slope={cs_beta_coeffs[0]:.4f}, intercept={cs_beta_coeffs[1]:.4f}"
+    )
+
+    plt.figure()
+    plt.plot(beta_range, cs_beta, "o", label="Simulated CS")
+    plt.plot(beta_range, cs_beta_fit, "-", label="Linear fit")
+    plt.xlabel("Sideslip angle (deg)")
+    plt.ylabel("CS")
+    plt.title(f"CS vs Sideslip at alpha={alpha_fixed}°")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    cs_beta_df = pd.DataFrame(
+        {
+            "beta_deg": beta_range,
+            "CS": cs_beta,
+            "CS_fit": cs_beta_fit,
+        }
+    )
+    cs_beta_csv_path = save_folder / "cs_vs_sideslip.csv"
+    cs_beta_df.to_csv(cs_beta_csv_path, index=False)
+    print(f"CS vs sideslip saved to {cs_beta_csv_path}")
+
+    # --- Fit cmz vs sideslip at alpha=8° ---
+    cmz_beta = np.zeros(len(beta_range))
+    for i, beta in enumerate(beta_range):
+        body_aero_polar_with_bridles.va_initialize(Umag, alpha_fixed, beta, 0)
+        results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
+        cmz_beta[i] = results.get("cmz", np.nan)
+
+    cmz_beta_coeffs = np.polyfit(np.deg2rad(beta_range), cmz_beta, 1)
+    cmz_beta_fit = np.polyval(cmz_beta_coeffs, np.deg2rad(beta_range))
+    print(
+        f"Fitted cmz vs sideslip: slope={cmz_beta_coeffs[0]:.4f}, intercept={cmz_beta_coeffs[1]:.4f}"
+    )
+
+    plt.figure()
+    plt.plot(beta_range, cmz_beta, "o", label="Simulated cmz")
+    plt.plot(beta_range, cmz_beta_fit, "-", label="Linear fit")
+    plt.xlabel("Sideslip angle (deg)")
+    plt.ylabel("cmz")
+    plt.title(f"cmz vs Sideslip at alpha={alpha_fixed}°")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    cmz_beta_df = pd.DataFrame(
+        {
+            "beta_deg": beta_range,
+            "cmz": cmz_beta,
+            "cmz_fit": cmz_beta_fit,
+        }
+    )
+    cmz_beta_csv_path = save_folder / "cmz_vs_sideslip.csv"
+    cmz_beta_df.to_csv(cmz_beta_csv_path, index=False)
+    print(f"cmz vs sideslip saved to {cmz_beta_csv_path}")
 
 
 if __name__ == "__main__":
