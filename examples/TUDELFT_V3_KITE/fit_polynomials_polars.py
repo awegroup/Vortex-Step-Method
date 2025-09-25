@@ -35,12 +35,14 @@ def main():
         / "CAD_derived_geometry"
         / "config_kite_CAD_CFD_polars.yaml"
     )
-    bridle_path = Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "CAD_derived_geometry"
-        / "struc_geometry.yaml"
-    )
+
+    # bridle_path = (
+    #     Path(PROJECT_DIR)s
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "CAD_derived_geometry"
+    #     / "struc_geometry.yaml"
+    # )
 
     ### 2. defining settings
     n_panels = 40
@@ -51,14 +53,9 @@ def main():
     print(f"\nCreating corrected polar input with bridles")
     body_aero_polar_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(
-            Path(PROJECT_DIR)
-            / "data"
-            / "TUDELFT_V3_KITE"
-            / "config_kite_CAD_CFD_polars.yaml"
-        ),
+        file_path=file_path,
         spanwise_panel_distribution=spanwise_panel_distribution,
-        bridle_path=bridle_path,
+        # bridle_path=None,
     )
 
     ### 4. Setting va
@@ -70,7 +67,7 @@ def main():
     # and saving in results with literature
     save_folder = Path(PROJECT_DIR) / "results" / "V9_KITE"
 
-    angle_of_attack_range = np.linspace(1, 10, 12)
+    angle_of_attack_range = np.linspace(0, 20, 21)
     gamma = None
     center_of_pressure = np.zeros((len(angle_of_attack_range), 3))
     total_force = np.zeros((len(angle_of_attack_range), 3))
@@ -99,7 +96,7 @@ def main():
         aero_roll[i] = np.arctan2(results["cs"], results["cl"]) * 180 / np.pi
     end_time = time.time()
     print(f"Time taken for calculations: {end_time - begin_time} seconds")
-
+    # angle_of_attack_range = angle_of_attack_range - 1
     dependencies = [
         "np.ones(len(alpha))",
         "alpha",
@@ -212,7 +209,7 @@ def main():
         }
     )
     save_folder.mkdir(parents=True, exist_ok=True)
-    polars_csv_path = save_folder / "polars.csv"
+    polars_csv_path = save_folder / "polars_VSM.csv"
     polars_df.to_csv(polars_csv_path, index=False)
     print(f"Polars saved to {polars_csv_path}")
 
