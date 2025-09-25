@@ -48,6 +48,7 @@ conv_crit = {
 }
 
 data_airf = np.loadtxt(r"./polars/clarky_maneia.csv", delimiter=",")
+# data_airf is now [alpha(rad), CL, CD, CM] and can be used directly as polar_data for each section
 
 # %% SOLVER
 start_time = time.time()

@@ -3,10 +3,10 @@ import numpy as np
 import logging
 import pprint
 from copy import deepcopy
-from VSM.Solver import Solver
-from VSM.Panel import Panel
-from VSM.BodyAerodynamics import BodyAerodynamics
-from VSM.WingGeometry import Wing
+from VSM.core.Solver import Solver
+from VSM.core.Panel import Panel
+from VSM.core.BodyAerodynamics import BodyAerodynamics
+from VSM.core.WingGeometry import Wing
 
 
 import os
@@ -61,7 +61,7 @@ def thesis_induction_matrix_creation(
     rings : List of list with the definition of each vortex filament
     Uinf : Wind speed velocity vector
     data_airf : 2D airfoil data with alpha, Cl, Cd, Cm
-    recalc_alpha : True if you want to recalculate the induced angle of attack at 1/4 of the chord (VSM)
+    recalc_alpha : True if you want to recompute the induced angle of attack at 1/4 of the chord (VSM)
     Gamma0 : Initial Guess of Gamma
     model : VSM: Vortex Step method/ LLT: Lifting Line Theory
 
@@ -183,8 +183,27 @@ def test_induction_matrix_creation():
     core_radius_fraction = 1e-20  # only value I could find
     wing = Wing(n_panels, "unchanged")
     for idx in range(int(len(coord_left_to_right) / 2)):
+        # Generate inviscid polar data for this section
+        alpha_range = [
+            -10 * np.pi / 180,
+            30 * np.pi / 180,
+            np.pi / 180,
+        ]  # radians, step = 1 deg
+        alpha = np.arange(
+            alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
+        )
+        polar_data = np.column_stack(
+            [
+                alpha,
+                2 * np.pi * alpha,  # CL
+                np.zeros_like(alpha),  # CD
+                np.zeros_like(alpha),  # CM
+            ]
+        )
         wing.add_section(
-            coord_left_to_right[2 * idx], coord_left_to_right[2 * idx + 1], ["inviscid"]
+            coord_left_to_right[2 * idx],
+            coord_left_to_right[2 * idx + 1],
+            polar_data,
         )
     wing_aero = BodyAerodynamics([wing])
     wing_aero.va = Uinf
@@ -214,7 +233,7 @@ def test_induction_matrix_creation():
     ### NEW ###
     va_norm_array = np.array([vec_norm(Uinf)] * len(coord))
     va_unit_array = np.array([Uinf / vec_norm(Uinf)] * len(coord))
-    AIC_x, AIC_y, AIC_z = wing_aero.calculate_AIC_matrices(
+    AIC_x, AIC_y, AIC_z = wing_aero.compute_AIC_matrices(
         model, core_radius_fraction, va_norm_array, va_unit_array
     )
 
@@ -254,7 +273,7 @@ def test_induction_matrix_creation():
     ### NEW ###
 
     # wing_aero.va = Uinf
-    AIC_x, AIC_y, AIC_z = wing_aero.calculate_AIC_matrices(
+    AIC_x, AIC_y, AIC_z = wing_aero.compute_AIC_matrices(
         model, core_radius_fraction, va_norm_array, va_unit_array
     )
     # Check if the matrices are the same

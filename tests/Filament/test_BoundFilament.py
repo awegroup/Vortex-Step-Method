@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import logging
-from VSM.Filament import BoundFilament
+from VSM.core.Filament import BoundFilament
 
 
 # Define fixtures for core_radius_fraction and gamma
@@ -15,7 +15,7 @@ def gamma():
     return 1.0
 
 
-def test_calculate_induced_velocity(gamma, core_radius_fraction):
+def test_compute_induced_velocity(gamma, core_radius_fraction):
     # Define a simple filament and control point
     filament = BoundFilament([0, 0, 0], [1, 0, 0])
     control_point = [0.5, 1, 0]
@@ -37,13 +37,13 @@ def test_calculate_induced_velocity(gamma, core_radius_fraction):
     )
 
     # Calculated solution using the BoundFilament class method
-    induced_velocity_calculated = filament.velocity_3D_bound_vortex(
+    induced_velocity_computed = filament.velocity_3D_bound_vortex(
         control_point, gamma, core_radius_fraction
     )
 
     # Assert the induced velocities are almost equal
     np.testing.assert_almost_equal(
-        induced_velocity_calculated, induced_velocity_analytical, decimal=6
+        induced_velocity_computed, induced_velocity_analytical, decimal=6
     )
 
 

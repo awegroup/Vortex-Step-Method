@@ -1,0 +1,225 @@
+wing_sections:
+  # ---------------------------------------------------------------
+  # headers:
+  #   - airfoil_id: integer, unique identifier for the airfoil (matches wing_airfoils)
+  #   - LE_x: x-coordinate of leading edge
+  #   - LE_y: y-coordinate of leading edge
+  #   - LE_z: z-coordinate of leading edge
+  #   - TE_x: x-coordinate of trailing edge
+  #   - TE_y: y-coordinate of trailing edge
+  #   - TE_z: z-coordinate of trailing edge
+  # ---------------------------------------------------------------
+  headers: [airfoil_id, LE_x, LE_y, LE_z, TE_x, TE_y, TE_z]
+  data:
+    - [1, 0.52218, 4.1459378000000005, 8.171215, 0.86682, 4.152601, 8.182607]
+    - [2, 0.263184, 4.128047333333334, 8.221623, 0.874727, 4.141856, 8.229216]
+    - [3, 0.028112, 4.110713133333333, 8.299881, 0.887481, 4.124523, 8.304402]
+    - [4, -0.183243, 4.09143955, 8.404511, 0.904737, 4.101072, 8.406125]
+    - [5, -0.368472, 4.071198533333334, 8.53343, 0.926149, 4.071974, 8.532342]
+    - [6, -0.522929, 4.044764516666667, 8.68433, 0.951369, 4.0377, 8.681014]
+    - [7, -0.639766, 4.0122215, 8.854842, 0.980052, 3.998721, 8.850098]
+    - [8, -0.709238, 3.97555605, 9.041356, 1.011852, 3.955506, 9.037553]
+    - [9, -0.79088, 3.8134530499999997, 9.459568, 1.189372, 3.789238, 9.449439]
+    - [10, -0.864219, 3.50976455, 9.790205, 1.256822, 3.485499, 9.772089]
+    - [11, -0.929298, 3.1432477, 10.046493, 1.310901, 3.116753, 10.023988]
+    - [12, -0.986158, 2.8075264499999997, 10.342998, 1.354755, 2.780285, 10.315722]
+    - [13, -1.034831, 2.4026866, 10.538677, 1.390237, 2.380855, 10.504511]
+    - [14, -1.075348, 1.969432, 10.648648, 1.41853, 1.946587, 10.611473]
+    - [15, -1.107733, 1.5636341, 10.837398, 1.440421, 1.540958, 10.797442]
+    - [16, -1.132004, 1.1212366, 10.921702, 1.456442, 1.107796, 10.877957]
+    - [17, -1.148177, 0.6743327499999999, 10.908834, 1.466944, 0.660721, 10.863797]
+    - [18, -1.156262, 0.23513389999999998, 10.991837, 1.472144, 0.220752, 10.946209]
+    - [18, -1.156262, -0.23513389999999998, 10.991837, 1.472144, -0.220752, 10.946209]
+    - [17, -1.148177, -0.6743327499999999, 10.908834, 1.466944, -0.660721, 10.863797]
+    - [16, -1.132004, -1.1212366, 10.921702, 1.456442, -1.107796, 10.877957]
+    - [15, -1.107733, -1.5636341, 10.837398, 1.440421, -1.540958, 10.797442]
+    - [14, -1.075348, -1.969432, 10.648648, 1.41853, -1.946587, 10.611473]
+    - [13, -1.034831, -2.4026866, 10.538677, 1.390237, -2.380855, 10.504511]
+    - [12, -0.986158, -2.8075264499999997, 10.342998, 1.354755, -2.780285, 10.315722]
+    - [11, -0.929298, -3.1432477, 10.046493, 1.310901, -3.116753, 10.023988]
+    - [10, -0.864219, -3.50976455, 9.790205, 1.256822, -3.485499, 9.772089]
+    - [9, -0.79088, -3.8134530499999997, 9.459568, 1.189372, -3.789238, 9.449439]
+    - [8, -0.709238, -3.97555605, 9.041356, 1.011852, -3.955506, 9.037553]
+    - [7, -0.639766, -4.0122215, 8.854842, 0.980052, -3.998721, 8.850098]
+    - [6, -0.522929, -4.044764516666667, 8.68433, 0.951369, -4.0377, 8.681014]
+    - [5, -0.368472, -4.071198533333334, 8.53343, 0.926149, -4.071974, 8.532342]
+    - [4, -0.183243, -4.09143955, 8.404511, 0.904737, -4.101072, 8.406125]
+    - [3, 0.028112, -4.110713133333333, 8.299881, 0.887481, -4.124523, 8.304402]
+    - [2, 0.263184, -4.128047333333334, 8.221623, 0.874727, -4.141856, 8.229216]
+    - [1, 0.52218, -4.1459378000000005, 8.171215, 0.86682, -4.152601, 8.182607]
+
+wing_airfoils:
+  # ---------------------------------------------------------------
+  # headers:
+  #   - airfoil_id: integer, unique identifier for the airfoil
+  #   - type: one of [neuralfoil, breukels_regression, masure_regression, polars]
+  #   - info_dict: dictionary with parameters depending on 'type'
+  #
+  # info_dict fields by type:
+  #   - breukels_regression:
+  #       t: Tube diameter non-dimensionalized by chord (required)
+  #       kappa: Maximum camber height/magnitude, non-dimensionalized by chord (required)
+  #   - neuralfoil:
+  #       dat_file_path: Path to airfoil .dat file (x, y columns)
+  #       model_size: NeuralFoil model size (e.g., "xxxlarge")
+  #       xtr_lower: Lower transition location (0=forced, 1=free)
+  #       xtr_upper: Upper transition location
+  #       n_crit: Critical amplification factor (see guidelines below)
+  #         n_crit guidelines:
+  #           Sailplane:           12–14
+  #           Motorglider:         11–13
+  #           Clean wind tunnel:   10–12
+  #           Average wind tunnel: 9   (standard "e^9 method")
+  #           Dirty wind tunnel:   4–8
+  #   - polars:
+  #       csv_file_path: Path to polar CSV file (columns: alpha [rad], cl, cd, cm)
+  #   - masure_regression:
+  #       t, eta, kappa, delta, lamba, phi: Regression parameters
+  #   - inviscid:
+  #       no further data is required 
+  # ---------------------------------------------------------------
+  alpha_range: [-10, 31, 0.5] # [deg], in this range the polars are calculated
+  reynolds: !!float 1e6 # Reynolds number
+  headers: [airfoil_id, type, info_dict]
+  data:
+    - [1, inviscid, {}]
+    - [2, inviscid, {}]
+    - [3, inviscid, {}]
+    - [4, inviscid, {}]
+    - [5, inviscid, {}]
+    - [6, inviscid, {}]
+    - [7, inviscid, {}]
+    - [8, inviscid, {}]
+    - [9, inviscid, {}]
+    - [10, inviscid, {}]
+    - [11, inviscid, {}]
+    - [12, inviscid, {}]
+    - [13, inviscid, {}]
+    - [14, inviscid, {}]
+    - [15, inviscid, {}]
+    - [16, inviscid, {}]
+    - [17, inviscid, {}]
+    - [18, inviscid, {}]
+
+bridle_nodes:
+  # ---------------------------------------------------------------
+  # headers:
+  #   - id: integer, unique identifier for the node
+  #   - x: x-coordinate [m]
+  #   - y: y-coordinate [m]
+  #   - z: z-coordinate [m]
+  #   - type: node type, either 'knot' or 'pulley'
+  # ---------------------------------------------------------------
+  headers: [id, x, y, z, type]
+  data:
+    - [21, -0.67653494, 2.10580567, 7.08413599, knot]
+    - [22, -0.79196791, 1.01882151, 7.57069579, knot]
+    - [23, -0.79196791, -1.01882151, 7.57069579, knot]
+    - [24, -0.67653494, -2.10580567, 7.08413599, knot]
+    - [25, -0.46444477, 0.77505128, 4.23316161, knot]
+    - [26, -0.46444477, -0.77505128, 4.23316161, knot]
+    - [27, 0.54344694, 1.57655435, 5.91086207, knot]
+    - [28, 0.62960591, 0.92728966, 6.64639402, knot]
+    - [29, 0.62960591, -0.92728966, 6.64639402, knot]
+    - [30, 0.54344694, -1.57655435, 5.91086207, knot]
+    - [31, 0.39092886, 0.71221536, 4.26118728, knot]
+    - [32, 0.39092886, -0.71221536, 4.26118728, knot]
+    - [33, 0.30679124, 0.49235914, 3.39885672, pulley]
+    - [34, 0.28625931, 0.0, 3.19030736, knot]
+    - [35, 0.30679124, -0.49235914, 3.39885672, pulley]
+    - [36, 0.13269336, 0.23394851, 1.48060245, knot]
+    - [37, 0.13269336, -0.23394851, 1.48060245, knot]
+
+bridle_lines:
+  # ---------------------------------------------------------------
+  # headers:
+  #   - name: string, line name
+  #   - rest_length: measured rest length [m]
+  #   - diameter: line diameter [m]
+  #   - material: string, material type (e.g., dyneema)
+  #   - density: material density [kg/m^3]
+  # ---------------------------------------------------------------
+  headers: [name, rest_length, diameter, material, density]
+  data:
+  # front lines
+  - [a6, 11.790, 0.002, dyneema,970]
+  - [A5, 2.870, 0.002, dyneema,970]
+  - [A3, 3.450, 0.002, dyneema,970]
+  - [A2, 3.500, 0.002, dyneema,970]
+  - [A1, 3.690, 0.002, dyneema,970]
+  - [AII, 3.250, 0.002, dyneema,970]
+  - [AI, 3.620, 0.002, dyneema,970]
+  - [amain, 3.910, 0.002, dyneema,970]
+  # rear lines
+  - [br1, 4.410, 0.002, dyneema,970]
+  - [br2, 4.170, 0.002, dyneema,970]
+  - [br3, 4.140, 0.002, dyneema,970]
+  - [br5, 3.580, 0.002, dyneema,970]
+  - [br6, 13.560, 0.002, dyneema,970]
+  - [BRI, 2.360, 0.002, dyneema,970]
+  - [BRII, 2.080, 0.002, dyneema,970]
+  - [BR-main-1, .700, 0.002, dyneema,970]
+  - [M-line, 2.410, 0.002, dyneema,970]
+  # - [S, 1.730, 0.002, dyneema,970] # measured
+  # - [Power Tape, 3.330, 0.002, polyester] # measured
+  - [Steering Tape, 1.530, 0.002, dyneema,970] # trying 0.2m smalller
+  - [Power Tape, 2.900, 0.002, dyneema,970] # trying 0.2m smaller
+
+bridle_connections:
+  # ---------------------------------------------------------------
+  # headers:
+  #   - name: string, line name
+  #   - ci: integer, node id (start)
+  #   - cj: integer, node id (end)
+  #   - ck: integer, third node id (only for pulleys, else omitted or 0)
+  # ---------------------------------------------------------------
+  headers: [name, ci, cj, ck]
+  data:
+    # front lines
+    - [a6,1,25,33] #e.g. this is a pulley
+    - [A5,3,21]
+    - [A3,5,21]
+    - [A2,7,22]
+    - [A1,9,22]
+    - [A1,11,23]
+    - [A2,13,23]
+    - [A3,15,24]
+    - [A5,17,24]
+    - [a6,19,26,35]
+    - [AII,21,25]
+    - [AI,22,25]
+    - [AI,23,26]
+    - [AII,24,26]
+    - [amain,25,0]
+    - [amain,26,0]
+    # rear lines
+    - [a6,1,33,25]
+    - [br6,2,33,36]
+    - [br6,2,36,33]
+    - [br5,4,27]
+    - [br3,6,27]
+    - [br2,8,28]
+    - [br1,10,28]
+    - [br1,12,29]
+    - [br2,14,29]
+    - [br3,16,30]
+    - [br5,18,30]
+    - [a6,19,35,26]
+    - [br6,20,35,37]
+    - [br6,20,37,35]
+    - [BRII,27,31]
+    - [BRI,28,31]
+    - [BRI,29,32]
+    - [BRII,30,32]
+    - [BR-main-1,31,33]
+    - [BR-main-1,32,35]
+    - [M-line,33,36,34]
+    - [M-line,33,34,36]
+    - [M-line,35,34,37]
+    - [M-line,35,37,34]
+    - [Steering Tape,36,0]
+    - [Power Tape,34,0]
+    - [Steering Tape,37,0]
+
+
+

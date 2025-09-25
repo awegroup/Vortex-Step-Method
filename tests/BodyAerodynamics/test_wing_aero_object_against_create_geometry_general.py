@@ -1,9 +1,9 @@
 import numpy as np
 import logging
 from copy import deepcopy
-from VSM.Filament import BoundFilament, SemiInfiniteFilament
-from VSM.WingGeometry import Wing
-from VSM.BodyAerodynamics import BodyAerodynamics
+from VSM.core.Filament import BoundFilament, SemiInfiniteFilament
+from VSM.core.WingGeometry import Wing
+from VSM.core.BodyAerodynamics import BodyAerodynamics
 
 import os
 import sys
@@ -55,6 +55,9 @@ def creating_tests(wing_aero, coord, Uinf, model):
             evaluation_point = panel.control_point
         elif model == "LLT":
             evaluation_point = panel.aerodynamic_center
+        else:
+            raise ValueError("Invalid model")
+        logging.debug(f"evaluation_point: {evaluation_point}")
 
         assert np.allclose(
             evaluation_point, expected_controlpoints[i]["coordinates"], atol=1e-4
@@ -179,9 +182,28 @@ def create_geometry(model="VSM", wing_type="rectangular", plotting=False, N=40):
 
     coord_left_to_right = flip_created_coord_in_pairs(deepcopy(coord))
     wing = Wing(N, "unchanged")
-    for i in range(int(len(coord_left_to_right) / 2)):
+    for idx in range(int(len(coord_left_to_right) / 2)):
+        # Generate inviscid polar data for this section
+        alpha_range = [
+            -10 * np.pi / 180,
+            30 * np.pi / 180,
+            np.pi / 180,
+        ]  # radians, step = 1 deg
+        alpha = np.arange(
+            alpha_range[0], alpha_range[1] + alpha_range[2], alpha_range[2]
+        )
+        polar_data = np.column_stack(
+            [
+                alpha,
+                2 * np.pi * alpha,  # CL
+                np.zeros_like(alpha),  # CD
+                np.zeros_like(alpha),  # CM
+            ]
+        )
         wing.add_section(
-            coord_left_to_right[2 * i], coord_left_to_right[2 * i + 1], ["inviscid"]
+            coord_left_to_right[2 * idx],
+            coord_left_to_right[2 * idx + 1],
+            polar_data,
         )
     wing_aero = BodyAerodynamics([wing])
     wing_aero.va = Uinf
