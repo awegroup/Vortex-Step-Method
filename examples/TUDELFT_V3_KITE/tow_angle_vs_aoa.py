@@ -70,7 +70,7 @@ def main():
 
     ### 7. Plotting the polar curves for different angles of attack and side slip angles
     # and saving in results with literature
-    save_folder = Path(PROJECT_DIR) / "results" / "V3_KITE"
+    save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE"
 
     angle_of_attack_range = np.linspace(-5, 10, 61)
     gamma = None
