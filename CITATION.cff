@@ -14,7 +14,7 @@ version: "0.1.0"
 doi: "10.1111/11111"
 date-released: "2023-01-01"
 license: "MIT"
-url: "https://github.com/ocayon/Vortex-Step-Method"
+url: "https://github.com/awegroup/Vortex-Step-Method"
 references:
   - type: article
     authors:
@@ -25,6 +25,7 @@ references:
         family-names: "Gaunaa"
       - given-names: "Roland"
         family-names: "Schmehl"
+        orcid: "https://orcid.org/0000-0002-4112-841X"
     title: "Fast Aero-Structural Model of a Leading-Edge Inflatable Kite"
     doi: "10.3390/en16073061"
     journal: "Energies"
@@ -41,6 +42,7 @@ preferred-citation:
       family-names: "Gaunaa"
     - given-names: "Roland"
       family-names: "Schmehl"
+      orcid: "https://orcid.org/0000-0002-4112-841X"
   title: "Fast Aero-Structural Model of a Leading-Edge Inflatable Kite"
   doi: "10.3390/en16073061"
   journal: "Energies"
