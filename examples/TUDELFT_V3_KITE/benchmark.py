@@ -95,7 +95,7 @@ def main() -> None:
         ),
     ]
 
-    n_panels = 150
+    n_panels = 25
     spanwise_distribution = "uniform"
     Umag = 10.0
     side_slip = 0.0

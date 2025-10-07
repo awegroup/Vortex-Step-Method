@@ -41,7 +41,7 @@ class BodyAerodynamics:
         compute_circulation_distribution_elliptical_wing: Returns the circulation distribution for an elliptical wing.
         compute_circulation_distribution_cosine: Returns the circulation distribution based on a cosine profile.
         compute_results: Computes aerodynamic forces, moments, and other metrics based on the current state.
-        va_initialize: Initializes the apparent velocity vector (va) and yaw rate.
+        va_initialize: Initializes the apparent velocity vector (va) and body rotation rates.
         update_effective_angle_of_attack_if_VSM: Updates the effective angle of attack for VSM using induced velocities.
         compute_line_aerodynamic_force: Computes the aerodynamic force on a line element (used for bridles).
 
@@ -71,6 +71,7 @@ class BodyAerodynamics:
         self._gamma_distribution = None
         self._alpha_uncorrected = None
         self._alpha_corrected = None
+        self._body_rates = np.zeros(3)
 
     def _build_panels(self):
         """Helper method to build the panel list from the current wing geometry."""
@@ -550,6 +551,10 @@ class BodyAerodynamics:
         return self._va
 
     @property
+    def body_rates(self):
+        return self._body_rates
+
+    @property
     def gamma_distribution(self):
         return self._gamma_distribution
 
@@ -574,38 +579,44 @@ class BodyAerodynamics:
         self._panels = value
 
     @va.setter
-    def va(self, va, yaw_rate: float = 0.0):
+    def va(
+        self,
+        va,
+        yaw_rate: float = 0.0,
+        pitch_rate: float = 0.0,
+        roll_rate: float = 0.0,
+    ):
 
         # # Removing old wake filaments
         # self.panels = Wake.remove_frozen_wake(self.panels)
         if isinstance(va, tuple) and len(va) == 2:
             va, yaw_rate = va
+        elif isinstance(va, tuple) and len(va) == 3:
+            va, yaw_rate, pitch_rate = va
+        elif isinstance(va, tuple) and len(va) == 4:
+            va, yaw_rate, pitch_rate, roll_rate = va
 
         self._va = np.array(va)
+        self._body_rates = np.array([roll_rate, pitch_rate, yaw_rate])
 
-        if len(va) == 3 and yaw_rate == 0.0:
+        if (
+            len(va) == 3
+            and yaw_rate == 0.0
+            and pitch_rate == 0.0
+            and roll_rate == 0.0
+        ):
             va_distribution = np.repeat([va], len(self.panels), axis=0)
         elif len(va) == len(self.panels):
             va_distribution = va
-        elif yaw_rate != 0.0 and len(va) == 3:
-            va_distribution = []
-
-            for wing in self.wings:
-                # Create the spanwise positions array
-                spanwise_positions = np.array(
-                    [panel.control_point[1] for panel in self.panels]
+        elif len(va) == 3:
+            va_distribution = np.repeat([va], len(self.panels), axis=0)
+            if yaw_rate != 0.0 or pitch_rate != 0.0 or roll_rate != 0.0:
+                control_points = np.array(
+                    [panel.control_point for panel in self.panels]
                 )
-
-                for i in range(wing.n_panels):
-                    yaw_rate_apparent_velocity = np.array(
-                        [-yaw_rate * spanwise_positions[i], 0, 0]
-                    )
-
-                    # Append the current wing's velocities to the overall distribution
-                    va_distribution.append(yaw_rate_apparent_velocity + va)
-
-            # Concatenate all wings' distributions into a single array
-            va_distribution = np.vstack(va_distribution)
+                body_rates = np.array([roll_rate, pitch_rate, yaw_rate])
+                rotational_velocity = np.cross(body_rates, control_points)
+                va_distribution = va_distribution + rotational_velocity
 
         else:
             raise ValueError(
@@ -1504,15 +1515,19 @@ class BodyAerodynamics:
         angle_of_attack: float = 6.8,
         side_slip: float = 0.0,
         yaw_rate: float = 0.0,
+        pitch_rate: float = 0.0,
+        roll_rate: float = 0.0,
     ):
         """
-        Initializes the apparent velocity (va) and yaw rate for the WingAero object.
+        Initializes the apparent velocity (va) and body rates for the WingAero object.
 
         Parameters:
         Umag (float): Magnitude of the velocity.
         angle_of_attack (float): Angle of attack in degrees.
         side_slip (float): Sideslip angle in degrees, a minus is added because its defined counter-clockwise.
-        yaw_rate (float): Yaw rate, default is 0.0.
+        yaw_rate (float): Yaw rate about the body z-axis, default is 0.0.
+        pitch_rate (float): Pitch rate about the body y-axis, default is 0.0.
+        roll_rate (float): Roll rate about the body x-axis, default is 0.0.
         """
         # Convert angles to radians
         aoa_rad = np.deg2rad(angle_of_attack)
@@ -1532,7 +1547,7 @@ class BodyAerodynamics:
         )
 
         # Set the va attribute using the setter
-        self.va = (vel_app, yaw_rate)
+        self.va = (vel_app, yaw_rate, pitch_rate, roll_rate)
 
     def update_effective_angle_of_attack_if_VSM(
         self,

@@ -48,7 +48,7 @@ def main():
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
     ### 2. defining settings
-    n_panels = 36
+    n_panels = 100
     spanwise_panel_distribution = "uniform"
     solver_base_version = Solver()
 

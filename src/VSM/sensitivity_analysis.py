@@ -23,6 +23,8 @@ def testing_single_solver_setting(
     angle_of_attack,
     side_slip,
     yaw_rate,
+    pitch_rate,
+    roll_rate,
     literature_path_list_alpha,
     literature_label_list_alpha,
     literature_path_list_beta,
@@ -72,6 +74,8 @@ def testing_single_solver_setting(
         angle_of_attack=angle_of_attack,
         side_slip=side_slip,
         yaw_rate=yaw_rate,
+        pitch_rate=pitch_rate,
+        roll_rate=roll_rate,
         Umag=Umag,
         title=f"alphasweep_{parameter}",
         data_type=".pdf",
@@ -90,6 +94,8 @@ def testing_single_solver_setting(
         angle_of_attack=angle_of_attack,
         side_slip=side_slip,
         yaw_rate=yaw_rate,
+        pitch_rate=pitch_rate,
+        roll_rate=roll_rate,
         Umag=Umag,
         title=f"betasweep_{parameter}",
         data_type=".pdf",
@@ -105,7 +111,14 @@ def testing_single_solver_setting(
             run_time_list = []
             for solver, body_aero in zip(solver_list, body_aero_list):
                 print(f"\n{parameter}={getattr(solver, parameter)}")
-                body_aero.va_initialize(Umag, alpha, side_slip, yaw_rate)
+                body_aero.va_initialize(
+                    Umag,
+                    alpha,
+                    side_slip,
+                    yaw_rate,
+                    pitch_rate,
+                    roll_rate,
+                )
                 begin_time = time.time()
                 results_list.append(solver.solve(body_aero))
                 run_time_list.append(time.time() - begin_time)
@@ -120,6 +133,8 @@ def testing_single_solver_setting(
                 Umag=Umag,
                 side_slip=side_slip,
                 yaw_rate=yaw_rate,
+                pitch_rate=pitch_rate,
+                roll_rate=roll_rate,
                 solver_list=solver_list_for_plot,
                 body_aero_list=body_aero_list_for_plot,
                 label_list=label_list,
@@ -148,6 +163,8 @@ def testing_n_panels_effect(
     angle_of_attack,
     side_slip,
     yaw_rate,
+    pitch_rate,
+    roll_rate,
     literature_path_list_alpha,
     literature_label_list_alpha,
     literature_path_list_beta,
@@ -199,6 +216,8 @@ def testing_n_panels_effect(
         angle_of_attack=angle_of_attack,
         side_slip=side_slip,
         yaw_rate=yaw_rate,
+        pitch_rate=pitch_rate,
+        roll_rate=roll_rate,
         Umag=Umag,
         title="alphasweep_n_panels",
         data_type=".pdf",
@@ -218,6 +237,8 @@ def testing_n_panels_effect(
         angle_of_attack=angle_of_attack,
         side_slip=side_slip,
         yaw_rate=yaw_rate,
+        pitch_rate=pitch_rate,
+        roll_rate=roll_rate,
         Umag=Umag,
         title="betasweep_n_panels",
         data_type=".pdf",
@@ -236,7 +257,14 @@ def testing_n_panels_effect(
             for i, body_aero in enumerate(body_aero_list):
                 print(f"\nn_panels={n_panels_list[i]}")
 
-                body_aero.va_initialize(Umag, alpha, side_slip, yaw_rate)
+                body_aero.va_initialize(
+                    Umag,
+                    alpha,
+                    side_slip,
+                    yaw_rate,
+                    pitch_rate,
+                    roll_rate,
+                )
                 begin_time = time.time()
                 results_list.append(solver.solve(body_aero))
                 run_time_list.append(time.time() - begin_time)
@@ -252,6 +280,8 @@ def testing_n_panels_effect(
                 Umag=Umag,
                 side_slip=side_slip,
                 yaw_rate=yaw_rate,
+                pitch_rate=pitch_rate,
+                roll_rate=roll_rate,
                 solver_list=solver_list_for_plot,
                 body_aero_list=body_aero_list_for_plot,
                 label_list=label_list,
@@ -278,6 +308,8 @@ def testing_all_solver_settings(
     angle_of_attack=5,
     side_slip=0,
     yaw_rate=0,
+    pitch_rate=0,
+    roll_rate=0,
     aerodynamic_model_type_list=None,
     allowed_error_list=None,
     core_radius_fraction_list=None,
@@ -348,6 +380,8 @@ def testing_all_solver_settings(
                 angle_of_attack,
                 side_slip,
                 yaw_rate,
+                pitch_rate,
+                roll_rate,
                 literature_path_list_alpha,
                 literature_label_list_alpha,
                 literature_path_list_beta,
@@ -367,6 +401,8 @@ def testing_all_solver_settings(
                 angle_of_attack,
                 side_slip,
                 yaw_rate,
+                pitch_rate,
+                roll_rate,
                 literature_path_list_alpha,
                 literature_label_list_alpha,
                 literature_path_list_beta,
