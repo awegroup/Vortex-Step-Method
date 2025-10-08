@@ -19,7 +19,6 @@ from VSM.core.Solver import Solver
 def compute_trim_angle(
     body_aero: BodyAerodynamics,
     solver: Solver,
-    alpha_initial_guess: float,
     side_slip: float = 0.0,
     velocity_magnitude: float = 10.0,
     roll_rate: float = 0.0,
@@ -31,6 +30,7 @@ def compute_trim_angle(
     fine_tolerance: float = 1e-3,
     derivative_step: float = 0.1,
     max_bisection_iter: int = 40,
+    reference_point: np.ndarray = None,
 ) -> List[MutableMapping[str, float]]:
     """Compute trim angles and verify pitch stability.
 
@@ -46,9 +46,6 @@ def compute_trim_angle(
         Instantiated aerodynamic model that will be updated in-place.
     solver : Solver
         Solver instance configured with the desired reference point.
-    alpha_initial_guess : float
-        Initial guess for angle of attack (degrees). Used as the center
-        of the search range if not explicitly bounded.
     side_slip : float, optional
         Sideslip angle (degrees). Default is 0.0.
     velocity_magnitude : float, optional
@@ -70,6 +67,9 @@ def compute_trim_angle(
         angle. Must be positive.
     max_bisection_iter : int, optional
         Maximum number of bisection iterations per bracket.
+    reference_point : np.ndarray, optional
+        Reference point for moment calculation [x, y, z]. If None, defaults to
+        solver.reference_point.
 
     Returns
     -------
@@ -91,6 +91,13 @@ def compute_trim_angle(
     if alpha_max <= alpha_min:
         raise ValueError("alpha_max must be greater than alpha_min")
 
+    # Use reference_point if provided, otherwise use solver.reference_point
+    if reference_point is None:
+        if hasattr(solver, "reference_point"):
+            reference_point = np.array(solver.reference_point)
+        else:
+            reference_point = np.array([0.0, 0.0, 0.0])
+
     alpha_coarse = np.arange(alpha_min, alpha_max + coarse_step, coarse_step)
 
     def _extract_cmy(results: Mapping[str, float]) -> float:
@@ -107,6 +114,7 @@ def compute_trim_angle(
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,
             roll_rate=roll_rate,
+            reference_point=reference_point,
         )
         solved = solver.solve(body_aero)
         return _extract_cmy(solved)
@@ -120,10 +128,7 @@ def compute_trim_angle(
     # Perform coarse sweep
     cmy_coarse: List[float] = []
     for alpha in alpha_coarse:
-        try:
-            cmy_value = _evaluate_cmy(float(alpha))
-        except Exception:
-            cmy_value = float("nan")
+        cmy_value = _evaluate_cmy(float(alpha))
         cmy_coarse.append(cmy_value)
 
     cmy_coarse_array = np.asarray(cmy_coarse)
@@ -134,7 +139,11 @@ def compute_trim_angle(
     results: List[MutableMapping[str, float]] = []
 
     if valid_cmy.size < 2:
-        return results
+        raise ValueError(
+            f"Insufficient valid CMy values in coarse sweep. "
+            f"Got {valid_cmy.size} valid points out of {len(alpha_coarse)} angles tested. "
+            f"Check that the aerodynamic solver is working correctly."
+        )
 
     # Look for sign changes
     sign_changes = np.where(np.diff(np.sign(valid_cmy)))[0]
@@ -144,15 +153,12 @@ def compute_trim_angle(
         closest_idx = int(np.argmin(np.abs(valid_cmy)))
         trim_alpha = float(valid_alphas[closest_idx])
         derivative = _compute_derivative(trim_alpha, derivative_step)
-        results.append(
-            {
-                "trim_angle": trim_alpha,
-                "dCMy_dalpha": derivative,
-                "stable": derivative < 0.0,
-                "notes": "closest to zero",
-            }
-        )
-        return results
+        return {
+            "trim_angle": trim_alpha,
+            "dCMy_dalpha": derivative,
+            "is_stable": bool(derivative < 0.0),
+            "notes": "closest to zero",
+        }
 
     # Refine each sign change with bisection
     for idx in sign_changes:
@@ -200,6 +206,11 @@ def compute_trim_angle(
     for idx, res in enumerate(results):
         if res["is_stable"]:
             idx_list.append(idx)
+
+    if len(idx_list) == 0:
+        raise ValueError(
+            "No stable trim point found. All trim candidates have positive dCMy/dalpha (unstable)."
+        )
 
     if len(idx_list) > 1:
         raise ValueError("Multiple stable trim points found. Not supported.")

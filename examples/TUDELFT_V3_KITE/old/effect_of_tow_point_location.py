@@ -60,10 +60,9 @@ def main():
 
     ### 4. Setting va
     Umag = 20
-    yaw_rate = 0
-    body_aero_polar_with_bridles.va_initialize(Umag, 8, 5, yaw_rate)
+    body_aero_polar_with_bridles.va_initialize(Umag, 8, 5)
 
-    x_KCU = np.arange(-1.25, 0.5, 0.25)
+    x_tow_point = np.arange(-1.25, 0.5, 0.25)
     alpha_range = np.linspace(0, 20, 11)  # Angle of attack sweep
     ss_range = np.linspace(0, 10, 11)  # Sideslip sweep
     # Sweep over angle of attack for each reference point and collect all curves
@@ -71,13 +70,13 @@ def main():
     cmx_alpha_all = []
     cmy_alpha_all = []
     trim_aoa_all = []
-    for x in x_KCU:
+    for x in x_tow_point:
         solver = Solver(reference_point=[x, 0, 0])
         cmz_alpha = []
         cmx_alpha = []
         cmy_alpha = []
         for alpha in alpha_range:
-            body_aero_polar_with_bridles.va_initialize(Umag, alpha, 0, yaw_rate)
+            body_aero_polar_with_bridles.va_initialize(Umag, alpha, 0)
             results = solver.solve(body_aero_polar_with_bridles)
             cmz_alpha.append(results.get("cmz", np.nan))
             cmx_alpha.append(results.get("cmx", np.nan))
@@ -105,10 +104,10 @@ def main():
 
     # Triple plot for angle of attack
     fig, axs = plt.subplots(1, 3, figsize=(18, 5), sharex=True)
-    for i, x in enumerate(x_KCU):
-        axs[0].plot(alpha_range, cmz_alpha_all[i], label=f"x_KCU={x:.2f}")
-        axs[1].plot(alpha_range, cmx_alpha_all[i], label=f"x_KCU={x:.2f}")
-        axs[2].plot(alpha_range, cmy_alpha_all[i], label=f"x_KCU={x:.2f}")
+    for i, x in enumerate(x_tow_point):
+        axs[0].plot(alpha_range, cmz_alpha_all[i], label=f"x_tow_point={x:.2f}")
+        axs[1].plot(alpha_range, cmx_alpha_all[i], label=f"x_tow_point={x:.2f}")
+        axs[2].plot(alpha_range, cmy_alpha_all[i], label=f"x_tow_point={x:.2f}")
     axs[0].set_xlabel("Angle of Attack (deg)")
     axs[0].set_ylabel("Yaw Moment Coefficient (cmz)")
     axs[0].set_title("cmz vs Angle of Attack")
@@ -132,15 +131,13 @@ def main():
     cmz_ss_all = []
     cmx_ss_all = []
     cmy_ss_all = []
-    for i, x in enumerate(x_KCU):
+    for i, x in enumerate(x_tow_point):
         solver = Solver(reference_point=[x, 0, 0])
         cmz_ss = []
         cmx_ss = []
         cmy_ss = []
         for ss in ss_range:
-            body_aero_polar_with_bridles.va_initialize(
-                Umag, trim_aoa_all[i], ss, yaw_rate
-            )
+            body_aero_polar_with_bridles.va_initialize(Umag, trim_aoa_all[i], ss)
             results = solver.solve(body_aero_polar_with_bridles)
             cmz_ss.append(results.get("cmz", np.nan))
             cmx_ss.append(results.get("cmx", np.nan))
@@ -151,10 +148,10 @@ def main():
 
     # Triple plot for sideslip
     fig, axs = plt.subplots(1, 3, figsize=(18, 5), sharex=True)
-    for i, x in enumerate(x_KCU):
-        axs[0].plot(ss_range, cmz_ss_all[i], label=f"x_KCU={x:.2f}")
-        axs[1].plot(ss_range, cmx_ss_all[i], label=f"x_KCU={x:.2f}")
-        axs[2].plot(ss_range, cmy_ss_all[i], label=f"x_KCU={x:.2f}")
+    for i, x in enumerate(x_tow_point):
+        axs[0].plot(ss_range, cmz_ss_all[i], label=f"x_tow_point={x:.2f}")
+        axs[1].plot(ss_range, cmx_ss_all[i], label=f"x_tow_point={x:.2f}")
+        axs[2].plot(ss_range, cmy_ss_all[i], label=f"x_tow_point={x:.2f}")
     axs[0].set_xlabel("Sideslip Angle (deg)")
     axs[0].set_ylabel("Yaw Moment Coefficient (cmz)")
     axs[0].set_title("cmz vs Sideslip Angle")

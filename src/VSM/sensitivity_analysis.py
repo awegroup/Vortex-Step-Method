@@ -186,7 +186,6 @@ def testing_n_panels_effect(
             n_panels=n_panels,
             file_path=file_path,
             spanwise_panel_distribution=spanwise_panel_distribution,
-            is_with_bridles=False,
         )
         body_aero_list.append(body_aero)
         label_list.append(f"n_panels = {n_panels}")

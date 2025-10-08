@@ -115,209 +115,6 @@ class BodyAerodynamics:
     ####################
     ## CLASS METHODS ###
     ####################
-    # @classmethod
-    # def from_file(
-    #     cls,
-    #     file_path: str,
-    #     n_panels: int,
-    #     spanwise_panel_distribution: str,
-    #     is_with_corrected_polar: bool = False,
-    #     polar_data_dir: str = None,
-    #     is_with_bridles: bool = False,
-    #     bridle_data_path: str = None,
-    #     is_half_wing: bool = False,
-    #     is_neuralfoil: bool = False,
-    #     nf_airfoil_data_dir: str = None,
-    #     nf_reynolds_number: float = None,
-    #     nf_alpha_range: np.ndarray = [-10, 25, 26],
-    #     nf_xtr_lower: float = 0.01,
-    #     nf_xtr_upper: float = 0.01,
-    #     nf_n_crit: float = 9,
-    #     nf_is_with_save_polar: bool = False,
-    # ):
-    #     """
-    #     Instantiate a BodyAerodynamics object from wing geometry data and optional aerodynamic polar or bridle data.
-
-    #     This class method constructs a Wing instance and populates it with sections using data from a CSV
-    #     file that defines wing geometry. Optionally, it can load pre-computed corrected polars or run NeuralFoil
-    #     to generate polar data. Bridles can also be incorporated if required.
-
-    #     ## Args:
-    #         file_path (str): Path to the wing geometry CSV file. Required columns:
-    #         • LE_x, LE_y, LE_z: Leading Edge coordinates.
-    #         • TE_x, TE_y, TE_z: Trailing Edge coordinates.
-
-    #         ### --- Breukels Correlation (if used) ---
-    #         - d_tube: Tube diameter (required).
-    #         - camber (or y_camber): Camber information (required).
-
-    #         ### --- Wing Configuration ---
-    #         - is_half_wing (bool, optional): If True, the input represents half a wing. The data will be mirrored
-    #           (excluding the mid-span slice) to form a full wing.
-
-    #         ### --- Panel Configuration ---
-    #         - n_panels (int): Number of panels to discretize the wing.
-    #         - spanwise_panel_distribution (str): Method for distributing panels along the wing span
-    #           (e.g., uniform, cosine, etc.).
-
-    #         ### --- Corrected Polar Data ---
-    #         - is_with_corrected_polar (bool): If True, uses pre-computed corrected polar data from CSV files.
-    #         - polar_data_dir (str): Directory containing corrected polar CSV files, each with columns:
-    #           alpha, cl, cd, cm (with alpha in radians).
-
-    #         ### --- NeuralFoil Polar Data ---
-    #         - is_neuralfoil (bool): If True, computes airfoil polar data using NeuralFoil.
-    #         - nf_airfoil_data_dir (str): Directory containing airfoil .dat files with (x, y) columns, orderd like
-    #             • 1.dat: mid-span slice
-    #             • 2.dat: first slice from the root
-    #             • ...
-    #             • n.dat: last 'tip' slice
-
-    #         - nf_reynolds_number (float): Reynolds Number at which NeuralFoil should run.
-    #         - nf_alpha_range (np.ndarray): Array with the minimum, maximum, and number of alpha values (in degrees).
-    #         - nf_xtr_lower (float): Lower bound for transition location (0 means forced, 1 is fully free).
-    #         - nf_xtr_upper (float): Upper bound for transition location.
-    #         - nf_n_crit (float): Critical amplification factor for turbulent transition.
-    #         Guidelines:
-    #             • Sailplane:           12–14
-    #             • Motorglider:         11–13
-    #             • Clean wind tunnel:   10–12
-    #             • Average wind tunnel: 9   (standard "e^9 method")
-    #             • Dirty wind tunnel:   4–8
-    #         - nf_is_with_save_polar (bool): If True, saves the generated polar data to a CSV file in the specified directory.
-
-    #         ### --- Bridle Data ---
-    #         - is_with_bridles (bool, optional): If True, reads an additional CSV file for bridle information.
-    #         - bridle_data_path (str): Path to the bridle data CSV file. Required columns:
-    #         • p1_x, p1_y, p1_z: First bridle point.
-    #         • p2_x, p2_y, p2_z: Second bridle point.
-    #         • diameter: Cable diameter.
-
-    #     ## Returns:
-    #         BodyAerodynamics: An instance built using the provided wing geometry and (if applicable) the aerodynamic
-    #         polar or bridle data.
-
-    #     ## Raises:
-    #         ValueError: If required data for any enabled configuration (corrected polar, NeuralFoil, or Breukels) is missing.
-    #     """
-    #     # Initialize wing
-    #     wing_instance = Wing(
-    #         n_panels=n_panels, spanwise_panel_distribution=spanwise_panel_distribution
-    #     )
-    #     df = pd.read_csv(file_path)
-
-    #     if is_half_wing:
-    #         df_orderded_opposite = df.copy()
-    #         df_orderded_opposite = df_orderded_opposite.drop(
-    #             df_orderded_opposite.index[-1]
-    #         )
-    #         df_orderded_opposite = df_orderded_opposite[::-1]
-    #         df_orderded_opposite["LE_y"] = -df_orderded_opposite["LE_y"]
-    #         df_orderded_opposite["TE_y"] = -df_orderded_opposite["TE_y"]
-    #         df = pd.concat([df, df_orderded_opposite])
-
-    #     for i, row in df.iterrows():
-    #         LE = np.array([row["LE_x"], row["LE_y"], row["LE_z"]])
-    #         TE = np.array([row["TE_x"], row["TE_y"], row["TE_z"]])
-
-    #         # --- Build config for AirfoilAerodynamics ---
-    #         if is_with_corrected_polar:
-    #             config = {
-    #                 "source": "csv",
-    #                 "file_path": str(Path(polar_data_dir) / f"{i}.csv"),
-    #             }
-    #         elif is_neuralfoil:
-    #             if nf_airfoil_data_dir is None:
-    #                 raise ValueError(
-    #                     "airfoil_data_dir must be set if is_neuralfoil is True"
-    #                 )
-    #             if nf_reynolds_number is None:
-    #                 raise ValueError(
-    #                     "Re_for_neuralfoil must be set if is_neuralfoil is True"
-    #                 )
-    #             n_files_in_airfoil_data_dir = len(
-    #                 [
-    #                     f
-    #                     for f in Path(nf_airfoil_data_dir).iterdir()
-    #                     if f.is_file() and f.suffix == ".dat"
-    #                 ]
-    #             )
-    #             idx = n_files_in_airfoil_data_dir - i
-    #             airfoil_dat_file_path = Path(nf_airfoil_data_dir) / f"{idx}.dat"
-    #             alpha_range = np.linspace(
-    #                 nf_alpha_range[0],
-    #                 nf_alpha_range[1],
-    #                 nf_alpha_range[2],
-    #             )
-    #             config = {
-    #                 "source": "neuralfoil",
-    #                 "nf_args": {
-    #                     "filename": str(airfoil_dat_file_path),
-    #                     "alpha": alpha_range,
-    #                     "Re": nf_reynolds_number,
-    #                     "model_size": "xxxlarge",
-    #                     "xtr_lower": nf_xtr_lower,
-    #                     "xtr_upper": nf_xtr_upper,
-    #                     "n_crit": nf_n_crit,
-    #                 },
-    #             }
-    #         else:
-    #             # Default to Breukels
-    #             if pd.isnull(row.get("d_tube", None)):
-    #                 raise ValueError(
-    #                     "d_tube must be provided as column in wing_geometry if using Breukels Correlation"
-    #                 )
-    #             if pd.isnull(row.get("y_camber", None)):
-    #                 raise ValueError(
-    #                     "y_camber must be provided as column in wing_geometry if using Breukels Correlation"
-    #                 )
-    #             config = {
-    #                 "source": "breukels",
-    #                 "breukels_args": {
-    #                     "d_tube": row["d_tube"],
-    #                     "y_camber": row["y_camber"],
-    #                     # Optionally add alpha range here if needed
-    #                 },
-    #             }
-
-    #         # --- Generate polar using AirfoilAerodynamics ---
-    #         aero = AirfoilAerodynamics.from_config(config)
-    #         polar_data = aero.to_polar_array()
-
-    #         # Optionally save NeuralFoil polars if requested
-    #         if is_neuralfoil and nf_is_with_save_polar:
-    #             save_path = (
-    #                 Path(nf_airfoil_data_dir)
-    #                 / "neuralfoil_computed_2D_polars"
-    #                 / f"{idx}.csv"
-    #             )
-    #             df_to_save = pd.DataFrame(
-    #                 {
-    #                     "alpha": np.rad2deg(aero.alpha),
-    #                     "CL": aero.CL,
-    #                     "CD": aero.CD,
-    #                     "CM": aero.CM,
-    #                 }
-    #             )
-    #             if not save_path.parent.exists():
-    #                 save_path.parent.mkdir(parents=True, exist_ok=True)
-    #             df_to_save.to_csv(save_path, index=False)
-
-    #         wing_instance.add_section(LE, TE, polar_data)
-
-    #     if is_with_bridles:
-    #         df_bridle = pd.read_csv(bridle_data_path)
-    #         bridle_lines = [
-    #             [
-    #                 np.array([row["p1_x"], row["p1_y"], row["p1_z"]]),
-    #                 np.array([row["p2_x"], row["p2_y"], row["p2_z"]]),
-    #                 row["diameter"],
-    #             ]
-    #             for _, row in df_bridle.iterrows()
-    #         ]
-    #         return cls([wing_instance], bridle_lines)
-    #     else:
-    #         return cls([wing_instance])
 
     @classmethod
     def instantiate(
@@ -562,10 +359,6 @@ class BodyAerodynamics:
     def wings(self):
         return self._wings
 
-    # @property
-    # def stall_angle_list(self):
-    #     return self._stall_angle_list
-
     ###########################
     ## SETTER FUNCTIONS
     ###########################
@@ -581,52 +374,63 @@ class BodyAerodynamics:
     @va.setter
     def va(
         self,
-        va,
-        yaw_rate: float = 0.0,
-        pitch_rate: float = 0.0,
+        va: np.ndarray,
+        *,  # the asterisk forces the following args to be keyword-only
         roll_rate: float = 0.0,
-    ):
+        pitch_rate: float = 0.0,
+        yaw_rate: float = 0.0,
+        reference_point: np.ndarray | None = None,
+    ) -> None:
+        """
+        Set the apparent velocity distribution and optional rigid-body rates.
 
-        # # Removing old wake filaments
-        # self.panels = Wake.remove_frozen_wake(self.panels)
-        if isinstance(va, tuple) and len(va) == 2:
-            va, yaw_rate = va
-        elif isinstance(va, tuple) and len(va) == 3:
-            va, yaw_rate, pitch_rate = va
-        elif isinstance(va, tuple) and len(va) == 4:
-            va, yaw_rate, pitch_rate, roll_rate = va
+        Parameters
+        ----------
+        va : array-like
+            - shape (3,) for a uniform freestream vector, or
+            - shape (n_panels, 3) for a per-panel apparent velocity.
+        roll_rate, pitch_rate, yaw_rate : float
+            Body rates in rad/s (p, q, r).
+        reference_point : array-like, optional
+            3-vector r0 for rotational inflow. Default is (0,0,0).
+            v_rot(r) = omega x (r - r0).
+        """
+        # normalize and store the canonical 'va' (see note below)
+        va = np.asarray(va, dtype=float)
+        self._va = va
 
-        self._va = np.array(va)
-        self._body_rates = np.array([roll_rate, pitch_rate, yaw_rate])
-
-        if (
-            len(va) == 3
-            and yaw_rate == 0.0
-            and pitch_rate == 0.0
-            and roll_rate == 0.0
-        ):
-            va_distribution = np.repeat([va], len(self.panels), axis=0)
-        elif len(va) == len(self.panels):
-            va_distribution = va
-        elif len(va) == 3:
-            va_distribution = np.repeat([va], len(self.panels), axis=0)
-            if yaw_rate != 0.0 or pitch_rate != 0.0 or roll_rate != 0.0:
-                control_points = np.array(
-                    [panel.control_point for panel in self.panels]
-                )
-                body_rates = np.array([roll_rate, pitch_rate, yaw_rate])
-                rotational_velocity = np.cross(body_rates, control_points)
-                va_distribution = va_distribution + rotational_velocity
-
+        n = self.n_panels
+        if va.shape == (3,):
+            va_distribution = np.tile(va, (n, 1))
+        elif va.shape == (n, 3):
+            va_distribution = va.copy()
         else:
-            raise ValueError(
-                f"Invalid va distribution, len(va) :{len(va)} != len(self.panels):{len(self.panels)}"
+            raise ValueError(f"'va' must be shape (3,) or ({n}, 3); got {va.shape}")
+
+        # store body rates for introspection
+        self._body_rates = np.array([roll_rate, pitch_rate, yaw_rate], dtype=float)
+
+        # add rotational inflow only if any rate is nonzero
+        if (roll_rate != 0.0) or (pitch_rate != 0.0) or (yaw_rate != 0.0):
+            r0 = (
+                np.zeros(3, dtype=float)
+                if reference_point is None
+                else np.asarray(reference_point, dtype=float)
             )
-        # Update the va attribute of each panel
+            if r0.shape != (3,):
+                raise ValueError(f"reference_point must be shape (3,), got {r0.shape}")
+
+            control_points = np.array(
+                [p.control_point for p in self.panels], dtype=float
+            )
+            # v_rot = [p,q,r] x (r - r0)
+            va_distribution += np.cross(self._body_rates, control_points - r0)
+
+        # push to panels
         for i, panel in enumerate(self.panels):
             panel.va = va_distribution[i]
 
-        # Add the frozen wake elements based on the va distribution
+        # update wake using the new distribution
         self.panels = Wake.frozen_wake(va_distribution, self.panels)
 
     ###########################
@@ -1517,6 +1321,7 @@ class BodyAerodynamics:
         yaw_rate: float = 0.0,
         pitch_rate: float = 0.0,
         roll_rate: float = 0.0,
+        reference_point: np.ndarray = None,
     ):
         """
         Initializes the apparent velocity (va) and body rates for the WingAero object.
@@ -1528,26 +1333,32 @@ class BodyAerodynamics:
         yaw_rate (float): Yaw rate about the body z-axis, default is 0.0.
         pitch_rate (float): Pitch rate about the body y-axis, default is 0.0.
         roll_rate (float): Roll rate about the body x-axis, default is 0.0.
+        reference_point (np.ndarray): Reference point for moment calculation [x, y, z], default is None (uses [0, 0, 0]).
         """
         # Convert angles to radians
         aoa_rad = np.deg2rad(angle_of_attack)
         # a (-) is added because its defined counter-clockwise
         side_slip_rad = -np.deg2rad(side_slip)
 
-        # Calculate apparent velocity vector
-        vel_app = (
-            np.array(
-                [
-                    np.cos(aoa_rad) * np.cos(side_slip_rad),
-                    np.sin(side_slip_rad),
-                    np.sin(aoa_rad),
-                ]
-            )
-            * Umag
+        # Set the va attribute using the setter with keyword arguments
+        # The va setter requires keyword-only arguments after the va parameter
+        type(self).va.fset(
+            self,
+            va=(
+                np.array(
+                    [
+                        np.cos(aoa_rad) * np.cos(side_slip_rad),
+                        np.sin(side_slip_rad),
+                        np.sin(aoa_rad),
+                    ]
+                )
+                * Umag
+            ),
+            roll_rate=roll_rate,
+            pitch_rate=pitch_rate,
+            yaw_rate=yaw_rate,
+            reference_point=reference_point,
         )
-
-        # Set the va attribute using the setter
-        self.va = (vel_app, yaw_rate, pitch_rate, roll_rate)
 
     def update_effective_angle_of_attack_if_VSM(
         self,

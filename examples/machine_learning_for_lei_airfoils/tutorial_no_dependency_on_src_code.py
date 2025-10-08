@@ -29,6 +29,7 @@ from utils_masure_regression_lei_parametric import (
 
 # In-memory cache of loaded models (per Reynolds)
 _MASURE_MODEL_CACHE = {}
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 
 
 def _patch_sklearn_compatibility(model):
@@ -196,7 +197,7 @@ def main():
     # -------------------------
     # User-configurable inputs
     # -------------------------
-    ml_models_dir = "data/ml_models"  # where ET_re*.pkl live
+    ml_models_dir = Path(PROJECT_DIR) / "data" / "ml_models"  # where ET_re*.pkl live
     Re = 1e6  # choose one of: 1e6, 5e6, 2e7
     alpha_range = [-10, 25, 1]  # [deg_min, deg_max, step]
 
