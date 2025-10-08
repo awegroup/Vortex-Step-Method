@@ -4,6 +4,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+
+## [2.0.0] - 08-10-2025
+
+### ⚠️ Breaking Changes
+
+#### API Changes in `BodyAerodynamics`
+
+**1. `va.setter` now requires keyword-only arguments:**
+
+The velocity setter has been completely redesigned to properly handle body angular rates and reference points. All arguments after `va` are now **keyword-only**.
+
+**Old usage (v1.1.0):**
+```python
+# Setting velocity with yaw rate (tuple format)
+body_aero.va = (vel_app, yaw_rate)
+
+# Or without yaw rate
+body_aero.va = vel_app
+```
+
+**New usage (v2.0.0+):**
+```python
+# Basic velocity setting (no body rates)
+body_aero.va = vel_app
+
+# With body rates (keyword arguments required)
+body_aero.va = vel_app, roll_rate=p, pitch_rate=q, yaw_rate=r
+
+# With custom reference point for rotational velocity
+body_aero.va = vel_app, yaw_rate=r, reference_point=np.array([x, y, z])
+```
+
+**Migration guide:**
+- Instead of setting it directly using `body_aero.va`, you can instead use `va_initialize()` (see below)
+
+- If you do want to directly set it, you could should write for full control over body rates:
+  ```python
+  body_aero.va = vel_app, roll_rate=p, pitch_rate=q, yaw_rate=r, reference_point=ref_pt
+  ```
+
+**2. `va_initialize()` signature expanded:**
+
+The initialization method now accepts body angular rates and reference point.
+
+**Old signature (v1.1.0):**
+```python
+body_aero.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate=0.0)
+```
+
+**New signature (v2.0.0+):**
+```python
+body_aero.va_initialize(
+    Umag, 
+    angle_of_attack, 
+    side_slip, 
+    pitch_rate=0.0,      # NEW
+    roll_rate=0.0,       # NEW  
+    reference_point=None # NEW
+)
+```
+
+**Migration guide:**
+- The `yaw_rate` parameter has been **removed**
+- Body rates are now specified via `pitch_rate`, `roll_rate` keywords
+- If you need yaw rate, use `pitch_rate` parameter (body-fixed z-axis)
+- Most existing code will work without changes if you weren't using `yaw_rate`
+- If you were using `yaw_rate`, replace with appropriate body rate:
+  ```python
+  # Old
+  body_aero.va_initialize(Umag, alpha, beta, yaw_rate=0.5)
+  
+  # New (yaw is rotation about body z-axis = pitch_rate)
+  body_aero.va_initialize(Umag, alpha, beta, pitch_rate=0.5)
+  ```
+
+**3. Rotational velocity calculation changed:**
+
+The method for computing rotational velocity contributions has been fundamentally updated:
+
+- **Old behavior:** Simple uniform yaw rate applied
+- **New behavior:** Proper rotational velocity field: `v_rot = omega × (r - r_ref)`
+  - Accounts for all three body angular rates (roll, pitch, yaw)
+  - Reference point can be specified (defaults to panel centroids)
+  - Physically accurate velocity field due to body rotation
+
+**Impact:**
+- Results involving body angular rates will differ from v1.1.0
+- New results are physically more accurate
+- If comparing with v1.1.0 results, expect differences in cases with non-zero angular rates
+
+**4. New property: `_body_rates`**
+
+Body angular rates are now stored and accessible via `_body_rates` property:
+```python
+p, q, r = body_aero._body_rates  # [roll_rate, pitch_rate, yaw_rate]
+```
+
+### Added
+
+#### New Modules
+
+**1. `stability_derivatives.py`**
+- Compute rigid-body aerodynamic stability derivatives
+- Function: `compute_rigid_body_stability_derivatives()`
+- Supports derivatives w.r.t. angle of attack (α), sideslip (β), and body rates (p, q, r)
+- Optional non-dimensionalization of rate derivatives
+- Uses central finite differences for accuracy
+- See `docs/StabilityDerivatives.md` for detailed documentation
+
+**2. `trim_angle.py`**
+- Find trim angle of attack where pitching moment equals zero
+- Function: `compute_trim_angle()`
+- Two-phase algorithm: coarse sweep + bisection refinement
+- Automatic stability verification
+- Configurable convergence tolerances
+- See `docs/TrimAngle.md` for detailed documentation
+
+#### New Documentation
+- `docs/StabilityDerivatives.md` - Comprehensive guide to stability derivative computation
+- `docs/TrimAngle.md` - Guide to trim angle finding with examples
+- `docs/README.md` - Updated documentation index with quick-start guide
+- Enhanced main `README.md` with Quick Start, Key Features, and Troubleshooting sections
+
+#### New Examples
+- `examples/TUDELFT_V3_KITE/tow_angle_geometry.py` - Visualize effect of tow angle on kite geometry
+- `examples/TUDELFT_V3_KITE/tow_point_location_parametric_study.py` - Study tow point location effects
+- `examples/TUDELFT_V3_KITE/kite_stability_dynamics.py` - Demonstrate stability derivative computation
+
+### Fixed
+- Projected area calculation now uses correct trapezoidal integration method
+- Reference point handling in rotational velocity calculations
+
+
 ## [1.1.0] - 2025-09-26
 
 ### ⚠️ Breaking Changes
