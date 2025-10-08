@@ -30,7 +30,7 @@ For detailed documentation, please refer to the following resources.
 ## Installation Instructions
 1. Clone the repository:
     ```bash
-    git clone https://github.com/ocayon/Vortex-Step-Method
+    git clone https://github.com/awegroup/Vortex-Step-Method
     ```
 
 2. Navigate to the repository folder:
@@ -115,11 +115,6 @@ Another tutorial is present under `examples/TUDELFT_V3_LEI_KITE/tutorial.py` whe
 
 ## Contributing Guide
 Please report issues and create pull requests using the URL:
-```
-https://github.com/ocayon/Vortex-Step-Method/
-```
-
-This is required because you cannot/should not do it using the URL
 ```
 https://github.com/awegroup/Vortex-Step-Method
 ```
