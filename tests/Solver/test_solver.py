@@ -8,6 +8,7 @@ from pathlib import Path
 # Go back to root folder
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, root_path)
+sys.path.insert(0, os.path.join(root_path, "src"))
 
 from VSM.core.Solver import Solver
 from VSM.core.BodyAerodynamics import BodyAerodynamics
@@ -144,6 +145,28 @@ def test_solver_with_yaw_rate(solver, body_aero):
     # Should still converge with yaw rate
     assert results["cl"] is not None
     assert not np.isnan(results["cl"])
+
+
+def test_body_rates_affect_panel_velocity(body_aero):
+    """Rotational rates should induce the expected velocity field."""
+    yaw_rate = 0.3
+    pitch_rate = -0.2
+    roll_rate = 0.1
+    body_aero.va_initialize(
+        Umag=0.0,
+        angle_of_attack=0.0,
+        side_slip=0.0,
+        yaw_rate=yaw_rate,
+        pitch_rate=pitch_rate,
+        roll_rate=roll_rate,
+    )
+
+    expected_rates = np.array([roll_rate, pitch_rate, yaw_rate])
+    assert np.allclose(body_aero.body_rates, expected_rates)
+
+    for panel in body_aero.panels:
+        expected_velocity = np.cross(expected_rates, panel.control_point)
+        np.testing.assert_allclose(panel.va, expected_velocity, atol=1e-12)
 
 
 def test_solver_force_distribution(solver, body_aero):

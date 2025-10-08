@@ -16,6 +16,8 @@ def generate_n_panel_sensitivity_df(
     angle_of_attack,
     side_slip,
     yaw_rate,
+    pitch_rate,
+    roll_rate,
     config_path,
     spanwise_panel_distribution,
     solver_instance,
@@ -34,7 +36,14 @@ def generate_n_panel_sensitivity_df(
             is_with_bridles=False,
         )
         # Initialize the aerodynamic model with the test conditions.
-        body_aero.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+        body_aero.va_initialize(
+            Umag,
+            angle_of_attack,
+            side_slip,
+            yaw_rate,
+            pitch_rate,
+            roll_rate,
+        )
 
         # Run the solver and measure runtime.
         start_time = time.time()
@@ -48,6 +57,8 @@ def generate_n_panel_sensitivity_df(
                 "alpha": angle_of_attack,
                 "beta": side_slip,
                 "yaw_rate": yaw_rate,
+                "pitch_rate": pitch_rate,
+                "roll_rate": roll_rate,
                 "cl": results.get("cl", None),
                 "cd": results.get("cd", None),
                 "cs": results.get("cs", None),
@@ -69,6 +80,8 @@ def generate_csv_files(
     angle_of_attack,
     side_slip,
     yaw_rate,
+    pitch_rate,
+    roll_rate,
     n_panels_list,
     aerodynamic_model_type_list=["VSM"],
     allowed_error_list=None,
@@ -95,6 +108,8 @@ def generate_csv_files(
         angle_of_attack (float): Angle of attack (in degrees).
         side_slip (float): Side slip angle (in degrees).
         yaw_rate (float): Yaw rate for the body (in appropriate units, e.g., rad/s).
+        pitch_rate (float): Pitch rate for the body (in appropriate units, e.g., rad/s).
+        roll_rate (float): Roll rate for the body (in appropriate units, e.g., rad/s).
         n_panels_list (list): List of numbers of panels to test in the convergence analysis.
         aerodynamic_model_type_list (list): List of aerodynamic model types (e.g., ["VSM", "LLT"]).
         allowed_error_list (list): List of allowed normalized errors for convergence (e.g., [1e-6]).
@@ -160,6 +175,8 @@ def generate_csv_files(
                 angle_of_attack,
                 side_slip,
                 yaw_rate,
+                pitch_rate,
+                roll_rate,
                 config_path,
                 spanwise_panel_distribution_i,
                 solver_instance,
@@ -226,7 +243,9 @@ def plot_convergence(convergence_results_dir, name, plot_type="pdf"):
         va_mag = df["va_mag"].iloc[0]
         alpha_val = df["alpha"].iloc[0]
         beta_val = df["beta"].iloc[0]
-        yaw_rate = df["yaw_rate"].iloc[0]
+        yaw_rate = df["yaw_rate"].iloc[0] if "yaw_rate" in df.columns else 0.0
+        pitch_rate = df["pitch_rate"].iloc[0] if "pitch_rate" in df.columns else 0.0
+        roll_rate = df["roll_rate"].iloc[0] if "roll_rate" in df.columns else 0.0
 
         # Plot metrics for each row
         for row_idx, row_metrics in enumerate(metrics_rows):
@@ -251,7 +270,11 @@ def plot_convergence(convergence_results_dir, name, plot_type="pdf"):
 
     # Add overall title with metadata info
     fig.suptitle(
-        f"va_mag = {va_mag} m/s, $\\alpha = {alpha_val}^\\circ$, $\\beta = {beta_val}^\\circ$, yaw_rate = {yaw_rate} rad/s",
+        (
+            f"va_mag = {va_mag} m/s, $\\alpha = {alpha_val}^\\circ$, "
+            f"$\\beta = {beta_val}^\\circ$, yaw = {yaw_rate} rad/s, "
+            f"pitch = {pitch_rate} rad/s, roll = {roll_rate} rad/s"
+        ),
         fontsize=15,
         y=0.98,
     )

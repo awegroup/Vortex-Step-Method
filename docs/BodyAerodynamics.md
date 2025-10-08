@@ -111,7 +111,7 @@ Main class that orchestrates the aerodynamic analysis by combining wing geometry
 
 #### Key Analysis Methods:
 
-- **`va_initialize(Umag, angle_of_attack, side_slip=0.0, yaw_rate=0.0)`**: Sets flight conditions
+- **`va_initialize(Umag, angle_of_attack, side_slip=0.0, yaw_rate=0.0, pitch_rate=0.0, roll_rate=0.0)`**: Sets flight conditions and optional body rotation rates
 - **`compute_AIC_matrices(aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array)`**: Builds Aerodynamic Influence Coefficient matrices
 - **`compute_results(gamma_new, rho, aerodynamic_model_type, ...)`**: Computes forces, moments, and coefficients from circulation distribution
 
@@ -206,7 +206,9 @@ body_aero.va_initialize(
     Umag=15.0,           # m/s
     angle_of_attack=8.0, # degrees
     side_slip=2.0,       # degrees  
-    yaw_rate=0.1         # rad/s
+    yaw_rate=0.1,        # rad/s
+    pitch_rate=0.0,      # rad/s
+    roll_rate=0.05       # rad/s
 )
 
 # Solve aerodynamics

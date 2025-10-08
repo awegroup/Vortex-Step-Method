@@ -630,11 +630,20 @@ def running_VSM(
     angle_of_attack: float,
     side_slip: float,
     yaw_rate: float,
+    pitch_rate: float,
+    roll_rate: float,
 ) -> Dict[str, Any]:
     """Run the Vortex Source Method on the given wing_aero object, based on AoA."""
     # setting va
 
-    wing_aero.va_initialize(vel, angle_of_attack, side_slip, yaw_rate)
+    wing_aero.va_initialize(
+        vel,
+        angle_of_attack,
+        side_slip,
+        yaw_rate,
+        pitch_rate,
+        roll_rate,
+    )
 
     # configuring the solver
     VSM_solver = Solver()
@@ -672,6 +681,8 @@ def add_case_information(
     angle_of_attack: float,
     side_slip: float,
     yaw_rate: float,
+    pitch_rate: float,
+    roll_rate: float,
     results: Dict[str, Any],
 ) -> go.Figure:
     kite_geometry_ranges = compute_kite_geometry_ranges(panels)
@@ -685,43 +696,45 @@ def add_case_information(
     )
     add_text_annotations(fig, x=1, y=0.94, title=f"side slip = {side_slip:.2f} [deg]")
     add_text_annotations(fig, x=1, y=0.91, title=f"yaw rate = {yaw_rate:.2f} [rad/s]")
-    add_text_annotations(fig, x=1, y=0.88, title="-------------------")
+    add_text_annotations(fig, x=1, y=0.88, title=f"pitch rate = {pitch_rate:.2f} [rad/s]")
+    add_text_annotations(fig, x=1, y=0.85, title=f"roll rate = {roll_rate:.2f} [rad/s]")
+    add_text_annotations(fig, x=1, y=0.82, title="-------------------")
     add_text_annotations(
         fig,
         x=1,
-        y=0.85,
+        y=0.79,
         title=f"CL = {results['cl']:.2f}",
     )
     add_text_annotations(
         fig,
         x=1,
-        y=0.82,
+        y=0.76,
         title=f"CD = {results['cd']:.2f}",
     )
     add_text_annotations(
         fig,
         x=1,
-        y=0.79,
+        y=0.73,
         title=f"CS = {results['cs']:.2f}",
     )
 
-    add_text_annotations(fig, x=1, y=0.76, title="-------------------")
+    add_text_annotations(fig, x=1, y=0.70, title="-------------------")
     add_text_annotations(
         fig,
         x=1,
-        y=0.73,
+        y=0.67,
         title=f"span = {span:.3f} [m]",
     )
     add_text_annotations(
         fig,
         x=1,
-        y=0.70,
+        y=0.64,
         title=f"chord = {chord:.3f} [m]",
     )
     add_text_annotations(
         fig,
         x=1,
-        y=0.67,
+        y=0.61,
         title=f"height = {height:.3f} [m]",
     )
 
@@ -736,12 +749,22 @@ def update_plot(
     angle_of_attack: float,
     side_slip: float,
     yaw_rate: float,
+    pitch_rate: float,
+    roll_rate: float,
     is_with_aerodynamic_details: bool,
     is_with_bridles: bool,
     title: str,
 ):
     # Update AoA and rerun VSM
-    results = running_VSM(wing_aero, vel, angle_of_attack, side_slip, yaw_rate)
+    results = running_VSM(
+        wing_aero,
+        vel,
+        angle_of_attack,
+        side_slip,
+        yaw_rate,
+        pitch_rate,
+        roll_rate,
+    )
 
     # Populating the plot with updated aerodynamic details
     fig.data = []  # Clear the previous plot data
@@ -753,7 +776,15 @@ def update_plot(
         is_with_bridles,
     )
     fig = add_case_information(
-        fig, wing_aero.panels, vel, angle_of_attack, side_slip, yaw_rate, results
+        fig,
+        wing_aero.panels,
+        vel,
+        angle_of_attack,
+        side_slip,
+        yaw_rate,
+        pitch_rate,
+        roll_rate,
+        results,
     )
     fig = update_fig_layout(fig, wing_aero.panels, title, is_show_legend=True)
 
@@ -765,6 +796,8 @@ def interactive_plot(
     angle_of_attack: float = 10,
     side_slip: float = 0,
     yaw_rate: float = 0,
+    pitch_rate: float = 0,
+    roll_rate: float = 0,
     title: str = "Interactive plot",
     is_with_aerodynamic_details: bool = False,
     is_with_bridles: bool = False,
@@ -782,6 +815,8 @@ def interactive_plot(
         angle_of_attack: Angle of attack in degrees
         side_slip: Side slip angle in degrees
         yaw_rate: Yaw rate in rad/s
+        pitch_rate: Pitch rate in rad/s
+        roll_rate: Roll rate in rad/s
         title: Plot title
         is_with_aerodynamic_details: Show aerodynamic visualization details
         is_with_bridles: Show bridle system visualization
@@ -809,6 +844,8 @@ def interactive_plot(
         angle_of_attack,
         side_slip,
         yaw_rate,
+        pitch_rate,
+        roll_rate,
         is_with_aerodynamic_details,
         is_with_bridles,
         title,

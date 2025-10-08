@@ -95,9 +95,7 @@ def main():
     aoa_deg = 30  # Angle of attack in degrees
     aoa_rad = np.deg2rad(aoa_deg)
     vel_app = np.array([np.cos(aoa_rad), 0, np.sin(aoa_rad)]) * Umag
-    yaw_rate = 0
-    body_aero.va = vel_app, yaw_rate  # Set inflow with yaw rate
-    body_aero.va = vel_app  # Or set inflow without yaw rate
+    body_aero.va = vel_app
 
     # Optionally, set the inflow condition without specifying the yaw rate
     body_aero.va = vel_app
@@ -117,8 +115,6 @@ def main():
         body_aero,
         vel=Umag,
         angle_of_attack=aoa_rad,
-        side_slip=0,
-        yaw_rate=0,
         is_with_aerodynamic_details=True,
     )
 
