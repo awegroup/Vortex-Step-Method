@@ -139,7 +139,7 @@ class BodyAerodynamics:
         Returns:
             BodyAerodynamics instance.
 
-        YAML file structure expected (see config_kite_surfplan.yaml):
+        YAML file structure expected (see aero_geometry_surfplan_inviscid.yaml):
 
         - wing_sections:
             headers: [airfoil_id, LE_x, LE_y, LE_z, TE_x, TE_y, TE_z]

@@ -37,7 +37,7 @@ def create_parameter_variations(percent_variation=10):
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
-        / "config_kite_CAD_masure_regression.yaml"
+        / "aero_geometry_CAD_masure_regression.yaml"
     )
     output_base_dir = (
         project_dir / "results" / "TUDELFT_V3_KITE" / "effect_of_varying_airfoil_shape"
@@ -161,7 +161,7 @@ def verify_parameter_variations(percent_variation=10):
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
-        / "config_kite_CAD_masure_regression.yaml"
+        / "aero_geometry_CAD_masure_regression.yaml"
     )
     variations_base_dir = (
         project_dir / "results" / "TUDELFT_V3_KITE" / "effect_of_varying_airfoil_shape"
@@ -255,7 +255,7 @@ def generate_2D_plots(
         project_dir
         / "data"
         / "TUDELFT_V3_KITE"
-        / "config_kite_CAD_masure_regression.yaml"
+        / "aero_geometry_CAD_masure_regression.yaml"
     )
     variations_base_dir = (
         project_dir / "results" / "TUDELFT_V3_KITE" / "effect_of_varying_airfoil_shape"
@@ -482,7 +482,7 @@ def generate_2D_and_3D_plots(
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
-        / "config_kite_CAD_masure_regression.yaml"
+        / "aero_geometry_CAD_masure_regression.yaml"
     )
     variations_base_dir = (
         project_dir / "results" / "TUDELFT_V3_KITE" / "effect_of_varying_airfoil_shape"

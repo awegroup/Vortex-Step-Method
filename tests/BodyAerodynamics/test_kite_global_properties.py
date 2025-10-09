@@ -19,7 +19,7 @@ class TestKiteGlobalProperties:
     def config_file_path(self):
         """Path to the test configuration file."""
         test_dir = Path(__file__).parent
-        return test_dir / "config_kite_CAD_inviscid.yaml"
+        return test_dir / "aero_geometry_CAD_inviscid.yaml"
 
     @pytest.fixture
     def body_aero(self, config_file_path):
@@ -190,7 +190,7 @@ class TestGeometricPropertiesWithDifferentPanelCounts:
     def config_file_path(self):
         """Path to the test configuration file."""
         test_dir = Path(__file__).parent
-        return test_dir / "config_kite_CAD_inviscid.yaml"
+        return test_dir / "aero_geometry_CAD_inviscid.yaml"
 
     @pytest.mark.parametrize("n_panels", [20, 30, 40, 50])
     def test_geometric_properties_mesh_independent(self, config_file_path, n_panels):

@@ -19,7 +19,7 @@ cad_derived_geometry_dir = (
 )
 body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
     n_panels=n_panels,
-    file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+    file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
     spanwise_panel_distribution=spanwise_panel_distribution,
 )
 
