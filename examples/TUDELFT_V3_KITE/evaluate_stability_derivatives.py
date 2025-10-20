@@ -3,14 +3,16 @@ import numpy as np
 from VSM import trim_angle
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
-from VSM.stability_derivatives import compute_rigid_body_stability_derivatives
+from VSM.stability_derivatives import (
+    compute_rigid_body_stability_derivatives,
+    map_derivatives_to_aircraft_frame,
+)
 from VSM.trim_angle import compute_trim_angle
 
+
 # Default step sizes for finite differences
-
-
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-n_panels = 30
+n_panels = 100
 spanwise_panel_distribution = "uniform"
 solver_base_version = Solver(reference_point=np.array([0.0, 0.0, 0.0]))
 
@@ -38,7 +40,6 @@ step_sizes = {
 }
 
 # Get reference point from solver for physically correct moment calculations
-# The reference point is critical for rotational velocity calculations:
 # v_rot(r) = omega × (r - r_ref)
 reference_point = solver_base_version.reference_point
 
@@ -61,7 +62,6 @@ results = compute_trim_angle(
 )
 print(f"results: {results}")
 
-
 trim_angle = results["trim_angle"]
 dCMy_dalpha = results["dCMy_dalpha"]
 print(f"Trim angle found at {trim_angle:.3f} degrees.")
@@ -82,7 +82,7 @@ derivatives = compute_rigid_body_stability_derivatives(
     nondimensionalize_rates=True,  # Convert rate derivatives to per hat-rate
 )
 
-print("\nComputed stability derivatives:")
+print("\nComputed stability derivatives (VSM frame, x rearward, y right, z up):")
 print("=" * 60)
 print("Angle derivatives (per radian):")
 for key, value in derivatives.items():
@@ -91,5 +91,18 @@ for key, value in derivatives.items():
 
 print("\nRate derivatives (per hat-rate, dimensionless):")
 for key, value in derivatives.items():
+    if any(rate in key for rate in ["_dp", "_dq", "_dr"]):
+        print(f"  {key}: {value:+.6f}")
+
+# Apply reference frame transformation using the VSM module function
+derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
+
+print("\nAngle derivatives (per radian) - Aircraft Frame:")
+for key, value in derivatives_aircraft.items():
+    if "alpha" in key or "beta" in key:
+        print(f"  {key}: {value:+.6f}")
+
+print("\nRate derivatives (per hat-rate, dimensionless) - Aircraft Frame:")
+for key, value in derivatives_aircraft.items():
     if any(rate in key for rate in ["_dp", "_dq", "_dr"]):
         print(f"  {key}: {value:+.6f}")

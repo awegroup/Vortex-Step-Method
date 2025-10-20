@@ -1,11 +1,34 @@
 # Vortex Step Method
-The Vortex Step Method (VSM) is an enhanced lifting line method that improves upon the classic approach by solving the circulation system at the three-quarter chord position. This adjustment allows for more accurate calculations of lift and drag forces, particularly addressing the shortcomings in induced drag prediction. VSM is further refined by coupling it with 2D viscous airfoil polars, making it well-suited for complex geometries, including low aspect ratio wings, as well as configurations with sweep, dihedral, and anhedral angles, typical for leading-edge inflatable (LEI) kites, that are used in airborne wind energy production, boat-towing and kite-surfing. An open-source example kite is the [TU Delft V3 Kite](https://awegroup.github.io/TUDELFT_V3_KITE/), of which a video is shown below, made using the internal plotting library.
-
-![](docs/TUDELFT_V3_KITE_plotly.gif)
-
-The software presented here includes examples for: a rectangular wing and a leading-edge inflatable kite.
+The Vortex Step Method (VSM) is an enhanced lifting line method that improves upon the classic approach by solving the circulation system at the three-quarter chord position. This adjustment allows for more accurate calculations of lift and drag forces, particularly addressing the shortcomings in induced drag prediction. VSM is further refined by coupling it with 2D viscous airfoil polars, making it well-suited for complex geometries, including low aspect ratio wings, as well as configurations with sweep, dihedral, and anhedral angles, typical for leading-edge inflatable (LEI) kites, that are used in airborne wind energy production, boat-towing and kite-surfing. 
 
 A Julia version of this project is available at [VortexStepMethod.jl](https://github.com/Albatross-Kite-Transport/VortexStepMethod.jl)
+
+
+## Reference Frame
+
+The VSM uses a body-fixed reference frame with the following conventions:
+
+**Coordinate Axes:**
+- **x-axis**: Rearward (leading edge → trailing edge)
+- **y-axis**: Right wing (when looking from behind the kite)
+- **z-axis**: Upward (from wing tip to mid-span)
+
+**Aerodynamic Angles:**
+- **Angle of Attack (α)**: Positive for nose up
+- **Sideslip (β)**: Positive for wind from the left/port side (positive Vy)
+
+**Body Rotation Rates** (right-hand rule):
+- **Roll rate (p)**: Positive for left wing down (counter-clockwise looking forward)
+- **Pitch rate (q)**: Positive for nose up (clockwise looking from right wing)
+- **Yaw rate (r)**: Positive for nose left (counter-clockwise looking down)
+
+The reference frame is illustrated below for the open-source example kite, the [TU Delft V3 Kite](https://awegroup.github.io/TUDELFT_V3_KITE/).
+
+<!-- ![](docs/TUDELFT_V3_KITE_plotly.gif) -->
+![](docs/TUDELFT_V3_KITE_reference_frame.png)
+
+**Aircraft Frame Transformation:** For stability derivatives in standard aircraft coordinates (x-forward, y-right, z-down), use `map_derivatives_to_aircraft_frame()` from the `VSM.stability_derivatives` module. See `examples/TUDELFT_V3_KITE/evaluate_stability_derivatives.py` for usage.
+
 
 ## Key Features
 
@@ -99,41 +122,6 @@ For detailed documentation, please refer to the following resources.
     deactivate
     ```
 
-## Quick Start
-
-Here's a minimal example to get started:
-
-```python
-from pathlib import Path
-from VSM.core.BodyAerodynamics import BodyAerodynamics
-from VSM.core.Solver import Solver
-
-# Load kite geometry from YAML configuration
-config_path = "data/TUDELFT_V3_KITE/CAD_derived_geometry/config_kite_CAD_CFD_polars.yaml"
-body_aero = BodyAerodynamics.instantiate(
-    n_panels=30,
-    file_path=config_path,
-    spanwise_panel_distribution="uniform"
-)
-
-# Set flow conditions
-body_aero.va_initialize(
-    Umag=10.0,              # Velocity magnitude [m/s]
-    angle_of_attack=6.0,    # Angle of attack [deg]
-    side_slip=0.0,          # Sideslip angle [deg]
-)
-
-# Solve and get results
-solver = Solver()
-results = solver.solve(body_aero)
-
-print(f"CL = {results['cl']:.3f}")
-print(f"CD = {results['cd']:.3f}")
-print(f"L/D = {results['cl']/results['cd']:.2f}")
-```
-
-For more examples, see the `examples/` directory.
-
 ## Dependencies
 
 - numpy - Numerical computing
@@ -182,9 +170,7 @@ See individual files for detailed documentation and usage instructions.
 For large-scale parametric studies:
 
 1. **Use fewer panels during exploration** (`n_panels=20-30`), then increase for final results
-2. **Numba JIT compilation** automatically accelerates vortex calculations (first run slower)
-3. **Parallel studies**: Run multiple configurations using `multiprocessing` or `joblib`
-4. **Cache geometries**: Instantiate `BodyAerodynamics` once, reuse with different flow conditions
+2. **Cache geometries**: Instantiate `BodyAerodynamics` once, reuse with different flow conditions
 
 Example:
 ```python

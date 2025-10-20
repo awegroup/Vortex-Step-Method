@@ -43,7 +43,8 @@ def compute_rigid_body_stability_derivatives(
     angle_of_attack : float
         Baseline angle of attack in degrees.
     side_slip : float
-        Baseline sideslip angle in degrees (positive for starboard-to-port flow).
+        Baseline sideslip angle in degrees (positive for wind from the left/port side,
+        negative for wind from the right/starboard side).
     velocity_magnitude : float
         Magnitude of the freestream velocity (m/s).
     roll_rate : float, optional
@@ -112,8 +113,8 @@ def compute_rigid_body_stability_derivatives(
     param_names = ("alpha", "beta", "p", "q", "r")
 
     default_steps = {
-        "alpha": 0.5,  # degrees
-        "beta": 0.5,  # degrees
+        "alpha": np.rad2deg(0.005),  # degrees
+        "beta": np.rad2deg(0.005),  # degrees
         "p": 0.01,  # rad/s
         "q": 0.01,  # rad/s
         "r": 0.01,  # rad/s
@@ -296,3 +297,80 @@ def compute_rigid_body_stability_derivatives(
                 derivatives[key_r] *= scale_r  # now per hat_r
 
     return derivatives
+
+
+def map_derivatives_to_aircraft_frame(
+    derivatives_vsm: Dict[str, float],
+) -> Dict[str, float]:
+    """
+    Transform stability derivatives from VSM frame (x rearward, y right, z up)
+    to aircraft frame (x forward, y right, z down) using the proper rotation
+    R_y(pi) = diag(-1, 1, -1).
+
+    Signs:
+      s(Cx)=s(Cz)=s(CMx)=s(CMz) = -1
+      s(Cy)=s(CMy)             = +1
+
+    Mapping of independent variables:
+      alpha' = alpha
+      beta'  = -beta
+      p' = -p,  q' = q,  r' = -r
+    """
+    print("\n" + "=" * 60)
+    print("REFERENCE FRAME TRANSFORMATION")
+    print("=" * 60)
+
+    print("\nVSM Reference Frame (used above):")
+    print("  x: rearward (LE → TE)")
+    print("  y: right wing")
+    print("  z: upward")
+    print("  β: positive for wind from LEFT (port, +Vy)")
+    print("  α: positive for nose up")
+    print("  Body rates (right-hand rule with z-up):")
+    print("    p (roll):  positive = LEFT wing DOWN (CCW looking forward)")
+    print("    q (pitch): positive = nose UP (CW looking from right wing)")
+    print("    r (yaw):   positive = nose LEFT (CCW looking down)")
+
+    print("\n" + "-" * 40)
+    print(f"Aircraft Reference Frame (standard aerospace):  ")
+    print(f"  x: forward (tail → nose)")
+    print(f"  y: right wing")
+    print(f"  z: downward")
+    print(f"  Mapping used: R_y(pi) = diag(-1, 1, -1)  [proper 180° about +y]")
+    print(f"  Implications:")
+    print(f"    - Forces:   (Cx', Cy', Cz') = (-Cx,  Cy, -Cz)")
+    print(f"    - Moments:  (CMx',CMy',CMz')= (-CMx, CMy, -CMz)")
+    print(f"    - Angles:   alpha' = alpha,  beta' = -beta")
+    print(f"    - Rates:    (p', q', r') = (-p, q, -r)")
+
+    print("\n" + "=" * 60)
+    print("STABILITY DERIVATIVES IN AIRCRAFT FRAME")
+    print("=" * 60)
+    s = {"Cx": -1, "Cy": +1, "Cz": -1, "CMx": -1, "CMy": +1, "CMz": -1}
+
+    out: Dict[str, float] = {}
+
+    # Angle derivatives
+    for coeff, sc in s.items():
+        ka = f"d{coeff}_dalpha"  # alpha' = alpha (no flip)
+        kb = f"d{coeff}_dbeta"  # beta' = -beta (extra minus)
+
+        if ka in derivatives_vsm:
+            out[ka] = sc * derivatives_vsm[ka]
+        if kb in derivatives_vsm:
+            out[kb] = -sc * derivatives_vsm[kb]
+
+    # Rate derivatives
+    for coeff, sc in s.items():
+        kp = f"d{coeff}_dp"  # p' = -p (extra minus)
+        kq = f"d{coeff}_dq"  # q' =  q (no flip)
+        kr = f"d{coeff}_dr"  # r' = -r (extra minus)
+
+        if kp in derivatives_vsm:
+            out[kp] = -sc * derivatives_vsm[kp]
+        if kq in derivatives_vsm:
+            out[kq] = sc * derivatives_vsm[kq]
+        if kr in derivatives_vsm:
+            out[kr] = -sc * derivatives_vsm[kr]
+
+    return out

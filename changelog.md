@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [2.0.1] - ????-2025
+
+### Added
+- `evaluate_stability_derivatives.py` example script demonstrating the use of the new
+  `compute_rigid_body_stability_derivatives()` function for calculating aerodynamic stability derivatives, prints results at trim conditions in the kite reference frame (x-backward LE to TE, y-right from kite's perspective, z-up) and in the aircraft convention (x-forward, y-right, z-down).
+
 ## [2.0.0] - 08-10-2025
 
 ### ⚠️ Breaking Changes
