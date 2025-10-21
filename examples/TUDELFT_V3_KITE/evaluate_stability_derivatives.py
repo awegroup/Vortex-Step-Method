@@ -98,21 +98,36 @@ for key, value in derivatives.items():
 
 derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
 
-# Print aircraft frame derivatives in the same order as VSM frame
 coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
-angle_params = ["dalpha", "dbeta"]
-rate_params = ["dp", "dq", "dr"]
+angle_keys = [f"d{coeff}_dalpha" for coeff in coeffs] + [
+    f"d{coeff}_dbeta" for coeff in coeffs
+]
+rate_keys = [f"d{coeff}_dp" for coeff in coeffs] + [
+    f"d{coeff}_dq" for coeff in coeffs
+] + [f"d{coeff}_dr" for coeff in coeffs]
 
-print("\nAngle derivatives (per radian) - Aircraft Frame:")
-for coeff in coeffs:
-    for param in angle_params:
-        key = f"d{coeff}_{param}"
-        if key in derivatives_aircraft:
-            print(f"  {key}: {derivatives_aircraft[key]:+.6f}")
 
-print("\nRate derivatives (per hat-rate, dimensionless) - Aircraft Frame:")
-for coeff in coeffs:
-    for param in rate_params:
-        key = f"d{coeff}_{param}"
-        if key in derivatives_aircraft:
-            print(f"  {key}: {derivatives_aircraft[key]:+.6f}")
+def print_combined(title, keys) -> None:
+    print(f"\n{title}")
+    header = f"  {'Derivative':<18}{'VSM':>14}{'Aircraft':>14}"
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for key in keys:
+        if key not in derivatives and key not in derivatives_aircraft:
+            continue
+        vsm_val = (
+            f"{derivatives[key]:+.6f}" if key in derivatives else "     n/a"
+        )
+        ac_val = (
+            f"{derivatives_aircraft[key]:+.6f}"
+            if key in derivatives_aircraft
+            else "     n/a"
+        )
+        print(f"  {key:<18}{vsm_val:>14}{ac_val:>14}")
+
+
+print_combined("Angle derivatives (per radian)", angle_keys)
+print_combined(
+    "Rate derivatives (per hat-rate, dimensionless)",
+    rate_keys,
+)
