@@ -139,7 +139,7 @@ class BodyAerodynamics:
         Returns:
             BodyAerodynamics instance.
 
-        YAML file structure expected (see config_kite_surfplan.yaml):
+        YAML file structure expected (see aero_geometry_surfplan_inviscid.yaml):
 
         - wing_sections:
             headers: [airfoil_id, LE_x, LE_y, LE_z, TE_x, TE_y, TE_z]
@@ -1329,7 +1329,7 @@ class BodyAerodynamics:
         Parameters:
         Umag (float): Magnitude of the velocity.
         angle_of_attack (float): Angle of attack in degrees.
-        side_slip (float): Sideslip angle in degrees, a minus is added because its defined counter-clockwise.
+        side_slip (float): Sideslip angle in degrees.
         yaw_rate (float): Yaw rate about the body z-axis, default is 0.0.
         pitch_rate (float): Pitch rate about the body y-axis, default is 0.0.
         roll_rate (float): Roll rate about the body x-axis, default is 0.0.
@@ -1337,8 +1337,7 @@ class BodyAerodynamics:
         """
         # Convert angles to radians
         aoa_rad = np.deg2rad(angle_of_attack)
-        # a (-) is added because its defined counter-clockwise
-        side_slip_rad = -np.deg2rad(side_slip)
+        side_slip_rad = np.deg2rad(side_slip)
 
         # Set the va attribute using the setter with keyword arguments
         # The va setter requires keyword-only arguments after the va parameter

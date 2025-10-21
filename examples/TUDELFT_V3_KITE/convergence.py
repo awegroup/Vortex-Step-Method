@@ -16,7 +16,7 @@ def main():
         Path(PROJECT_DIR)
         / "data"
         / "TUDELFT_V3_KITE"
-        / "config_kite_CAD_CFD_polars.yaml"
+        / "aero_geometry_CAD_CFD_polars.yaml"
     )
     convergence_analysis_dir = (
         Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "convergence_analysis"
@@ -84,7 +84,7 @@ def convergence_relation(
     side_slip=0,
     yaw_rate=0,
     spanwise_panel_distribution="uniform",
-    config_file="config_kite_CAD_CFD_polars.yaml",
+    config_file="aero_geometry_CAD_CFD_polars.yaml",
 ):
     """
     Create a 2x3 subplot showing actual values and errors vs n_panels for multiple angles of attack.
@@ -448,5 +448,5 @@ if __name__ == "__main__":
         side_slip=0,
         yaw_rate=0,
         spanwise_panel_distribution="uniform",
-        config_file=Path("CAD_derived_geometry") / "config_kite_CAD_CFD_polars.yaml",
+        config_file=Path("CAD_derived_geometry") / "aero_geometry_CAD_CFD_polars.yaml",
     )

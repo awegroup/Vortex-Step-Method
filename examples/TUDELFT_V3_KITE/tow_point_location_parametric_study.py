@@ -36,7 +36,7 @@ def main():
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
-        / "config_kite_CAD_CFD_polars.yaml"
+        / "aero_geometry_CAD_CFD_polars.yaml"
     )
     bridle_path = (
         PROJECT_DIR
