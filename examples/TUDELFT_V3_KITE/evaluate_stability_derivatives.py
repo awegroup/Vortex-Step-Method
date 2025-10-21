@@ -95,14 +95,24 @@ for key, value in derivatives.items():
         print(f"  {key}: {value:+.6f}")
 
 # Apply reference frame transformation using the VSM module function
+
 derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
 
+# Print aircraft frame derivatives in the same order as VSM frame
+coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
+angle_params = ["dalpha", "dbeta"]
+rate_params = ["dp", "dq", "dr"]
+
 print("\nAngle derivatives (per radian) - Aircraft Frame:")
-for key, value in derivatives_aircraft.items():
-    if "alpha" in key or "beta" in key:
-        print(f"  {key}: {value:+.6f}")
+for coeff in coeffs:
+    for param in angle_params:
+        key = f"d{coeff}_{param}"
+        if key in derivatives_aircraft:
+            print(f"  {key}: {derivatives_aircraft[key]:+.6f}")
 
 print("\nRate derivatives (per hat-rate, dimensionless) - Aircraft Frame:")
-for key, value in derivatives_aircraft.items():
-    if any(rate in key for rate in ["_dp", "_dq", "_dr"]):
-        print(f"  {key}: {value:+.6f}")
+for coeff in coeffs:
+    for param in rate_params:
+        key = f"d{coeff}_{param}"
+        if key in derivatives_aircraft:
+            print(f"  {key}: {derivatives_aircraft[key]:+.6f}")

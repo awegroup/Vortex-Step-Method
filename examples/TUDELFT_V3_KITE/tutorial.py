@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
 from VSM.plotting import (
@@ -50,7 +51,7 @@ def main():
     ### 2. defining settings
     n_panels = 50
     spanwise_panel_distribution = "uniform"
-    solver_base_version = Solver()
+    solver_base_version = Solver(reference_point=np.array([0.0, 0.0, 0.0]))
 
     # Step 1: Instantiate BodyAerodynamics objects from different YAML configs
     cad_derived_geometry_dir = (
