@@ -18,7 +18,7 @@ class TestMasureRegressionReal:
             test_dir
             / "data"
             / "TUDELFT_V3_KITE"
-            / "config_kite_CAD_masure_regression.yaml"
+            / "aero_geometry_CAD_masure_regression.yaml"
         )
 
     @pytest.fixture

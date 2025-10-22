@@ -83,14 +83,14 @@ def main() -> None:
             "Breukels regression",
             data_dir
             / "CAD_derived_geometry"
-            / "config_kite_CAD_breukels_regression.yaml",
+            / "aero_geometry_CAD_breukels_regression.yaml",
             None,
         ),
         (
             "Masure ML regression",
             data_dir
             / "CAD_derived_geometry"
-            / "config_kite_CAD_masure_regression.yaml",
+            / "aero_geometry_CAD_masure_regression.yaml",
             ml_models_dir,
         ),
     ]

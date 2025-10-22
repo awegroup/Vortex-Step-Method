@@ -3,14 +3,16 @@ import numpy as np
 from VSM import trim_angle
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
-from VSM.stability_derivatives import compute_rigid_body_stability_derivatives
+from VSM.stability_derivatives import (
+    compute_rigid_body_stability_derivatives,
+    map_derivatives_to_aircraft_frame,
+)
 from VSM.trim_angle import compute_trim_angle
 
+
 # Default step sizes for finite differences
-
-
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-n_panels = 30
+n_panels = 100
 spanwise_panel_distribution = "uniform"
 solver_base_version = Solver(reference_point=np.array([0.0, 0.0, 0.0]))
 
@@ -19,7 +21,7 @@ cad_derived_geometry_dir = (
 )
 body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
     n_panels=n_panels,
-    file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+    file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
     spanwise_panel_distribution=spanwise_panel_distribution,
 )
 
@@ -38,7 +40,6 @@ step_sizes = {
 }
 
 # Get reference point from solver for physically correct moment calculations
-# The reference point is critical for rotational velocity calculations:
 # v_rot(r) = omega × (r - r_ref)
 reference_point = solver_base_version.reference_point
 
@@ -61,7 +62,6 @@ results = compute_trim_angle(
 )
 print(f"results: {results}")
 
-
 trim_angle = results["trim_angle"]
 dCMy_dalpha = results["dCMy_dalpha"]
 print(f"Trim angle found at {trim_angle:.3f} degrees.")
@@ -82,7 +82,7 @@ derivatives = compute_rigid_body_stability_derivatives(
     nondimensionalize_rates=True,  # Convert rate derivatives to per hat-rate
 )
 
-print("\nComputed stability derivatives:")
+print("\nComputed stability derivatives (VSM frame, x rearward, y right, z up):")
 print("=" * 60)
 print("Angle derivatives (per radian):")
 for key, value in derivatives.items():
@@ -93,3 +93,41 @@ print("\nRate derivatives (per hat-rate, dimensionless):")
 for key, value in derivatives.items():
     if any(rate in key for rate in ["_dp", "_dq", "_dr"]):
         print(f"  {key}: {value:+.6f}")
+
+# Apply reference frame transformation using the VSM module function
+
+derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
+
+coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
+angle_keys = [f"d{coeff}_dalpha" for coeff in coeffs] + [
+    f"d{coeff}_dbeta" for coeff in coeffs
+]
+rate_keys = [f"d{coeff}_dp" for coeff in coeffs] + [
+    f"d{coeff}_dq" for coeff in coeffs
+] + [f"d{coeff}_dr" for coeff in coeffs]
+
+
+def print_combined(title, keys) -> None:
+    print(f"\n{title}")
+    header = f"  {'Derivative':<18}{'VSM':>14}{'Aircraft':>14}"
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for key in keys:
+        if key not in derivatives and key not in derivatives_aircraft:
+            continue
+        vsm_val = (
+            f"{derivatives[key]:+.6f}" if key in derivatives else "     n/a"
+        )
+        ac_val = (
+            f"{derivatives_aircraft[key]:+.6f}"
+            if key in derivatives_aircraft
+            else "     n/a"
+        )
+        print(f"  {key:<18}{vsm_val:>14}{ac_val:>14}")
+
+
+print_combined("Angle derivatives (per radian)", angle_keys)
+print_combined(
+    "Rate derivatives (per hat-rate, dimensionless)",
+    rate_keys,
+)
