@@ -12,7 +12,8 @@ from utils_masure_regression_lei_parametric import (
 
 
 ## USER INPUT
-ml_models_dir = "data/ml_models"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+ml_models_dir = Path(PROJECT_DIR) / "data" / "ml_models"
 
 
 def main(ml_models_dir):

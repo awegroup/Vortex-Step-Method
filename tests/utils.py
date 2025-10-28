@@ -696,51 +696,36 @@ def plotting_CL_CD_gamma_LLT_VSM_old_new_comparison(
     )
 
 
-def compute_projected_area(coord, z_plane_vector=np.array([0, 0, 1])):
-    """Calculates the projected area of the wing onto a specified plane.
-
-    The projected area is computed based on the leading and trailing edge points of each section
-    projected onto a plane defined by a normal vector (default is z-plane).
+def compute_projected_area(coord, z_plane_vector=np.array([0.0, 0.0, 1.0])):
+    """
+    Calculates the projected area of the wing onto a specified plane.
 
     Args:
+        coord: array-like, shape (2*N, 3)
+            Sequence of leading and trailing edge points, ordered from one tip to the other.
         z_plane_vector (np.ndarray): Normal vector defining the projection plane (default is [0, 0, 1]).
 
     Returns:
         projected_area (float): The projected area of the wing.
     """
-    # Normalize the z_plane_vector
-    z_plane_vector = z_plane_vector / np.linalg.norm(z_plane_vector)
+    n = np.asarray(z_plane_vector, dtype=float)
+    n /= np.linalg.norm(n)
 
-    # Helper function to project a point onto the plane
-    def project_onto_plane(point, normal):
-        return point - np.dot(point, normal) * normal
+    def proj(P):
+        # orthogonal projection onto plane with normal n
+        return P - np.dot(P, n) * n
 
-    projected_area = 0.0
-    for i in range(len(coord) // 2 - 1):
-        # Get the points for the current and next section
-        LE_current = coord[2 * i]
-        TE_current = coord[2 * i + 1]
-        LE_next = coord[2 * (i + 1)]
-        TE_next = coord[2 * (i + 1) + 1]
-
-        # Project the points onto the plane
-        LE_current_proj = project_onto_plane(LE_current, z_plane_vector)
-        TE_current_proj = project_onto_plane(TE_current, z_plane_vector)
-        LE_next_proj = project_onto_plane(LE_next, z_plane_vector)
-        TE_next_proj = project_onto_plane(TE_next, z_plane_vector)
-
-        # Calculate the lengths of the projected edges
-        chord_current_proj = np.linalg.norm(TE_current_proj - LE_current_proj)
-        chord_next_proj = np.linalg.norm(TE_next_proj - LE_next_proj)
-
-        # Calculate the spanwise distance between the projected sections
-        spanwise_distance_proj = np.linalg.norm(LE_next_proj - LE_current_proj)
-
-        # Calculate the projected area of the trapezoid formed by these points
-        area = 0.5 * (chord_current_proj + chord_next_proj) * spanwise_distance_proj
-        projected_area += area
-
-    return projected_area
+    S = 0.0
+    N = len(coord) // 2
+    for i in range(N - 1):
+        A = proj(coord[2 * i])
+        B = proj(coord[2 * i + 1])
+        C = proj(coord[2 * (i + 1) + 1])
+        D = proj(coord[2 * (i + 1)])
+        # two triangles: (A,B,C) and (A,C,D)
+        S += 0.5 * np.linalg.norm(np.cross(B - A, C - A))
+        S += 0.5 * np.linalg.norm(np.cross(C - A, D - A))
+    return S
 
 
 def safe_add_section(wing, LE, TE, polar_data):

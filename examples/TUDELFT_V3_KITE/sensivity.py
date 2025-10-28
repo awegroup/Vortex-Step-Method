@@ -14,7 +14,7 @@ def main():
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
-        / "config_kite_CAD_CFD_polars.yaml"
+        / "aero_geometry_CAD_CFD_polars.yaml"
     )
     sensitivity_results_dir = (
         Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE" / "sensitivity_analysis"

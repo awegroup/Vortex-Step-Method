@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
 from VSM.plotting import (
@@ -48,9 +49,9 @@ def main():
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
     ### 2. defining settings
-    n_panels = 36
+    n_panels = 50
     spanwise_panel_distribution = "uniform"
-    solver_base_version = Solver()
+    solver_base_version = Solver(reference_point=np.array([0.0, 0.0, 0.0]))
 
     # Step 1: Instantiate BodyAerodynamics objects from different YAML configs
     cad_derived_geometry_dir = (
@@ -58,23 +59,28 @@ def main():
     )
     body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
     )
     body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
-        bridle_path=(cad_derived_geometry_dir / "struc_geometry.yaml"),
+        bridle_path=(
+            cad_derived_geometry_dir / "struc_geometry_manually_adjusted.yaml"
+        ),
+        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
     )
     body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "config_kite_CAD_neuralfoil.yaml"),
+        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_neuralfoil.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
     )
     body_aero_masure_regression = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "config_kite_CAD_masure_regression.yaml"),
+        file_path=(
+            cad_derived_geometry_dir / "aero_geometry_CAD_masure_regression.yaml"
+        ),
         ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
         spanwise_panel_distribution=spanwise_panel_distribution,
     )
@@ -101,14 +107,14 @@ def main():
     """
     Visualize the panel mesh, control points, and aerodynamic centers for the selected BodyAerodynamics object.
     """
-    # plot_geometry(
-    #     body_aero_CAD_CFD_polars,
-    #     title="TUDELFT_V3_KITE",
-    #     data_type=".pdf",
-    #     save_path=".",
-    #     is_save=False,
-    #     is_show=True,
-    # )
+    plot_geometry(
+        body_aero_CAD_CFD_polars,
+        title="TUDELFT_V3_KITE",
+        data_type=".pdf",
+        save_path=".",
+        is_save=False,
+        is_show=True,
+    )
 
     # Step 4: Create an interactive plot using Plotly
     """
@@ -148,6 +154,13 @@ def main():
         / "3D_polars_literature"
         / "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0.csv"
     )
+    path_wt_data = (
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "3D_polars_literature"
+        / "V3_CL_CD_CS_alpha_sweep_for_beta_0_WindTunnel_Poland_2025_Rey_560e4.csv"
+    )
     plot_polars(
         solver_list=[
             solver_base_version,
@@ -167,8 +180,9 @@ def main():
             "VSM CAD NeuralFoil",
             "VSM CAD Masure Regression",
             "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0",
+            "Wind Tunnel Data Poland 2025",
         ],
-        literature_path_list=[path_cfd_lebesque_alpha],
+        literature_path_list=[path_cfd_lebesque_alpha, path_wt_data],
         angle_range=[0, 5, 8, 10, 12, 15, 20, 25],
         angle_type="angle_of_attack",
         angle_of_attack=0,

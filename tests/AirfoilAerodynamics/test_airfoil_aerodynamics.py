@@ -31,7 +31,7 @@ def masure_test_config():
     """Configuration path for masure_regression tests."""
     test_dir = Path(__file__).parent.parent.parent
     return str(
-        test_dir / "data" / "TUDELFT_V3_KITE" / "config_kite_CAD_masure_regression.yaml"
+        test_dir / "data" / "TUDELFT_V3_KITE" / "aero_geometry_CAD_masure_regression.yaml"
     )
 
 

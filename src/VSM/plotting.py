@@ -74,6 +74,8 @@ def plot_distribution(
     Umag,
     side_slip,
     yaw_rate,
+    pitch_rate,
+    roll_rate,
     solver_list,
     body_aero_list,
     label_list,
@@ -118,6 +120,8 @@ def plot_distribution(
                 angle_of_attack=alpha,
                 side_slip=side_slip,
                 yaw_rate=yaw_rate,
+                pitch_rate=pitch_rate,
+                roll_rate=roll_rate,
             )
 
             y_coordinates_list.append(body_aero.compute_y_coordinates())
@@ -327,6 +331,8 @@ def generate_3D_polar_data(
     angle_of_attack=0,
     side_slip=0,
     yaw_rate=0,
+    pitch_rate=0,
+    roll_rate=0,
     Umag=10,
     steering="sideforce",  # sideforce or roll
 ):
@@ -341,6 +347,8 @@ def generate_3D_polar_data(
         angle_of_attack: angle of attack | default: 0
         side_slip: side slip angle | default: 0
         yaw_rate: yaw rate | default: 0
+        pitch_rate: pitch rate | default: 0
+        roll_rate: roll rate | default: 0
         Umag: magnitude of the velocity | default: 10
 
     Returns:
@@ -366,9 +374,23 @@ def generate_3D_polar_data(
     gamma = None
     for i, angle_i in enumerate(angle_range):
         if angle_type == "angle_of_attack":
-            body_aero.va_initialize(Umag, angle_i, side_slip, yaw_rate)
+            body_aero.va_initialize(
+                Umag,
+                angle_i,
+                side_slip,
+                yaw_rate,
+                pitch_rate,
+                roll_rate,
+            )
         elif angle_type == "side_slip":
-            body_aero.va_initialize(Umag, angle_of_attack, angle_i, yaw_rate)
+            body_aero.va_initialize(
+                Umag,
+                angle_of_attack,
+                angle_i,
+                yaw_rate,
+                pitch_rate,
+                roll_rate,
+            )
         else:
             raise ValueError(
                 "angle_type should be either 'angle_of_attack' or 'side_slip'"
@@ -377,7 +399,7 @@ def generate_3D_polar_data(
         begin_time = time.time()
         results = solver.solve(body_aero, gamma_distribution=gamma)
         run_time[i] = time.time() - begin_time
-        print(f"Angle: {angle_i:.1f}deg. Time: {run_time[i]:.4f}s")
+        print(f"{angle_type}: {angle_i:.1f}deg. Time: {run_time[i]:.4f}s")
         cl[i] = results["cl"]
         cd[i] = results["cd"]
         cs[i] = results["cs"]
@@ -426,6 +448,8 @@ def plot_polars(
     angle_of_attack=0,
     side_slip=0,
     yaw_rate=0,
+    pitch_rate=0,
+    roll_rate=0,
     Umag=10,
     title="polar",
     data_type=".pdf",
@@ -449,6 +473,8 @@ def plot_polars(
         angle_of_attack: angle of attack [deg] | default: 0
         side_slip: side slip angle [deg] | default: 0
         yaw_rate: yaw rate | default: 0
+        pitch_rate: pitch rate | default: 0
+        roll_rate: roll rate | default: 0
         Umag: magnitude of the velocity | default: 10
         title: title of the plot | default: "polar"
         data_type: type of the data to be saved | default: ".pdf"
@@ -505,6 +531,8 @@ def plot_polars(
             angle_of_attack=angle_of_attack,
             side_slip=side_slip,
             yaw_rate=yaw_rate,
+            pitch_rate=pitch_rate,
+            roll_rate=roll_rate,
             Umag=Umag,
             steering=steering,
         )
@@ -603,8 +631,9 @@ def plot_polars(
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         # Save the plot with the specified title and data type
-        plt.savefig(Path(save_path) / f"{title}{data_type}", bbox_inches="tight")
-        print(f"Plot saved as: {save_path}")
+        save_path_ = Path(save_path) / f"{title}{data_type}"
+        plt.savefig(save_path_, bbox_inches="tight")
+        print(f"Plot saved as: {save_path_}")
 
     # showing plot
     if is_show:
