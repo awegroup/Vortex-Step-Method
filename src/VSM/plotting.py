@@ -532,6 +532,8 @@ def plot_polars(
                 polar_data[3] = df["CS"].values
             elif steering == "roll":
                 polar_data[3] = np.degrees(np.arctan2(df["CS"], df["CL"]))
+        if angle_type == "angle_of_attack":
+            polar_data[3] = df["CL"].values / df["CD"].values
         if "CMx" in df.columns:
             polar_data[4] = df["CMx"].values
         if "CMy" in df.columns:

@@ -50,6 +50,7 @@ class Solver:
         artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
         is_with_simonet_artificial_viscosity: bool = False,
         simonet_artificial_viscosity_fva: float = None,
+        is_aoa_corrected: bool = False,
     ):
         """Initialize solver with configuration parameters.
 
@@ -83,6 +84,7 @@ class Solver:
         self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
         self.is_with_viscous_drag_correction = is_with_viscous_drag_correction
         self.reference_point = reference_point
+        self.is_aoa_corrected = is_aoa_corrected
         # === athmospheric properties ===
         self.mu = mu
         self.rho = rho
@@ -259,6 +261,7 @@ class Solver:
             self.is_only_f_and_gamma_output,
             self.is_with_viscous_drag_correction,
             self.reference_point,
+            self.is_aoa_corrected,
         )
         return results
 

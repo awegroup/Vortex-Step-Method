@@ -28,14 +28,14 @@ def main():
     ### 1. defining paths
     PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-    file_path = (
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "CAD_derived_geometry"
-        / "config_kite_CAD_CFD_polars.yaml"
-    )
-
+    # file_path = (
+    #     Path(PROJECT_DIR)
+    #     / "data"
+    #     / "TUDELFT_V3_KITE"
+    #     / "CAD_derived_geometry"
+    #     / "aero_geometry_CAD_CFD_polars.yaml"
+    # )
+    file_path = Path(PROJECT_DIR) / "data" / "V9_KITE" / "config_kite.yaml"
     # bridle_path = (
     #     Path(PROJECT_DIR)s
     #     / "data"
@@ -50,7 +50,6 @@ def main():
     solver = Solver(reference_point=[0, 0, 0])
 
     ### 3. Loading kite geometry from CSV file and instantiating BodyAerodynamics
-    print(f"\nCreating corrected polar input with bridles")
     body_aero_polar_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
         file_path=file_path,
