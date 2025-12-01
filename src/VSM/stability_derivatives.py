@@ -374,3 +374,196 @@ def map_derivatives_to_aircraft_frame(
             out[kr] = -sc * derivatives_vsm[kr]
 
     return out
+
+
+import numpy as np
+import math
+from typing import Dict, Tuple, Optional, Sequence
+
+
+# --- Reuse the adapter that maps aircraft inputs -> VSM solver and back -------------
+def compute_aircraft_frame_coeffs_from_solver(
+    body_aero,
+    solver,
+    alpha_rad: float,
+    beta_rad: float,
+    V: float,
+    p: float = 0.0,
+    q: float = 0.0,
+    r: float = 0.0,
+    reference_point: Optional[np.ndarray] = None,
+) -> Tuple[Dict[str, float], float, float]:
+    # map aircraft->VSM
+    alpha_deg_vsm = math.degrees(alpha_rad)
+    beta_deg_vsm = -math.degrees(beta_rad)
+    p_vsm, q_vsm, r_vsm = -p, q, -r
+
+    if reference_point is None:
+        if hasattr(solver, "reference_point"):
+            reference_point = np.array(solver.reference_point, dtype=float)
+        else:
+            reference_point = np.array([0.0, 0.0, 0.0], dtype=float)
+
+    body_aero.va_initialize(
+        Umag=V,
+        angle_of_attack=alpha_deg_vsm,
+        side_slip=beta_deg_vsm,
+        yaw_rate=r_vsm,
+        pitch_rate=q_vsm,
+        roll_rate=p_vsm,
+        reference_point=reference_point,
+    )
+    results = solver.solve(body_aero)
+
+    va_vec = np.asarray(body_aero.va, float)
+    Va = float(np.linalg.norm(va_vec))
+    if Va <= 0:
+        raise ValueError("Speed must be >0")
+    rho = float(getattr(solver, "rho", 1.225))
+    q_inf = 0.5 * rho * Va * Va
+    S = float(results["projected_area"])
+    if S <= 0:
+        raise ValueError("projected_area must be >0")
+
+    Fx, Fy, Fz = float(results["Fx"]), float(results["Fy"]), float(results["Fz"])
+    CMx, CMy, CMz = float(results["cmx"]), float(results["cmy"]), float(results["cmz"])
+
+    # VSM -> aircraft mapping: R_y(pi) = diag(-1, +1, -1)
+    Cx_vsm = Fx / (q_inf * S)
+    Cy_vsm = Fy / (q_inf * S)
+    Cz_vsm = Fz / (q_inf * S)
+    coeffs_air = {
+        "CX": -Cx_vsm,
+        "CY": Cy_vsm,
+        "CZ": -Cz_vsm,
+        "Cl": -CMx,
+        "Cm": CMy,
+        "Cn": -CMz,
+    }
+    return coeffs_air, q_inf, S
+
+
+# --- Utilities ---------------------------------------------------------------------
+def fit_quad_alpha(
+    alpha_vec: np.ndarray, y_alpha: np.ndarray
+) -> Tuple[float, float, float]:
+    """Least-squares fit y(α) ≈ c2 α^2 + c1 α + c0; α in radians."""
+    A = np.column_stack([alpha_vec**2, alpha_vec, np.ones_like(alpha_vec)])
+    c2, c1, c0 = np.linalg.lstsq(A, y_alpha, rcond=None)[0]
+    return float(c2), float(c1), float(c0)
+
+
+def central_diff(f_plus: float, f_minus: float, h: float) -> float:
+    return (f_plus - f_minus) / (2.0 * h)
+
+
+# --- Main builder ------------------------------------------------------------------
+def build_malz_coeff_table_from_solver(
+    body_aero,
+    solver,
+    V: float,
+    b: float,
+    c: float,
+    alpha_grid_deg: Sequence[float] = tuple(np.linspace(-15, 15, 13)),
+    beta_step_deg: float = 1.0,
+    p_hat_step: float = 0.02,  # small dimensionless hat-rate steps
+    q_hat_step: float = 0.02,
+    r_hat_step: float = 0.02,
+    reference_point: Optional[np.ndarray] = None,
+) -> Dict[str, Tuple[float, float, float]]:
+    """
+    Returns a dict like COEF with keys:
+      CX0,CXb,CXp,CXq,CXr,  CY0,CYb,CYp,CYq,CYr,  CZ0,CZb,CZp,CZq,CZr,
+      Cl0,Clb,Clp,Clq,Clr,  Cm0,Cmb,Cmp,Cmq,Cmr,  Cn0,Cnb,Cnp,Cnq,Cnr
+    Each value is a (c2,c1,c0) tuple per Eq. (19), α in radians.
+
+    All evaluations are at controls = 0.
+    """
+    alpha_grid = np.radians(np.array(alpha_grid_deg, float))
+    # small angle/rate steps
+    dbeta = math.radians(beta_step_deg)
+
+    # convert hat-rate steps to actual rad/s perturbations at this V
+    # p̂ = b p / (2 V) => p = (2 V / b) p̂ ; etc.
+    p_step = (2.0 * V / b) * p_hat_step
+    q_step = (2.0 * V / c) * q_hat_step
+    r_step = (2.0 * V / b) * r_hat_step
+
+    # storage per α for each output we will fit
+    names = ["CX", "CY", "CZ", "Cl", "Cm", "Cn"]
+    slices_0 = {k: [] for k in names}
+    slices_db = {k: [] for k in names}
+    slices_dp = {k: [] for k in names}
+    slices_dq = {k: [] for k in names}
+    slices_dr = {k: [] for k in names}
+
+    beta0 = 0.0
+    p0 = q0 = r0 = 0.0
+
+    for a in alpha_grid:
+        # baseline
+        c0, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0, q0, r0, reference_point
+        )
+        for k in names:
+            slices_0[k].append(c0[k])
+
+        # beta derivative at this α
+        cp, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0 + dbeta, V, p0, q0, r0, reference_point
+        )
+        cm, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0 - dbeta, V, p0, q0, r0, reference_point
+        )
+        for k in names:
+            slices_db[k].append(central_diff(cp[k], cm[k], dbeta))
+
+        # p̂ derivative (via p step in rad/s)
+        cp_, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0 + p_step, q0, r0, reference_point
+        )
+        cm_, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0 - p_step, q0, r0, reference_point
+        )
+        for k in names:
+            # convert from per (rad/s) to per hat_p by multiplying (2V/b)
+            slices_dp[k].append(central_diff(cp_[k], cm_[k], p_step) * (2.0 * V / b))
+
+        # q̂ derivative
+        cq_, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0, q0 + q_step, r0, reference_point
+        )
+        cmq, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0, q0 - q_step, r0, reference_point
+        )
+        for k in names:
+            slices_dq[k].append(central_diff(cq_[k], cmq[k], q_step) * (2.0 * V / c))
+
+        # r̂ derivative
+        cr_, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0, q0, r0 + r_step, reference_point
+        )
+        cmr, _, _ = compute_aircraft_frame_coeffs_from_solver(
+            body_aero, solver, a, beta0, V, p0, q0, r0 - r_step, reference_point
+        )
+        for k in names:
+            slices_dr[k].append(central_diff(cr_[k], cmr[k], r_step) * (2.0 * V / b))
+
+    # Fit each α-slice to quadratic c2 α^2 + c1 α + c0, α in radians
+    COEF = {}
+
+    # Baseline (*0)
+    for k in names:
+        COEF[k + "0"] = fit_quad_alpha(alpha_grid, np.array(slices_0[k]))
+
+    # Beta (*b)
+    for k in names:
+        COEF[k + "b"] = fit_quad_alpha(alpha_grid, np.array(slices_db[k]))
+
+    # Rates (*p,*q,*r)
+    for k in names:
+        COEF[k + "p"] = fit_quad_alpha(alpha_grid, np.array(slices_dp[k]))
+        COEF[k + "q"] = fit_quad_alpha(alpha_grid, np.array(slices_dq[k]))
+        COEF[k + "r"] = fit_quad_alpha(alpha_grid, np.array(slices_dr[k]))
+
+    return COEF
