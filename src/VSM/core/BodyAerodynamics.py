@@ -839,6 +839,7 @@ class BodyAerodynamics:
         is_only_f_and_gamma_output,
         is_with_viscous_drag_correction,
         reference_point,
+        is_aoa_corrected,
     ):
 
         cl_array, cd_array, cm_array = (
@@ -855,7 +856,7 @@ class BodyAerodynamics:
         drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
         moment = (cm_array * 0.5 * rho * Umag_array**2 * chord_array**2)[:, np.newaxis]
 
-        if aerodynamic_model_type == "VSM":
+        if is_aoa_corrected:
             alpha_corrected = self.update_effective_angle_of_attack_if_VSM(
                 gamma_new,
                 core_radius_fraction,
@@ -867,11 +868,9 @@ class BodyAerodynamics:
             )
             alpha_uncorrected = alpha_array[:, np.newaxis]
 
-        elif aerodynamic_model_type == "LLT":
+        else:
             alpha_corrected = alpha_array[:, np.newaxis]
             alpha_uncorrected = alpha_array[:, np.newaxis]
-        else:
-            raise ValueError("Unknown aerodynamic model type, should be LLT or VSM")
         # Checking that va is not distributed input
         if len(self._va) != 3:
             raise ValueError("Calc.results not ready for va_distributed input")
