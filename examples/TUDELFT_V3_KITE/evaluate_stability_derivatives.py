@@ -102,9 +102,11 @@ coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
 angle_keys = [f"d{coeff}_dalpha" for coeff in coeffs] + [
     f"d{coeff}_dbeta" for coeff in coeffs
 ]
-rate_keys = [f"d{coeff}_dp" for coeff in coeffs] + [
-    f"d{coeff}_dq" for coeff in coeffs
-] + [f"d{coeff}_dr" for coeff in coeffs]
+rate_keys = (
+    [f"d{coeff}_dp" for coeff in coeffs]
+    + [f"d{coeff}_dq" for coeff in coeffs]
+    + [f"d{coeff}_dr" for coeff in coeffs]
+)
 
 
 def print_combined(title, keys) -> None:
@@ -115,9 +117,7 @@ def print_combined(title, keys) -> None:
     for key in keys:
         if key not in derivatives and key not in derivatives_aircraft:
             continue
-        vsm_val = (
-            f"{derivatives[key]:+.6f}" if key in derivatives else "     n/a"
-        )
+        vsm_val = f"{derivatives[key]:+.6f}" if key in derivatives else "     n/a"
         ac_val = (
             f"{derivatives_aircraft[key]:+.6f}"
             if key in derivatives_aircraft
