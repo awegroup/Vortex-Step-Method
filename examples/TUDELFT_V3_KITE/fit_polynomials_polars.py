@@ -33,7 +33,7 @@ def main():
         / "data"
         / "TUDELFT_V3_KITE"
         / "CAD_derived_geometry"
-        / "config_kite_CAD_CFD_polars.yaml"
+        / "aero_geometry_CAD_CFD_polars.yaml"
     )
 
     # bridle_path = (
@@ -60,8 +60,7 @@ def main():
 
     ### 4. Setting va
     Umag = 20
-    yaw_rate = 0
-    body_aero_polar_with_bridles.va_initialize(Umag, 5, 0, yaw_rate)
+    body_aero_polar_with_bridles.va_initialize(Umag, 5, 0)
 
     ### 7. Plotting the polar curves for different angles of attack and side slip angles
     # and saving in results with literature
@@ -77,7 +76,7 @@ def main():
     begin_time = time.time()
     for i, angle_i in enumerate(angle_of_attack_range):
 
-        body_aero_polar_with_bridles.va_initialize(Umag, angle_i, 0, yaw_rate)
+        body_aero_polar_with_bridles.va_initialize(Umag, angle_i, 0)
 
         results = solver.solve(body_aero_polar_with_bridles, gamma_distribution=gamma)
         center_of_pressure[i, :] = results["center_of_pressure"]

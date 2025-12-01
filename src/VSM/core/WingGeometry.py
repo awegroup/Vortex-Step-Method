@@ -483,50 +483,77 @@ class Wing:
         span = np.max(projections) - np.min(projections)
         return span
 
-    def compute_projected_area(
-        self, z_plane_vector: np.ndarray = np.array([0, 0, 1])
-    ) -> float:
-        """Calculate projected area onto specified plane.
+    # def compute_projected_area(
+    #     self, z_plane_vector: np.ndarray = np.array([0, 0, 1])
+    # ) -> float:
+    #     """Calculate projected area onto specified plane.
 
-        Args:
-            z_plane_vector (np.ndarray): Normal vector defining projection plane.
+    #     Args:
+    #         z_plane_vector (np.ndarray): Normal vector defining projection plane.
 
-        Returns:
-            float: Projected wing area onto the specified plane.
+    #     Returns:
+    #         float: Projected wing area onto the specified plane.
+    #     """
+    #     # Normalize the z_plane_vector
+    #     z_plane_vector = z_plane_vector / jit_norm(z_plane_vector)
+
+    #     # Helper function to project a point onto the plane
+    #     def project_onto_plane(point, normal):
+    #         return point - np.dot(point, normal) * normal
+
+    #     projected_area = 0.0
+    #     for i in range(len(self.sections) - 1):
+    #         # Get the points for the current and next section
+    #         LE_current = self.sections[i].LE_point
+    #         TE_current = self.sections[i].TE_point
+    #         LE_next = self.sections[i + 1].LE_point
+    #         TE_next = self.sections[i + 1].TE_point
+
+    #         # Project the points onto the plane
+    #         LE_current_proj = project_onto_plane(LE_current, z_plane_vector)
+    #         TE_current_proj = project_onto_plane(TE_current, z_plane_vector)
+    #         LE_next_proj = project_onto_plane(LE_next, z_plane_vector)
+    #         TE_next_proj = project_onto_plane(TE_next, z_plane_vector)
+
+    #         # Calculate the lengths of the projected edges
+    #         chord_current_proj = jit_norm(TE_current_proj - LE_current_proj)
+    #         chord_next_proj = jit_norm(TE_next_proj - LE_next_proj)
+
+    #         # Calculate the spanwise distance between the projected sections
+    #         spanwise_distance_proj = jit_norm(LE_next_proj - LE_current_proj)
+
+    #         # Calculate the projected area of the trapezoid formed by these points
+    #         area = 0.5 * (chord_current_proj + chord_next_proj) * spanwise_distance_proj
+    #         projected_area += area
+
+    #     return projected_area
+
+    def compute_projected_area(self, z_plane_vector=np.array([0.0, 0.0, 1.0])):
         """
-        # Normalize the z_plane_vector
-        z_plane_vector = z_plane_vector / jit_norm(z_plane_vector)
+        sections: iterable of objects with .LE_point and .TE_point (3D arrays)
+                ordered from one tip to the other.
+        plane_normal: normal vector of the projection plane (e.g. [0,0,1] for XY).
 
-        # Helper function to project a point onto the plane
-        def project_onto_plane(point, normal):
-            return point - np.dot(point, normal) * normal
+        Returns: projected area onto the plane.
+        """
+        sections = self.sections
+        n = np.asarray(z_plane_vector, dtype=float)
+        n /= np.linalg.norm(n)
 
-        projected_area = 0.0
-        for i in range(len(self.sections) - 1):
-            # Get the points for the current and next section
-            LE_current = self.sections[i].LE_point
-            TE_current = self.sections[i].TE_point
-            LE_next = self.sections[i + 1].LE_point
-            TE_next = self.sections[i + 1].TE_point
+        def proj(P):
+            # orthogonal projection onto plane with normal n
+            return P - np.dot(P, n) * n
 
-            # Project the points onto the plane
-            LE_current_proj = project_onto_plane(LE_current, z_plane_vector)
-            TE_current_proj = project_onto_plane(TE_current, z_plane_vector)
-            LE_next_proj = project_onto_plane(LE_next, z_plane_vector)
-            TE_next_proj = project_onto_plane(TE_next, z_plane_vector)
-
-            # Calculate the lengths of the projected edges
-            chord_current_proj = jit_norm(TE_current_proj - LE_current_proj)
-            chord_next_proj = jit_norm(TE_next_proj - LE_next_proj)
-
-            # Calculate the spanwise distance between the projected sections
-            spanwise_distance_proj = jit_norm(LE_next_proj - LE_current_proj)
-
-            # Calculate the projected area of the trapezoid formed by these points
-            area = 0.5 * (chord_current_proj + chord_next_proj) * spanwise_distance_proj
-            projected_area += area
-
-        return projected_area
+        S = 0.0
+        for i in range(len(sections) - 1):
+            A = proj(sections[i].LE_point)
+            B = proj(sections[i].TE_point)
+            C = proj(sections[i + 1].TE_point)
+            D = proj(sections[i + 1].LE_point)
+            # two triangles: (A,B,C) and (A,C,D)
+            S += 0.5 * np.linalg.norm(np.cross(B - A, C - A))
+            S += 0.5 * np.linalg.norm(np.cross(C - A, D - A))
+        return S
 
 
 @dataclass

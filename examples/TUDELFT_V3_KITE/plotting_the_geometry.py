@@ -64,12 +64,12 @@ def main():
     )
     body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        # file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
-        file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
         bridle_path=(
             cad_derived_geometry_dir / "struc_geometry_manually_adjusted.yaml"
         ),
+        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
     )
     body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
         n_panels=n_panels,
@@ -136,106 +136,6 @@ def main():
         # / "results"
         # / "TUDELFT_V3_KITE"
         # / "interactive_plot.html",
-    )
-
-    # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
-    """
-    Compare the aerodynamic performance of different models by plotting lift, drag, and side force coefficients
-    as a function of angle of attack (alpha sweep) and side slip (beta sweep).
-    Literature/CFD data can be included for validation.
-    """
-    save_folder = Path(PROJECT_DIR) / "results" / "TUDELFT_V3_KITE"
-
-    # Step 5a: Plot alpha sweep (angle of attack)
-    path_cfd_lebesque_alpha = (
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "3D_polars_literature"
-        / "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0.csv"
-    )
-    path_wt_data = (
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "3D_polars_literature"
-        / "V3_CL_CD_CS_alpha_sweep_for_beta_0_WindTunnel_Poland_2025_Rey_560e4.csv"
-    )
-    plot_polars(
-        solver_list=[
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
-        ],
-        body_aero_list=[
-            body_aero_CAD_CFD_polars,
-            body_aero_CAD_CFD_polars_with_bridles,
-            body_aero_CAD_neuralfoil,
-            body_aero_masure_regression,
-        ],
-        label_list=[
-            "VSM CAD CFD Polars",
-            "VSM CAD CFD Polars with Bridles",
-            "VSM CAD NeuralFoil",
-            "VSM CAD Masure Regression",
-            "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0",
-            "Wind Tunnel Data Poland 2025",
-        ],
-        literature_path_list=[path_cfd_lebesque_alpha, path_wt_data],
-        angle_range=[0, 5, 8, 10, 12, 15, 20, 25],
-        angle_type="angle_of_attack",
-        angle_of_attack=0,
-        side_slip=0,
-        yaw_rate=0,
-        Umag=Umag,
-        title="alphasweep",
-        data_type=".pdf",
-        save_path=Path(save_folder),
-        is_save=True,
-        is_show=False,
-    )
-
-    # Step 5b: Plot beta sweep (side slip)
-    path_cfd_lebesque_beta = (
-        Path(PROJECT_DIR)
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "3D_polars_literature"
-        / "CFD_RANS_Rey_10e5_Poland2025_beta_sweep_alpha_13_02.csv"
-    )
-    plot_polars(
-        solver_list=[
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
-        ],
-        body_aero_list=[
-            body_aero_CAD_CFD_polars,
-            body_aero_CAD_CFD_polars_with_bridles,
-            body_aero_CAD_neuralfoil,
-            body_aero_masure_regression,
-        ],
-        label_list=[
-            "VSM CAD CFD Polars",
-            "VSM CAD CFD Polars with Bridles",
-            "VSM CAD NeuralFoil",
-            "VSM CAD Masure Regression",
-            "CFD_RANS_Rey_10e5_Poland2025_beta_sweep_alpha_13_02",
-        ],
-        literature_path_list=[path_cfd_lebesque_beta],
-        angle_range=[0, 3, 6, 9, 12],
-        angle_type="side_slip",
-        angle_of_attack=6.8,
-        side_slip=0,
-        yaw_rate=0,
-        Umag=3.15,
-        title="betasweep",
-        data_type=".pdf",
-        save_path=Path(save_folder),
-        is_save=True,
-        is_show=True,
     )
 
 
