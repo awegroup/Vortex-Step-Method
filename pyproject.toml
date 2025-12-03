@@ -93,6 +93,7 @@ dependencies = [
   "scikit-learn",
   "numba",
   "screeninfo",
+  "odfpy",
 ]
 
 
