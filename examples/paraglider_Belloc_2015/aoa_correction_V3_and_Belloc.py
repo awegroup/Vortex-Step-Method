@@ -160,8 +160,8 @@ def main(
     clcd_label=r"$C_{\mathrm{L}}/C_{\mathrm{D}}$",
     alpha_label=r"$\alpha$ ($^\circ$)",
     figsize=(15, 8),
-    n_panels: int = 150,
-    n_vsm_data_points: int = 50,
+    n_panels: int = 50,
+    n_vsm_data_points: int = 20,
     alpha_range: Tuple[float, float] = (-2, 17),
 ):
     set_plot_style()

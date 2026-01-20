@@ -73,6 +73,64 @@ def summarise_timings(label: str, timings: List[float]) -> str:
     )
 
 
+def benchmark_single_solve_cfd_polars(
+    project_dir: Path,
+    n_panels: int = 36,
+    Umag: float = 10.0,
+    alpha_deg: float = 8.0,
+    side_slip: float = 0.0,
+    yaw_rate: float = 0.0,
+) -> None:
+    """Run a single `Solver.solve()` on the CFD polars config and clock the time.
+
+    Uses TUDELFT_V3_KITE CAD-derived geometry with CFD polars and 36 panels.
+    Prints elapsed time and final aerodynamic coefficients (CL, CD, CS).
+    """
+    config_path = (
+        project_dir
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
+        / "aero_geometry_CAD_CFD_polars.yaml"
+    )
+
+    body = instantiate_body(
+        config_path=config_path,
+        n_panels=n_panels,
+        spanwise_panel_distribution="uniform",
+        ml_models_dir=None,
+    )
+
+    solver = Solver(gamma_initial_distribution_type="elliptical")
+    body.va_initialize(Umag, alpha_deg, side_slip, yaw_rate)
+
+    print("\n=== Single solve: CFD polars ===")
+    start_time = time.perf_counter()
+    results = solver.solve(body)
+    elapsed = time.perf_counter() - start_time
+    print(f"Solve time: {elapsed*1000:7.2f} ms")
+
+    start_time = time.perf_counter()
+    results = solver.solve(body)
+    elapsed = time.perf_counter() - start_time
+    print(f"Solve time: {elapsed*1000:7.2f} ms")
+
+    start_time = time.perf_counter()
+    results = solver.solve(body)
+    elapsed = time.perf_counter() - start_time
+    print(f"Solve time: {elapsed*1000:7.2f} ms")
+
+    print(
+        f"Settings -> n_panels={n_panels}, Umag={Umag} m/s, "
+        f"alpha={alpha_deg} deg, side_slip={side_slip}, yaw_rate={yaw_rate}"
+    )
+
+    print(
+        f"Coefficients -> CL={results.get('cl'):.3f}, "
+        f"CD={results.get('cd'):.3f}, CS={results.get('cs'):.3f}"
+    )
+
+
 def main() -> None:
     project_dir = Path(__file__).resolve().parents[2]
     data_dir = project_dir / "data" / "TUDELFT_V3_KITE"
@@ -169,6 +227,11 @@ def main() -> None:
             f"CL={final_iter['cl']:.3f}, CD={final_iter['cd']:.3f}, CS={final_iter['cs']:.3f}"
         )
 
+    # Also run single-solve benchmark with CFD polars and 36 panels
+    benchmark_single_solve_cfd_polars(project_dir)
+
 
 if __name__ == "__main__":
     main()
+    # project_dir = Path(__file__).resolve().parents[2]
+    # benchmark_single_solve_cfd_polars(project_dir)
