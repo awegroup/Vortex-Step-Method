@@ -299,7 +299,7 @@ class SemiInfiniteFilament(Filament):
             # determine the three velocity components
             return K * r1XVf
         # if point is on the filament
-        elif jit_norm(r1XVf) / jit_norm(Vf) == 0:
+        elif jit_norm(r1XVf) / jit_norm(Vf) < 1e-12 * epsilon:
             return np.zeros(3)
         # else, if point within core
         else:
