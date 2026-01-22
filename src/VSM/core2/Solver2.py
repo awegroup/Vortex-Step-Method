@@ -1,7 +1,7 @@
 import numpy as np
 import logging
 from . import jit_cross
-from .utils import compute_effective_section_axes
+from .utils2 import compute_effective_section_axes  #TODO: NEW
 
 
 class Solver:
@@ -161,11 +161,11 @@ class Solver:
             self.y_coords[i] = panel.control_point[1]
 
         (
-            self.x_eff_array,
-            self.y_eff_array,
-            self.cos_lambda_array,
-        ) = compute_effective_section_axes(self.y_airf_array, self.z_airf_array)
-        self.chord_eff_array = self.chord_array * self.cos_lambda_array
+            self.x_eff_array,  #TODO: NEW
+            self.y_eff_array,  #TODO: NEW
+            self.cos_lambda_array,  #TODO: NEW
+        ) = compute_effective_section_axes(self.y_airf_array, self.z_airf_array)  #TODO: NEW
+        self.chord_eff_array = self.chord_array * self.cos_lambda_array  #TODO: NEW
 
         va_norm_array = np.linalg.norm(self.va_array, axis=1)
         va_unit_array = self.va_array / va_norm_array[:, None]
@@ -259,7 +259,7 @@ class Solver:
             alpha_array,
             Umag_array,
             self.chord_array,
-            self.chord_eff_array,
+            self.chord_eff_array,  #TODO: NEW
             self.x_airf_array,
             self.y_airf_array,
             self.z_airf_array,
@@ -297,15 +297,15 @@ class Solver:
         relative_velocity_array = (
             self.va_array + induced_velocity_all
         )  # v_eff = v_inf + v_ind
-        u_dot_z = np.sum(relative_velocity_array * self.z_airf_array, axis=1)
-        u_eff_array = (
-            relative_velocity_array - u_dot_z[:, None] * self.z_airf_array
-        )  # projected into plane normal to span
-        Uinfcrossz_array = jit_cross(self.va_array, self.z_airf_array)
-        v_normal_array = np.sum(self.x_eff_array * u_eff_array, axis=1)
-        v_tangential_array = np.sum(self.y_eff_array * u_eff_array, axis=1)
-        alpha_array = np.arctan2(v_normal_array, v_tangential_array)  # alpha_eff
-        Umag_array = np.linalg.norm(u_eff_array, axis=1)
+        u_dot_z = np.sum(relative_velocity_array * self.z_airf_array, axis=1)  #TODO: NEW
+        u_eff_array = (  #TODO: NEW
+            relative_velocity_array - u_dot_z[:, None] * self.z_airf_array  #TODO: NEW
+        )  # projected into plane normal to span  #TODO: NEW
+        Uinfcrossz_array = jit_cross(self.va_array, self.z_airf_array)  #TODO: NEW
+        v_normal_array = np.sum(self.x_eff_array * u_eff_array, axis=1)  #TODO: NEW
+        v_tangential_array = np.sum(self.y_eff_array * u_eff_array, axis=1)  #TODO: NEW
+        alpha_array = np.arctan2(v_normal_array, v_tangential_array)  # alpha_eff  #TODO: NEW
+        Umag_array = np.linalg.norm(u_eff_array, axis=1)  #TODO: NEW
         Umagw_array = np.linalg.norm(Uinfcrossz_array, axis=1)
         cl_array = np.array(
             [panel.compute_cl(alpha) for panel, alpha in zip(self.panels, alpha_array)]
@@ -340,9 +340,9 @@ class Solver:
             alpha_array, Umag_array, cl_array, Umagw_array = (
                 self.compute_aerodynamic_quantities(gamma)
             )
-            gamma_new = (
-                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_eff_array
-            )
+            gamma_new = (  #TODO: NEW
+                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_eff_array  #TODO: NEW
+            )  #TODO: NEW
             gamma_new = (
                 1 - self.relaxation_factor * extra_relaxation_factor
             ) * gamma + self.relaxation_factor * extra_relaxation_factor * gamma_new
@@ -396,9 +396,9 @@ class Solver:
             _, Umag_array, cl_array, Umagw_array = self.compute_aerodynamic_quantities(
                 gamma
             )
-            gamma_new = (
-                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_eff_array
-            )
+            gamma_new = (  #TODO: NEW
+                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_eff_array  #TODO: NEW
+            )  #TODO: NEW
             # Residual: difference between the computed and current gamma.
             F_val = gamma - gamma_new
             return F_val

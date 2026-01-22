@@ -56,21 +56,21 @@ def point_in_quad(pt, corners):
     return point_in_triangle(pt, corners[0], corners[1], corners[2]) or point_in_triangle(pt, corners[0], corners[2], corners[3])
 
 
-def compute_effective_section_axes(y_airf_array, z_airf_array, eps=1e-12):
+def compute_effective_section_axes(y_airf_array, z_airf_array, eps=1e-12):  #TODO: NEW
     """Project chordwise directions into the plane normal to spanwise direction.
 
     Returns effective (x, y) axes and the cosine of local sweep (projection magnitude).
     """
-    y_airf_array = np.asarray(y_airf_array)
-    z_airf_array = np.asarray(z_airf_array)
-    y_dot_z = np.sum(y_airf_array * z_airf_array, axis=1)
-    y_proj = y_airf_array - y_dot_z[:, None] * z_airf_array
-    y_proj_norm = np.linalg.norm(y_proj, axis=1)
-    safe_norm = np.where(y_proj_norm > eps, y_proj_norm, 1.0)
-    y_eff = y_proj / safe_norm[:, None]
+    y_airf_array = np.asarray(y_airf_array)  #TODO: NEW
+    z_airf_array = np.asarray(z_airf_array)  #TODO: NEW
+    y_dot_z = np.sum(y_airf_array * z_airf_array, axis=1)  #TODO: NEW
+    y_proj = y_airf_array - y_dot_z[:, None] * z_airf_array  #TODO: NEW
+    y_proj_norm = np.linalg.norm(y_proj, axis=1)  #TODO: NEW
+    safe_norm = np.where(y_proj_norm > eps, y_proj_norm, 1.0)  #TODO: NEW
+    y_eff = y_proj / safe_norm[:, None]  #TODO: NEW
 
-    x_eff = np.cross(y_eff, z_airf_array)
-    x_eff_norm = np.linalg.norm(x_eff, axis=1)
-    safe_x_norm = np.where(x_eff_norm > eps, x_eff_norm, 1.0)
-    x_eff = x_eff / safe_x_norm[:, None]
-    return x_eff, y_eff, y_proj_norm
+    x_eff = np.cross(y_eff, z_airf_array)  #TODO: NEW
+    x_eff_norm = np.linalg.norm(x_eff, axis=1)  #TODO: NEW
+    safe_x_norm = np.where(x_eff_norm > eps, x_eff_norm, 1.0)  #TODO: NEW
+    x_eff = x_eff / safe_x_norm[:, None]  #TODO: NEW
+    return x_eff, y_eff, y_proj_norm  #TODO: NEW

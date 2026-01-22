@@ -1,6 +1,6 @@
 import numpy as np
 import logging
-from .Filament import BoundFilament
+from .Filament2 import BoundFilament
 from . import jit_cross, jit_norm, jit_dot
 
 
@@ -197,16 +197,16 @@ class Panel:
         # Calculate relative velocity and angle of attack
         # Constant throughout the iterations: self.va, self.x_airf, self.y_airf
         relative_velocity = self.va + induced_velocity
-        z_airf = self.z_airf
-        y_airf = self.y_airf
-        y_eff = y_airf - jit_dot(y_airf, z_airf) * z_airf
-        y_eff = y_eff / jit_norm(y_eff)
-        x_eff = jit_cross(y_eff, z_airf)
-        x_eff = x_eff / jit_norm(x_eff)
-        rel_eff = relative_velocity - jit_dot(relative_velocity, z_airf) * z_airf
-        v_normal = jit_dot(x_eff, rel_eff)
-        v_tangential = jit_dot(y_eff, rel_eff)
-        alpha = np.arctan2(v_normal, v_tangential)
+        z_airf = self.z_airf  #TODO: NEW
+        y_airf = self.y_airf  #TODO: NEW
+        y_eff = y_airf - jit_dot(y_airf, z_airf) * z_airf  #TODO: NEW
+        y_eff = y_eff / jit_norm(y_eff)  #TODO: NEW
+        x_eff = jit_cross(y_eff, z_airf)  #TODO: NEW
+        x_eff = x_eff / jit_norm(x_eff)  #TODO: NEW
+        rel_eff = relative_velocity - jit_dot(relative_velocity, z_airf) * z_airf  #TODO: NEW
+        v_normal = jit_dot(x_eff, rel_eff)  #TODO: NEW
+        v_tangential = jit_dot(y_eff, rel_eff)  #TODO: NEW
+        alpha = np.arctan2(v_normal, v_tangential)  #TODO: NEW
         return alpha, relative_velocity
 
     def compute_cl(self, alpha: float) -> float:
@@ -295,7 +295,7 @@ class Panel:
             np.ndarray: Total induced velocity from all filaments.
         """
         velind = [0, 0, 0]
-        n_filaments = len(self.filaments)
+        n_filaments = len(self.filaments)  #TODO: NEW
 
         # TODO: ADD option for more wake filaments
         for i, filament in enumerate(self.filaments):
@@ -312,21 +312,21 @@ class Panel:
                 tempvel = filament.velocity_3D_trailing_vortex(
                     evaluation_point, gamma, va_norm
                 )
-            elif n_filaments >= 7 and (i == 3 or i == 4):
-                tempvel = filament.velocity_3D_trailing_vortex(
-                    evaluation_point, gamma, va_norm
-                )
-            elif n_filaments >= 7 and (i == 5 or i == 6):
-                tempvel = filament.velocity_3D_trailing_vortex_semiinfinite(
-                    va_unit, evaluation_point, gamma, va_norm
-                )
-            # trailing_semi_inf1/2 (legacy)
-            elif n_filaments == 5 and (i == 3 or i == 4):
-                tempvel = filament.velocity_3D_trailing_vortex_semiinfinite(
-                    va_unit, evaluation_point, gamma, va_norm
-                )
-            else:
-                continue
+            elif n_filaments >= 7 and (i == 3 or i == 4):  #TODO: NEW
+                tempvel = filament.velocity_3D_trailing_vortex(  #TODO: NEW
+                    evaluation_point, gamma, va_norm  #TODO: NEW
+                )  #TODO: NEW
+            elif n_filaments >= 7 and (i == 5 or i == 6):  #TODO: NEW
+                tempvel = filament.velocity_3D_trailing_vortex_semiinfinite(  #TODO: NEW
+                    va_unit, evaluation_point, gamma, va_norm  #TODO: NEW
+                )  #TODO: NEW
+            # trailing_semi_inf1/2 (legacy)  #TODO: NEW
+            elif n_filaments == 5 and (i == 3 or i == 4):  #TODO: NEW
+                tempvel = filament.velocity_3D_trailing_vortex_semiinfinite(  #TODO: NEW
+                    va_unit, evaluation_point, gamma, va_norm  #TODO: NEW
+                )  #TODO: NEW
+            else:  #TODO: NEW
+                continue  #TODO: NEW
 
             velind[0] += tempvel[0]
             velind[1] += tempvel[1]

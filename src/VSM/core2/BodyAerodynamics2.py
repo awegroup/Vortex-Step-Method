@@ -3,14 +3,14 @@ import logging
 import pandas as pd
 from pathlib import Path
 import yaml
-from .WingGeometry import Wing
-from .Panel import Panel
-from .Wake import Wake
-from .AirfoilAerodynamics import AirfoilAerodynamics
-from .utils import (
+from .WingGeometry2 import Wing
+from .Panel2 import Panel
+from .Wake2 import Wake
+from .AirfoilAerodynamics2 import AirfoilAerodynamics
+from .utils2 import (
     intersect_line_with_plane,
     point_in_quad,
-    compute_effective_section_axes,
+    compute_effective_section_axes,  #TODO: NEW
 )
 from . import jit_cross, jit_norm, jit_dot
 
@@ -57,10 +57,12 @@ class BodyAerodynamics:
         bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
+        use_jointed_wake: bool = False,  #TODO: NEW
     ):
         self._wings = wings
         self._aerodynamic_center_location = aerodynamic_center_location
         self._control_point_location = control_point_location
+        self._use_jointed_wake = use_jointed_wake  #TODO: NEW
 
         ##TODO:
         self._bridle_line_system = bridle_line_system
@@ -129,6 +131,7 @@ class BodyAerodynamics:
         spanwise_panel_distribution="uniform",
         bridle_path=None,
         ml_models_dir=None,
+        use_jointed_wake: bool = False,  #TODO: NEW
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -331,9 +334,9 @@ class BodyAerodynamics:
                     ck = int(row[3])
                     p3 = particles[ck]
                     bridle_lines.append([p2, p3, d])
-            return cls([wing_instance], bridle_lines)
+            return cls([wing_instance], bridle_lines, use_jointed_wake=use_jointed_wake)  #TODO: NEW
         else:
-            return cls([wing_instance])
+            return cls([wing_instance], use_jointed_wake=use_jointed_wake)  #TODO: NEW
 
     ###########################
     ## GETTER FUNCTIONS
@@ -435,7 +438,9 @@ class BodyAerodynamics:
             panel.va = va_distribution[i]
 
         # update wake using the new distribution
-        self.panels = Wake.frozen_wake(va_distribution, self.panels)
+        self.panels = Wake.frozen_wake(  #TODO: NEW
+            va_distribution, self.panels, use_jointed_wake=self._use_jointed_wake  #TODO: NEW
+        )  #TODO: NEW
 
     ###########################
     ## CALCULATE FUNCTIONS
@@ -833,7 +838,7 @@ class BodyAerodynamics:
         alpha_array,
         Umag_array,
         chord_array,
-        chord_eff_array,
+        chord_eff_array,  #TODO: NEW
         x_airf_array,
         y_airf_array,
         z_airf_array,
@@ -857,14 +862,14 @@ class BodyAerodynamics:
             cl_array[icp] = panel_i.compute_cl(alpha_array[icp])
             cd_array[icp], cm_array[icp] = panel_i.compute_cd_cm(alpha_array[icp])
             panel_width_array[icp] = panel_i.width
-        x_eff_array, y_eff_array, _ = compute_effective_section_axes(
-            y_airf_array, z_airf_array
-        )
-        lift = (cl_array * 0.5 * rho * Umag_array**2 * chord_eff_array)[:, np.newaxis]
-        drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_eff_array)[:, np.newaxis]
-        moment = (
-            cm_array * 0.5 * rho * Umag_array**2 * chord_eff_array**2
-        )[:, np.newaxis]
+        x_eff_array, y_eff_array, _ = compute_effective_section_axes(  #TODO: NEW
+            y_airf_array, z_airf_array  #TODO: NEW
+        )  #TODO: NEW
+        lift = (cl_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]  #TODO: NEW
+        drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]  #TODO: NEW
+        moment = (cm_array * 0.5 * rho * Umag_array**2 * chord_array**2)[  #TODO: NEW
+            :, np.newaxis  #TODO: NEW
+        ]  #TODO: NEW
 
         if is_aoa_corrected:
             alpha_corrected = self.update_effective_angle_of_attack_if_VSM(
@@ -872,7 +877,7 @@ class BodyAerodynamics:
                 core_radius_fraction,
                 x_airf_array,
                 y_airf_array,
-                z_airf_array,
+                z_airf_array,  #TODO: NEW
                 va_array,
                 va_norm_array,
                 va_unit_array,
@@ -921,13 +926,12 @@ class BodyAerodynamics:
             ### Defining panel_variables
             # Defining directions of airfoil that defines current panel_i
             z_airf_span = panel_i.z_airf  # along the span
-            y_airf_chord = y_eff_array[i]  # along the effective chord
-            x_airf_normal_to_chord = x_eff_array[i]  # normal to the effective chord
+            y_airf_chord = y_eff_array[i]  # along the effective chord  #TODO: NEW
+            x_airf_normal_to_chord = x_eff_array[i]  # normal to the effective chord  #TODO: NEW
             # TODO: implement these
             alpha_corrected_i = alpha_corrected[i]
-            panel_chord = panel_i.chord
-            chord_eff = chord_eff_array[i]
-            chord_eff_safe = chord_eff if chord_eff > 1e-12 else 1e-12
+            panel_chord = panel_i.chord  #TODO: NEW
+            panel_chord_safe = panel_chord if panel_chord > 1e-12 else 1e-12  #TODO: NEW
             panel_width = panel_i.width
             panel_area = panel_chord * panel_width
             area_all_panels += panel_area
@@ -1046,9 +1050,9 @@ class BodyAerodynamics:
             fz_global_3D_sum += fz_global_3D
 
             # Storing results that are useful
-            cl_prescribed_va_list.append(lift_prescribed_va / (q_inf * chord_eff_safe))
-            cd_prescribed_va_list.append(drag_prescribed_va / (q_inf * chord_eff_safe))
-            cs_prescribed_va_list.append(side_prescribed_va / (q_inf * chord_eff_safe))
+            cl_prescribed_va_list.append(lift_prescribed_va / (q_inf * panel_chord_safe))  #TODO: NEW
+            cd_prescribed_va_list.append(drag_prescribed_va / (q_inf * panel_chord_safe))  #TODO: NEW
+            cs_prescribed_va_list.append(side_prescribed_va / (q_inf * panel_chord_safe))  #TODO: NEW
             fx_global_3D_list.append(fx_global_3D)
             fy_global_3D_list.append(fy_global_3D)
             fz_global_3D_list.append(fz_global_3D)
@@ -1377,7 +1381,7 @@ class BodyAerodynamics:
         core_radius_fraction,
         x_airf_array,
         y_airf_array,
-        z_airf_array,
+        z_airf_array,  #TODO: NEW
         va_array,
         va_norm_array,
         va_unit_array,
@@ -1406,14 +1410,14 @@ class BodyAerodynamics:
             ]
         ).T
         relative_velocity_array = va_array + induced_velocity_all
-        x_eff_array, y_eff_array, _ = compute_effective_section_axes(
-            y_airf_array, z_airf_array
-        )
-        u_dot_z = np.sum(relative_velocity_array * z_airf_array, axis=1)
-        u_eff_array = relative_velocity_array - u_dot_z[:, None] * z_airf_array
-        v_normal_array = np.sum(x_eff_array * u_eff_array, axis=1)
-        v_tangential_array = np.sum(y_eff_array * u_eff_array, axis=1)
-        alpha_array = np.arctan2(v_normal_array, v_tangential_array)
+        x_eff_array, y_eff_array, _ = compute_effective_section_axes(  #TODO: NEW
+            y_airf_array, z_airf_array  #TODO: NEW
+        )  #TODO: NEW
+        u_dot_z = np.sum(relative_velocity_array * z_airf_array, axis=1)  #TODO: NEW
+        u_eff_array = relative_velocity_array - u_dot_z[:, None] * z_airf_array  #TODO: NEW
+        v_normal_array = np.sum(x_eff_array * u_eff_array, axis=1)  #TODO: NEW
+        v_tangential_array = np.sum(y_eff_array * u_eff_array, axis=1)  #TODO: NEW
+        alpha_array = np.arctan2(v_normal_array, v_tangential_array)  #TODO: NEW
 
         return alpha_array[:, np.newaxis]
 

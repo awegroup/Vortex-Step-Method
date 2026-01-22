@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import jit_cross, jit_norm, jit_dot
+from .utils2 import jit_cross, jit_norm, jit_dot
 
 # Example vectors for pre-compilation (dummy values)
 a = np.array([1.0, 2.0, 3.0])
