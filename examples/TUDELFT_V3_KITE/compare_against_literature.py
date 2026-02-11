@@ -5,8 +5,6 @@ from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
 )
-from VSM.plot_geometry_matplotlib import plot_geometry
-from VSM.plot_geometry_plotly import interactive_plot
 
 
 def main():
@@ -57,6 +55,12 @@ def main():
     cad_derived_geometry_dir = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
     )
+    body_aero_CAD_CFD_NF_combined_polars = BodyAerodynamics.instantiate(
+        n_panels=n_panels,
+        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_NF_combined.yaml"),
+        spanwise_panel_distribution=spanwise_panel_distribution,
+    )
+
     body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
         n_panels=n_panels,
         file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
@@ -94,6 +98,9 @@ def main():
     angle_of_attack = 6.8
     side_slip = 0
     yaw_rate = 0
+    body_aero_CAD_CFD_NF_combined_polars.va_initialize(
+        Umag, angle_of_attack, side_slip, yaw_rate
+    )
     body_aero_CAD_CFD_polars.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
     body_aero_CAD_CFD_polars_with_bridles.va_initialize(
         Umag, angle_of_attack, side_slip, yaw_rate
@@ -129,21 +136,24 @@ def main():
     plot_polars(
         solver_list=[
             solver_base_version,
+            # solver_base_version,
             solver_base_version,
             solver_base_version,
-            solver_base_version,
+            # solver_base_version,
         ],
         body_aero_list=[
-            body_aero_CAD_CFD_polars,
+            body_aero_CAD_CFD_NF_combined_polars,
+            # body_aero_CAD_CFD_polars,
             body_aero_CAD_CFD_polars_with_bridles,
             body_aero_CAD_neuralfoil,
-            body_aero_masure_regression,
+            # body_aero_masure_regression,
         ],
         label_list=[
-            "VSM CAD CFD Polars",
+            "VSM CAD CFD NF Combined Polars",
+            # "VSM CAD CFD Polars",
             "VSM CAD CFD Polars with Bridles",
             "VSM CAD NeuralFoil",
-            "VSM CAD Masure Regression",
+            # "VSM CAD Masure Regression",
             path_cfd_alpha.stem,
             path_windtunnel_alpha.stem,
         ],
@@ -182,14 +192,17 @@ def main():
             solver_base_version,
             solver_base_version,
             solver_base_version,
+            solver_base_version,
         ],
         body_aero_list=[
+            body_aero_CAD_CFD_NF_combined_polars,
             body_aero_CAD_CFD_polars,
             body_aero_CAD_CFD_polars_with_bridles,
             body_aero_CAD_neuralfoil,
             body_aero_masure_regression,
         ],
         label_list=[
+            "VSM CAD CFD NF Combined Polars",
             "VSM CAD CFD Polars",
             "VSM CAD CFD Polars with Bridles",
             "VSM CAD NeuralFoil",

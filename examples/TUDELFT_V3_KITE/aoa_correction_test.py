@@ -5,8 +5,6 @@ from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
 )
-from VSM.plot_geometry_matplotlib import plot_geometry
-from VSM.plot_geometry_plotly import interactive_plot
 
 
 def main():
