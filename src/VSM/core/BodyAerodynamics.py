@@ -58,7 +58,6 @@ class BodyAerodynamics:
         self._aerodynamic_center_location = aerodynamic_center_location
         self._control_point_location = control_point_location
 
-        ##TODO:
         self._bridle_line_system = bridle_line_system
         self.cd_cable = 1.1
         self.cf_cable = 0.01
@@ -796,14 +795,17 @@ class BodyAerodynamics:
             # 2) pitching moment about span axis:
             m_pitch = np.dot(M_local, z_airf)
 
-            # 3) force in the chord plane (perpendicular to span)
-            F_perp = F - np.dot(F, z_airf) * z_airf
-            F_perp_mag = np.linalg.norm(F_perp)
+            ###  Commented this on 11/02/2026, and replaced with improved version that DOES preserve moments
+            # # 3) force in the chord plane (perpendicular to span)
+            # F_perp = F - np.dot(F, z_airf) * z_airf
+            # F_perp_mag = np.linalg.norm(F_perp)
 
-            # 4) if there's no pitching‐plane force, fallback to AC
-            if F_perp_mag < 1e-12:
-                panel_cp_locations.append(ac)
-                continue
+            # # 4) if there's no pitching‐plane force, fallback to AC
+            # if F_perp_mag < 1e-12:
+            #     panel_cp_locations.append(ac)
+            #     continue
+
+            F_perp_mag = np.dot(np.cross(y_airf, F), z_airf)
 
             # 5) lever arm along chord = M / F
             lever = m_pitch / F_perp_mag

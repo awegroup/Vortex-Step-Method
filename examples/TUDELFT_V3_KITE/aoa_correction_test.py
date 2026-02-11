@@ -5,8 +5,6 @@ from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
 )
-from VSM.plot_geometry_matplotlib import plot_geometry
-from VSM.plot_geometry_plotly import interactive_plot
 
 
 def main():
@@ -56,7 +54,7 @@ def main():
         reference_point=np.array([0.0, 0.0, 0.0]), is_aoa_corrected=True
     )
 
-    # Step 1: Instantiate BodyAerodynamics objects from different YAML configs
+    ### Step 1: Instantiate BodyAerodynamics objects from different YAML configs
     cad_derived_geometry_dir = (
         Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
     )

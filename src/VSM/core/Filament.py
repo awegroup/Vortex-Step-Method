@@ -102,7 +102,7 @@ class BoundFilament(Filament):
                 * jit_dot(r0, r1 / jit_norm(r1) - r2 / jit_norm(r2))
             )
         # If point is on the filament
-        elif jit_norm(r1Xr0) / jit_norm(r0) == 0:
+        elif jit_norm(r1Xr0) / jit_norm(r0) < 1e-12 * epsilon:
             return np.zeros(3)
         # If point is inside the core radius of filament
         else:
@@ -179,7 +179,7 @@ class BoundFilament(Filament):
                 * jit_dot(r0, r1 / jit_norm(r1) - r2 / jit_norm(r2))
             )
         # if point is on the filament
-        elif jit_norm(r1Xr0) / jit_norm(r0) == 0:
+        elif jit_norm(r1Xr0) / jit_norm(r0) < 1e-12 * epsilon:
             return np.zeros(3)
         # if point is inside the core radius of filament
         else:
@@ -299,7 +299,7 @@ class SemiInfiniteFilament(Filament):
             # determine the three velocity components
             return K * r1XVf
         # if point is on the filament
-        elif jit_norm(r1XVf) / jit_norm(Vf) == 0:
+        elif jit_norm(r1XVf) / jit_norm(Vf) < 1e-12 * epsilon:
             return np.zeros(3)
         # else, if point within core
         else:
