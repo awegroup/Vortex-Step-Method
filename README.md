@@ -63,64 +63,28 @@ For detailed documentation, please refer to the following resources.
 - [Nomenclature](docs/nomenclature.md)
 - [Style Guide](docs/style_guide.md)
 
-## Installation Instructions
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/awegroup/Vortex-Step-Method
-    ```
 
-2. Navigate to the repository folder:
+## Usage instructions
+1. Install the repository:
+   Linux: 
     ```bash
-    cd Vortex-Step-Method
-    ```
-    
-3. Create a virtual environment:
-   
-   Linux or Mac:
-    ```bash
-    python3 -m venv venv
+    git clone git@github.com:awegroup/Vortex-Step-Method.git && \
+    cd Vortex-Step-Method && \
+    python3 -m venv venv && \
+    source venv/bin/activate && \
+    pip install -e .[dev]
     ```
     
     Windows:
     ```bash
-    python -m venv venv
-    ```
-    
-4. Activate the virtual environment:
-
-   Linux or Mac:
-    ```bash
-    source venv/bin/activate
-    ```
-
-    Windows
-    ```bash
-    .\venv\Scripts\activate
-    ```
-
-5. Install the required dependencies:
-
-   For users:
-    ```bash
-    pip install .
-    ```
-        
-   For developers:
-    ```bash
+    git clone git@github.com:awegroup/Vortex-Step-Method.git; `
+    cd Vortex-Step-Method; `
+    python -m venv venv; `
+    .\venv\Scripts\Activate.ps1; `
     pip install -e .[dev]
     ```
-    
-    For ubuntu add:
-    ```
-    pip install pyqt5
-    sudo apt install cm-super
-    sudo apt install dvipng
-   ```
 
-6. To deactivate the virtual environment:
-    ```bash
-    deactivate
-    ```
+2. Once installed, start exploring the `examples/` folder, which contains tutorials and commented specific analyses scripts.
 
 ## Dependencies
 
@@ -144,43 +108,6 @@ The code base is adapted to work with a machine learning model trained on more t
 
 As the three trained models, for Reynolds number = 1e6, 5e6 and 1e7 are too large (~2.3GB) for GitHub, they have to be downloaded separately, and added to the `data/ml_models` folder. They are accessible through [Zenodo](https://doi.org/10.5281/zenodo.16925758), and so is the [CFD data](https://doi.org/10.5281/zenodo.16925833) on which the models are trained. More description on its usage is found in [Airfoil Aerodynamics](docs/AirfoilAerodynamics.md).
 
-## Usage Examples
-
-The `examples/` folder contains comprehensive tutorials:
-
-### **Rectangular Wing**
-- `rectangular_wing/tutorial.py` - Basic wing analysis workflow
-
-### **TU Delft V3 Kite**
-- `tutorial.py` - Complete kite aerodynamic analysis
-- `evaluate_stability_derivatives.py` - Stability and control derivatives computation
-- `tow_angle_geometry.py` - Geometric tow angle and center of pressure analysis
-- `tow_point_location_parametric_study.py` - Design space exploration for tow point
-- `kite_stability_dynamics.py` - Natural frequency and oscillation period calculation
-- `convergence.py` - Panel count convergence study
-- `benchmark.py` - Performance benchmarking
-
-### **Machine Learning for LEI Airfoils**
-- `machine_learning_for_lei_airfoils/tutorial.py` - Using ML models for airfoil aerodynamics
-
-See individual files for detailed documentation and usage instructions.
-
-## Performance Optimization
-
-For large-scale parametric studies:
-
-1. **Use fewer panels during exploration** (`n_panels=20-30`), then increase for final results
-2. **Cache geometries**: Instantiate `BodyAerodynamics` once, reuse with different flow conditions
-
-Example:
-```python
-# Fast exploration
-body_aero = BodyAerodynamics.instantiate(n_panels=20, ...)  # ~0.1s per solve
-
-# High accuracy
-body_aero = BodyAerodynamics.instantiate(n_panels=100, ...) # ~2s per solve
-```
-
 ## Troubleshooting
 
 ### Common Issues
@@ -203,7 +130,7 @@ Download from [Zenodo](https://doi.org/10.5281/zenodo.16925758) and place in `da
 pip install jupyterlab "ipywidgets>=7.5"
 ```
 
-For more issues, check the [GitHub Issues](https://github.com/ocayon/Vortex-Step-Method/issues) page.
+For more issues, check the [GitHub Issues](https://github.com/awegroup/Vortex-Step-Method/issues) page.
 
 ## Contributing Guide
 Please report issues and create pull requests using the URL:
@@ -220,16 +147,18 @@ We welcome contributions to this project! Whether you're reporting a bug, sugges
    ```
 3. Implement your new feature
 4. Verify nothing broke using **pytest**
-```
-  pytest
-```
+    ```bash
+    pytest
+    ```
 5. **Commit your changes** with a descriptive message
-```
-  git commit -m "#<number> <message>"
-```
+    ```bash
+    git commit -m "#<number> <message>"
+    ```
 6. **Push your changes** to the github repo:
-   git push origin branch-name
    
+   ```bash
+   git push origin branch-name
+   ```
 7. **Create a pull-request**, with `base:develop`, to merge this feature branch
 8. Once the pull request has been accepted, **close the issue**
 
