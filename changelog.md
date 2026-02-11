@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.0] - 11/02/2026
+
+### Added
+- Added extensive new datasets (`555` files) between `v2.0.1` and current `main`, primarily:
+  - `data/TUDELFT_V3_KITE` (CAD-derived geometry, 2D/3D polars, validation assets)
+  - `data/paraglider_Belloc_2015` (reference data and `FoilsVTK` geometry set)
+- Added new examples (`15` files), including:
+  - TU Delft scripts: `aoa_correction_test.py`, `compare_against_literature.py`, `plotting_the_geometry.py`, `save_polars.py`, `testing_center_of_pressure_calculation.py`
+  - NeuralFoil tutorial and result figures in `examples/neuralfoil/`
+  - Belloc comparison scripts in `examples/paraglider_Belloc_2015/`
+
+### Changed
+- `Solver`:
+  - default `core_radius_fraction` changed from `1e-20` to `0.05`
+  - added `is_aoa_corrected` flag and propagated it to the aerodynamic solve path
+- `BodyAerodynamics`:
+  - center-of-pressure computation updated to use a signed force component (`dot(cross(y_airf, F), z_airf)`) instead of projected-force magnitude fallback logic
+  - solve branching now uses `is_aoa_corrected` flag
+- `stability_derivatives.py` expanded with aircraft-frame coefficient mapping utilities and a helper to build Malz-style quadratic coefficient tables from solver evaluations
+- `plotting.py::plot_polars` updated to compute `CL/CD` directly when plotting against angle of attack
+- Example maintenance:
+  - renamed `sensivity.py` -> `sensitivity.py`
+  - renamed `benchmark.py` -> `benchmark_runtime.py`
+  - updated `evaluate_stability_derivatives.py`, `fit_polynomials_polars.py`, and `tutorial.py`
+
+### Fixed
+- Improved filament near-singularity handling by replacing exact `== 0` checks with tolerance-based checks (`< 1e-12 * epsilon`) in bound, trailing, and semi-infinite filament evaluations.
+
+
 
 ## [2.0.1] - 21-10-2025
 
