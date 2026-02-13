@@ -1,64 +1,27 @@
 [project]
 
 name = "VSM"
-# Define the name of your project here. This is mandatory. Once you publish your package for the first time,
-# this name will be locked and associated with your project. It affects how users will
-# install your package via pip, like so:
-
-# $ pip install exampleproject
-
-# Your project will be accessible at: https://pypi.org/project/exampleproject/
-
-version = "1.0.0"
-# Version numbers should conform to PEP 440, and are also mandatory (but they can be set dynamic)
-# https://www.python.org/dev/peps/pep-0440/
-
-description = "Short description of your project"
-# Provide a short, one-line description of what your project does. This is known as the
-# "Summary" metadata field:
-# https://packaging.python.org/specifications/core-metadata/#summary
-
+dynamic = ["version"]
+description = "A Python package for fast aerodynamic vortex-step method simulations."
 readme = "README.md"
-# Here, you can include a longer description which often mirrors your README file.
-# This description will appear on PyPI when your project is published.
-# This corresponds to the "Description" metadata field:
-# https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#readme
-
 requires-python = ">=3.8"
-# Indicate the versions of Python your project is compatible with. Unlike the
-# 'Programming Language' classifiers, 'pip install' will verify this field
-# and prevent installation if the Python version does not match.
-# Check https://endoflife.date/python for Python versions that are still supported.
-
 license = {file = "LICENSE"}
-# This specifies the license.
-# It can be a text (e.g. license = {text = "MIT License"}) or a reference to a file with the license text as shown above.
-
-keywords = ["aerodynamics", "wind-energy", "simulation"]
-# Keywords that describe your project. These assist users in discovering your project on PyPI searches.
-# These should be a comma-separated list reflecting the nature or domain of the project.
-
+keywords = ["aerodynamics", "wind-energy", "simulation", "vortex-method", "fluid-dynamics", "kite", "paraglider", "airfoil", "python", "numerical-methods", "computational-fluid-dynamics", "CFD", "machine-learning", "regression", "panel-method", "wake", "stability", "foil", "engineering", "renewable-energy", "modeling", "data-analysis"]
 authors = [
   {name = "Cayon, Oriol", email = "ocayon@tudelft.nl" },
   {name = "Jelle, Poland", email = "j.a.w.poland@tudelft.nl"}
 ]
-# Information about the original authors of the project and their contact details.
-
 maintainers = [
   {name = "Cayon, Oriol", email = "ocayon@tudelft.nl" },
   {name = "Jelle, Poland", email = "j.a.w.poland@tudelft.nl"}
 ]
-# Information about the current maintainers of the project and their contact details.
-
-# Classifiers help categorize the project on PyPI and aid in discoverability.
-# For a full list of valid classifiers, see https://pypi.org/classifiers/
 classifiers = [
   # Indicate the development status of your project (maturity). Commonly, this is
   #   3 - Alpha
   #   4 - Beta
   #   5 - Stable
   #.  6 - Mature
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Stable",
 
   # Target audience
   "Intended Audience :: Developers",
@@ -76,12 +39,6 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3 :: Only",
 ]
-
-# Dependencies needed by your project. These packages will be installed by pip when
-# your project is installed. Ensure these are existing, valid packages.
-
-# For more on how this field compares to pip's requirements files, see:
-# https://packaging.python.org/discussions/install-requires-vs-requirements/
 dependencies = [
   "numpy",
   "matplotlib>=3.7.1",
@@ -95,14 +52,6 @@ dependencies = [
   "screeninfo",
   "odfpy",
 ]
-
-
-# You can define additional groups of dependencies here (e.g., development dependencies).
-# These can be installed using the "extras" feature of pip, like so:
-
-#   $ pip install exampleproject[dev]
-
-# These are often referred to as "extras" and provide optional functionality.
 [project.optional-dependencies]
 dev = [
   "pytest",
@@ -110,20 +59,19 @@ dev = [
   "black",
   ]
 
+# List of relevant URLs for your project. These are displayed on the left sidebar of your PyPI page.
+# This can include links to the homepage, source code, changelog, funding, etc.
 [project.urls]
-"Homepage" = "https://github.com/awegroup"
+"Homepage" = "https://github.com/awegroup/Vortex-Step-Method"
 "Source" = "https://github.com/awegroup/Vortex-Step-Method"
-
+"Documentation" = "https://github.com/awegroup/Vortex-Step-Method#readme"
+#"Changelog" = "https://github.com/awegroup/Vortex-Step-Method/releases"
+#"Funding" = "https://github.com/awegroup/Vortex-Step-Method#funding"
+"Bug Tracker" = "https://github.com/awegroup/Vortex-Step-Method/issues"
+"Download" = "https://github.com/awegroup/Vortex-Step-Method/releases"
 # To grab all the files from the src folders of installed packages, not only the .py files
 [tool.setuptools.packages.find]
 where = ["src"]
-
-# List of relevant URLs for your project. These are displayed on the left sidebar of your PyPI page.
-# This can include links to the homepage, source code, changelog, funding, etc.
-
-
-# This [project] example was adopted from https://github.com/pypa/sampleproject/blob/main/pyproject.toml
-
 
 [build-system]
 # Setuptools is the build backend; version 61+ supports PEP 621 [project] metadata
