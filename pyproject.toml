@@ -74,6 +74,9 @@ dev = [
 where = ["src"]
 
 [build-system]
-# Setuptools is the build backend; version 61+ supports PEP 621 [project] metadata
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_scheme = "release-branch-semver"
+local_scheme = "no-local-version"
