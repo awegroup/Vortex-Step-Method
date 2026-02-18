@@ -142,12 +142,14 @@ def make_solver(is_aoa_corrected: bool) -> Solver:
 
 
 def main(
-    color_no="blue",
+    color_no="red",
     color_yes="red",
     color_scatter="black",
+    color_cfd="blue",
     labels_V3=(
         r"VSM no corr ($3/4c$)",
         r"VSM $\alpha$ corr ($1/4c$)",
+        r"RANS CFD",
         r"WT LEI kite",
     ),
     labels_Belloc=(
@@ -161,24 +163,33 @@ def main(
     alpha_label=r"$\alpha$ ($^\circ$)",
     figsize=(15, 8),
     n_panels: int = 50,
-    n_vsm_data_points: int = 20,
+    n_vsm_data_points: int = 17,
     alpha_range: Tuple[float, float] = (-2, 17),
 ):
     set_plot_style()
     project_dir = Path(__file__).resolve().parents[2]
 
     # ---------------------- V3 setup ----------------------
-    v3_cad_dir = project_dir / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
+    v3_cad_dir = (
+        project_dir
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
+        / "2D_airfoils_polars_plots_BEST"
+    )
     v3_body = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=v3_cad_dir / "aero_geometry_CAD_CFD_polars.yaml",
+        file_path=v3_cad_dir / "aero_geometry_CFD_CAD_derived.yaml",
         # ml_models_dir=project_dir / "data" / "ml_models",
         spanwise_panel_distribution="uniform",
     )
     solver_v3_no = make_solver(False)
     solver_v3_yes = make_solver(True)
     v3_alpha = np.linspace(alpha_range[0], alpha_range[1], n_vsm_data_points)
-    Umag_v3 = 3.15
+    Umag_v3 = 2.82
+    ref_chord_v3 = 2.6
+    mu_v3 = 1.5e-5  # Dynamic viscosity of air at ~20°C in kg/(m·s)
+    print(f"V3 Reynolds Check: {Umag_v3 * ref_chord_v3 / mu_v3:.2e} (expect 5e5)")
 
     v3_cl_no, v3_cd_no, v3_clcd_no = run_alpha_sweep(
         v3_body, solver_v3_no, v3_alpha, Umag_v3
@@ -194,12 +205,29 @@ def main(
         / "3D_polars_literature"
         / "V3_CL_CD_CS_alpha_sweep_for_beta_0_WindTunnel_Poland_2025_Rey_560e4.csv"
     )
+
     v3_wt = pd.read_csv(v3_wt_path)
     v3_wt_cl = v3_wt["CL"].values
     v3_wt_cd = v3_wt["CD"].values
     v3_wt_alpha = v3_wt["alpha"].values
     v3_wt_clcd = np.divide(
         v3_wt_cl, v3_wt_cd, out=np.full_like(v3_wt_cl, np.nan), where=v3_wt_cd != 0
+    )
+
+    v3_CFD_path = (
+        project_dir
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "3D_polars_literature"
+        / "CFD_RANS_Rey_10e5_Poland2025_alpha_sweep_beta_0.csv"
+    )
+    v3_CFD = pd.read_csv(v3_CFD_path)
+    v3_CFD = v3_CFD.sort_values("alpha")
+    v3_CFD_cl = v3_CFD["CL"].values
+    v3_CFD_cd = v3_CFD["CD"].values
+    v3_CFD_alpha = v3_CFD["alpha"].values
+    v3_CFD_clcd = np.divide(
+        v3_CFD_cl, v3_CFD_cd, out=np.full_like(v3_CFD_cl, np.nan), where=v3_CFD_cd != 0
     )
 
     # ---------------------- Belloc setup ----------------------
@@ -217,7 +245,13 @@ def main(
     solver_belloc_yes = make_solver(True)
 
     belloc_alpha = np.linspace(alpha_range[0], alpha_range[1], n_vsm_data_points)
-    Umag_belloc = 10.0
+    Umag_belloc = 40.0
+    ref_chord_belloc = 0.35  # Assuming polars are non-dimensionalized by chord
+    mu_belloc = 0.67679e-5  # Dynamic viscosity of air at ~15°C in kg/(m·s)
+    print(
+        f"Belloc Reynolds Check: {Umag_belloc * ref_chord_belloc / mu_belloc:.2e} (expect 0.92e6)"
+    )
+
     belloc_cl_yes, belloc_cd_yes, belloc_clcd_yes = run_alpha_sweep(
         belloc_body, solver_belloc_yes, belloc_alpha, Umag_belloc
     )
@@ -241,10 +275,24 @@ def main(
         markersize=4,
         linestyle="-",
         linewidth=1,
+        label=labels_V3[3],
+    )
+    ax.plot(
+        v3_CFD_alpha,
+        v3_CFD_cl,
+        color=color_cfd,
+        marker="s",
+        markersize=4,
+        linestyle="-",
+        linewidth=1,
         label=labels_V3[2],
     )
-    plot_valid(ax, v3_alpha, v3_cl_no, label=labels_V3[0], color=color_no)
-    plot_valid(ax, v3_alpha, v3_cl_yes, label=labels_V3[1], color=color_yes)
+    plot_valid(
+        ax, v3_alpha, v3_cl_no, label=labels_V3[0], color=color_no, linestyle="-"
+    )
+    plot_valid(
+        ax, v3_alpha, v3_cl_yes, label=labels_V3[1], color=color_yes, linestyle="--"
+    )
     ax.set_ylabel(cl_label)
     ax.set_xlabel(alpha_label)
     ax.set_xlim(alpha_range[0], alpha_range[1])
@@ -260,10 +308,24 @@ def main(
         markersize=4,
         linestyle="-",
         linewidth=1,
+        label=labels_V3[3],
+    )
+    ax.plot(
+        v3_CFD_alpha,
+        v3_CFD_cd,
+        color=color_cfd,
+        marker="s",
+        markersize=4,
+        linestyle="-",
+        linewidth=1,
         label=labels_V3[2],
     )
-    plot_valid(ax, v3_alpha, v3_cd_no, label=labels_V3[0], color=color_no)
-    plot_valid(ax, v3_alpha, v3_cd_yes, label=labels_V3[1], color=color_yes)
+    plot_valid(
+        ax, v3_alpha, v3_cd_no, label=labels_V3[0], color=color_no, linestyle="-"
+    )
+    plot_valid(
+        ax, v3_alpha, v3_cd_yes, label=labels_V3[1], color=color_yes, linestyle="--"
+    )
     ax.set_ylabel(cd_label)
     ax.set_xlabel(alpha_label)
     ax.set_xlim(alpha_range[0], alpha_range[1])
@@ -279,10 +341,24 @@ def main(
         markersize=4,
         linestyle="-",
         linewidth=1,
+        label=labels_V3[3],
+    )
+    ax.plot(
+        v3_CFD_alpha,
+        v3_CFD_clcd,
+        color=color_cfd,
+        marker="s",
+        markersize=4,
+        linestyle="-",
+        linewidth=1,
         label=labels_V3[2],
     )
-    plot_valid(ax, v3_alpha, v3_clcd_no, label=labels_V3[0], color=color_no)
-    plot_valid(ax, v3_alpha, v3_clcd_yes, label=labels_V3[1], color=color_yes)
+    plot_valid(
+        ax, v3_alpha, v3_clcd_no, label=labels_V3[0], color=color_no, linestyle="-"
+    )
+    plot_valid(
+        ax, v3_alpha, v3_clcd_yes, label=labels_V3[1], color=color_yes, linestyle="--"
+    )
     ax.set_ylabel(clcd_label)
     ax.set_xlabel(alpha_label)
     ax.set_xlim(alpha_range[0], alpha_range[1])
@@ -301,8 +377,22 @@ def main(
             linestyle="-",
             label=labels_Belloc[2],
         )
-    plot_valid(ax, belloc_alpha, belloc_cl_no, label=labels_Belloc[0], color=color_no)
-    plot_valid(ax, belloc_alpha, belloc_cl_yes, label=labels_Belloc[1], color=color_yes)
+    plot_valid(
+        ax,
+        belloc_alpha,
+        belloc_cl_no,
+        label=labels_Belloc[0],
+        color=color_no,
+        linestyle="-",
+    )
+    plot_valid(
+        ax,
+        belloc_alpha,
+        belloc_cl_yes,
+        label=labels_Belloc[1],
+        color=color_yes,
+        linestyle="--",
+    )
     ax.set_ylabel(cl_label)
     ax.set_xlabel(alpha_label)
     ax.set_xlim(alpha_range[0], alpha_range[1])
@@ -320,8 +410,22 @@ def main(
             linestyle="-",
             label=labels_Belloc[2],
         )
-    plot_valid(ax, belloc_alpha, belloc_cd_no, label=labels_Belloc[0], color=color_no)
-    plot_valid(ax, belloc_alpha, belloc_cd_yes, label=labels_Belloc[1], color=color_yes)
+    plot_valid(
+        ax,
+        belloc_alpha,
+        belloc_cd_no,
+        label=labels_Belloc[0],
+        color=color_no,
+        linestyle="-",
+    )
+    plot_valid(
+        ax,
+        belloc_alpha,
+        belloc_cd_yes,
+        label=labels_Belloc[1],
+        color=color_yes,
+        linestyle="--",
+    )
     ax.set_ylabel(cd_label)
     ax.set_xlabel(alpha_label)
     ax.set_xlim(alpha_range[0], alpha_range[1])
@@ -338,9 +442,21 @@ def main(
             linestyle="-",
             label=labels_Belloc[2],
         )
-    plot_valid(ax, belloc_alpha, belloc_clcd_no, label=labels_Belloc[0], color=color_no)
     plot_valid(
-        ax, belloc_alpha, belloc_clcd_yes, label=labels_Belloc[1], color=color_yes
+        ax,
+        belloc_alpha,
+        belloc_clcd_no,
+        label=labels_Belloc[0],
+        color=color_no,
+        linestyle="-",
+    )
+    plot_valid(
+        ax,
+        belloc_alpha,
+        belloc_clcd_yes,
+        label=labels_Belloc[1],
+        color=color_yes,
+        linestyle="--",
     )
     ax.set_ylabel(clcd_label)
     ax.set_xlabel(alpha_label)

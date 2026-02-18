@@ -49,7 +49,8 @@ def main():
     ### defining settings
     n_panels = 50
     spanwise_panel_distribution = "uniform"
-    solver_base_version = Solver(reference_point=np.array([0.0, 0.0, 0.0]))
+    reference_point = np.array([0.422646, 0.0, 9.3667])
+    solver_base_version = Solver(reference_point=reference_point)
 
     # Step 1: Instantiate BodyAerodynamics objects from different YAML configs
     cad_derived_geometry_dir = (
@@ -61,54 +62,54 @@ def main():
         spanwise_panel_distribution=spanwise_panel_distribution,
     )
 
-    body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
-        n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
-        spanwise_panel_distribution=spanwise_panel_distribution,
-    )
-    body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
-        n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
-        spanwise_panel_distribution=spanwise_panel_distribution,
-        bridle_path=(
-            cad_derived_geometry_dir / "struc_geometry_manually_adjusted.yaml"
-        ),
-        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
-    )
-    body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
-        n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_neuralfoil.yaml"),
-        spanwise_panel_distribution=spanwise_panel_distribution,
-    )
-    body_aero_masure_regression = BodyAerodynamics.instantiate(
-        n_panels=n_panels,
-        file_path=(
-            cad_derived_geometry_dir / "aero_geometry_CAD_masure_regression.yaml"
-        ),
-        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
-        spanwise_panel_distribution=spanwise_panel_distribution,
-    )
+    # body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(
+    #     n_panels=n_panels,
+    #     file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
+    #     spanwise_panel_distribution=spanwise_panel_distribution,
+    # )
+    # body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
+    #     n_panels=n_panels,
+    #     file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
+    #     spanwise_panel_distribution=spanwise_panel_distribution,
+    #     bridle_path=(
+    #         cad_derived_geometry_dir / "struc_geometry_manually_adjusted.yaml"
+    #     ),
+    #     ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
+    # )
+    # body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
+    #     n_panels=n_panels,
+    #     file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_neuralfoil.yaml"),
+    #     spanwise_panel_distribution=spanwise_panel_distribution,
+    # )
+    # body_aero_masure_regression = BodyAerodynamics.instantiate(
+    #     n_panels=n_panels,
+    #     file_path=(
+    #         cad_derived_geometry_dir / "aero_geometry_CAD_masure_regression.yaml"
+    #     ),
+    #     ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
+    #     spanwise_panel_distribution=spanwise_panel_distribution,
+    # )
 
     # Set inflow conditions for each aerodynamic object
     """
     Set the wind speed, angle of attack, side slip, and yaw rate for each BodyAerodynamics object.
     This initializes the apparent wind vector and prepares the objects for analysis.
     """
-    Umag = 3.15
-    angle_of_attack = 6.8
+    Umag = 2.82
+    angle_of_attack = 12.5  # for sideslip comparison
     side_slip = 0
     yaw_rate = 0
     body_aero_CAD_CFD_NF_combined_polars.va_initialize(
         Umag, angle_of_attack, side_slip, yaw_rate
     )
-    body_aero_CAD_CFD_polars.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_CAD_CFD_polars_with_bridles.va_initialize(
-        Umag, angle_of_attack, side_slip, yaw_rate
-    )
-    body_aero_CAD_neuralfoil.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_masure_regression.va_initialize(
-        Umag, angle_of_attack, side_slip, yaw_rate
-    )
+    # body_aero_CAD_CFD_polars.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    # body_aero_CAD_CFD_polars_with_bridles.va_initialize(
+    #     Umag, angle_of_attack, side_slip, yaw_rate
+    # )
+    # body_aero_CAD_neuralfoil.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    # body_aero_masure_regression.va_initialize(
+    #     Umag, angle_of_attack, side_slip, yaw_rate
+    # )
 
     #  Plot polar curves for different angles of attack and side slip angles, and save results
     """
@@ -131,34 +132,34 @@ def main():
         / "data"
         / "TUDELFT_V3_KITE"
         / "3D_polars_literature"
-        / "WindTunnel_Re5e5_alpha_sweep_beta_0_Poland2025.csv"
+        / "windtunnel_alpha_sweep_beta_00_0_Poland_2025_Rey_5e5.csv"
     )
     plot_polars(
         solver_list=[
             solver_base_version,
             # solver_base_version,
-            solver_base_version,
-            solver_base_version,
+            # solver_base_version,
+            # solver_base_version,
             # solver_base_version,
         ],
         body_aero_list=[
             body_aero_CAD_CFD_NF_combined_polars,
             # body_aero_CAD_CFD_polars,
-            body_aero_CAD_CFD_polars_with_bridles,
-            body_aero_CAD_neuralfoil,
+            # body_aero_CAD_CFD_polars_with_bridles,
+            # body_aero_CAD_neuralfoil,
             # body_aero_masure_regression,
         ],
         label_list=[
             "VSM CAD CFD NF Combined Polars",
             # "VSM CAD CFD Polars",
-            "VSM CAD CFD Polars with Bridles",
-            "VSM CAD NeuralFoil",
+            # "VSM CAD CFD Polars with Bridles",
+            # "VSM CAD NeuralFoil",
             # "VSM CAD Masure Regression",
             path_cfd_alpha.stem,
             path_windtunnel_alpha.stem,
         ],
         literature_path_list=[path_cfd_alpha, path_windtunnel_alpha],
-        angle_range=[0, 5, 8, 10, 12, 15, 20, 25],
+        angle_range=[-3, 0, 3, 6, 9, 12, 15],
         angle_type="angle_of_attack",
         angle_of_attack=0,
         side_slip=0,
@@ -184,39 +185,39 @@ def main():
         / "data"
         / "TUDELFT_V3_KITE"
         / "3D_polars_literature"
-        / "WindTunnel_Re5e5_beta_sweep_alpha_13_Poland2025.csv"
+        / "windtunnel_beta_sweep_alpha_12_5_Poland_2025_Rey_5e5.csv"
     )
     plot_polars(
         solver_list=[
             solver_base_version,
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
-            solver_base_version,
+            # solver_base_version,
+            # solver_base_version,
+            # solver_base_version,
+            # solver_base_version,
         ],
         body_aero_list=[
             body_aero_CAD_CFD_NF_combined_polars,
-            body_aero_CAD_CFD_polars,
-            body_aero_CAD_CFD_polars_with_bridles,
-            body_aero_CAD_neuralfoil,
-            body_aero_masure_regression,
+            # body_aero_CAD_CFD_polars,
+            # body_aero_CAD_CFD_polars_with_bridles,
+            # body_aero_CAD_neuralfoil,
+            # body_aero_masure_regression,
         ],
         label_list=[
             "VSM CAD CFD NF Combined Polars",
-            "VSM CAD CFD Polars",
-            "VSM CAD CFD Polars with Bridles",
-            "VSM CAD NeuralFoil",
-            "VSM CAD Masure Regression",
+            # "VSM CAD CFD Polars",
+            # "VSM CAD CFD Polars with Bridles",
+            # "VSM CAD NeuralFoil",
+            # "VSM CAD Masure Regression",
             path_cfd_beta.stem,
             path_windtunnel_beta.stem,
         ],
         literature_path_list=[path_cfd_beta, path_windtunnel_beta],
-        angle_range=[0, 3, 6, 9, 12],
+        angle_range=[0, 2, 4, 6, 8, 10],
         angle_type="side_slip",
-        angle_of_attack=6.8,
+        angle_of_attack=angle_of_attack,
         side_slip=0,
         yaw_rate=0,
-        Umag=3.15,
+        Umag=Umag,
         title="betasweep",
         data_type=".pdf",
         save_path=Path(save_folder),

@@ -19,7 +19,7 @@ class Solver:
         gamma_initial_distribution_type (str): Initial circulation distribution method.
         is_only_f_and_gamma_output (bool): Return only forces and circulation if True.
         is_with_viscous_drag_correction (bool): Enable viscous drag correction.
-        reference_point (list): Reference point for moment calculations.
+        reference_point (np.ndarray): Reference point for moment calculations.
         mu (float): Dynamic viscosity of fluid.
         rho (float): Fluid density.
         is_smooth_circulation (bool): Apply circulation smoothing.
@@ -41,7 +41,7 @@ class Solver:
         gamma_initial_distribution_type: str = "elliptical",
         is_only_f_and_gamma_output: bool = False,
         is_with_viscous_drag_correction: bool = False,
-        reference_point: list = [0, 0, 0],
+        reference_point: np.ndarray | list | tuple | None = None,
         mu: float = 1.81e-5,
         rho: float = 1.225,
         is_smooth_circulation: bool = False,
@@ -64,7 +64,8 @@ class Solver:
             gamma_initial_distribution_type (str): Initial circulation distribution.
             is_only_f_and_gamma_output (bool): Return minimal output if True.
             is_with_viscous_drag_correction (bool): Enable viscous corrections.
-            reference_point (list): Reference point for moments.
+            reference_point (array-like, optional): Reference point for moments.
+                Must be shape (3,). Defaults to [0, 0, 0].
             mu (float): Dynamic viscosity.
             rho (float): Fluid density.
             is_smooth_circulation (bool): Apply circulation smoothing.
@@ -83,7 +84,7 @@ class Solver:
         self.gamma_initial_distribution_type = gamma_initial_distribution_type
         self.is_only_f_and_gamma_output = is_only_f_and_gamma_output
         self.is_with_viscous_drag_correction = is_with_viscous_drag_correction
-        self.reference_point = reference_point
+        self.reference_point = self._check_and_force_shape(reference_point)
         self.is_aoa_corrected = is_aoa_corrected
         # === athmospheric properties ===
         self.mu = mu
@@ -111,6 +112,20 @@ class Solver:
         self.chord_array = None
         self.width_array = None
         self.y_coords = None
+
+    @staticmethod
+    def _check_and_force_shape(
+        reference_point: np.ndarray | list | tuple | None,
+    ) -> np.ndarray:
+        """Return reference_point as a float array with shape (3,)."""
+        rp = (
+            np.zeros(3, dtype=float)
+            if reference_point is None
+            else np.asarray(reference_point, dtype=float)
+        )
+        if rp.shape != (3,):
+            raise ValueError(f"reference_point must be shape (3,), got {rp.shape}")
+        return rp
 
     def solve(self, body_aero, gamma_distribution: np.ndarray = None) -> dict:
         """Solve aerodynamic model for circulation distribution and forces.

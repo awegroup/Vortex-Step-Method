@@ -500,6 +500,15 @@ def plot_polars(
     else:
         raise ValueError("angle_type should be either 'angle_of_attack' or 'side_slip'")
 
+    angle_values = np.asarray(angle_range, dtype=float)
+    if angle_values.size == 0:
+        raise ValueError("angle_range must contain at least one value.")
+    x_min = float(np.nanmin(angle_values))
+    x_max = float(np.nanmax(angle_values))
+    if x_min == x_max:
+        x_min -= 0.5
+        x_max += 0.5
+
     # Validate input sizes
     total_solver_count = len(solver_list)
     total_data_count = total_solver_count + len(literature_path_list)
@@ -589,8 +598,11 @@ def plot_polars(
             y_label_list[2] = r"$\phi_a$"
 
     # plotting the actyual data
-    handle_list = []
+    color_cycle = plt.rcParams["axes.prop_cycle"].by_key().get(
+        "color", ["C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7"]
+    )
     for data_idx, label in enumerate(label_list):
+        series_color = color_cycle[data_idx % len(color_cycle)]
         for ax_idx, (ax, y_label) in enumerate(zip(axs_flat, y_label_list)):
             if polar_data_list[data_idx][ax_idx + 1] is None:
                 continue
@@ -601,18 +613,31 @@ def plot_polars(
                 polar_data_list[data_idx][0],
                 y_data,
                 label=label,
+                color=series_color,
                 linestyle="-",
                 marker="*",
                 markersize=7,
             )
     # Adding one legend
-    handles, labels = axs_flat[0].get_legend_handles_labels()
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            color=color_cycle[i % len(color_cycle)],
+            linestyle="-",
+            marker="*",
+            markersize=7,
+            label=label,
+        )
+        for i, label in enumerate(label_list)
+    ]
+    labels = label_list
     fig.legend(
         handles,
         labels,
         loc="lower center",
         bbox_to_anchor=(0.5, 0.05),
-        ncol=min(3, len(handles)),
+        ncol=2,
     )
     fig.subplots_adjust(bottom=0.1)
     plt.tight_layout(rect=[0, 0.2, 1, 0.95])
@@ -622,6 +647,7 @@ def plot_polars(
     for ax_idx, (ax, y_label) in enumerate(zip(axs_flat, y_label_list)):
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
+        ax.set_xlim(x_min, x_max)
         ax.grid(True)
 
     # saving plot

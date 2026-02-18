@@ -907,6 +907,9 @@ class BodyAerodynamics:
         va = self._va
         va_unit = va / va_mag
         q_inf = 0.5 * rho * va_mag**2
+        if reference_point is None:
+            reference_point = np.zeros(3)
+        reference_point = np.asarray(reference_point, dtype=float)
         for i, panel_i in enumerate(self.panels):
 
             ### Defining panel_variables
@@ -1105,17 +1108,21 @@ class BodyAerodynamics:
             # Scale by panel width if your 'moment[i]' is 2D moment-per-unit-span:
             M_local_3D = moment[i] * moment_axis_global * panel_i.width
 
-            # (3) Vector from panel AC to the chosen reference point:
-            r_vector = panel_ac_global - reference_point  # e.g. CG, wing root, etc.
+            # (3) Force application point used for r x F:
+            #     use aerodynamic center (1/4c) for all models.
+            panel_force_point_global = panel_i.aerodynamic_center
 
-            # (4) Cross product to shift the force from panel AC to ref. point:
+            # (4) Vector from panel force point to the chosen reference point:
+            r_vector = panel_force_point_global - reference_point
+
+            # (5) Cross product to shift the force to the reference point:
             force_global_3D = np.array([fx_global_3D, fy_global_3D, fz_global_3D])
             M_shift = np.cross(r_vector, force_global_3D)
 
-            # (5) Total panel moment about the reference point:
+            # (6) Total panel moment about the reference point:
             M_ref_panel = M_local_3D + M_shift
 
-            # (6) Accumulate or store:
+            # (7) Accumulate or store:
             mx_global_3D_sum += M_ref_panel[0]
             my_global_3D_sum += M_ref_panel[1]
             mz_global_3D_sum += M_ref_panel[2]
@@ -1250,12 +1257,30 @@ class BodyAerodynamics:
         results_dict.update(
             [
                 (
-                    "cmx_distribution",
-                    np.array(mx_global_3D_list)
-                    / (q_inf * projected_area * chord_array),
+                    "cm_panel_dist",
+                    np.divide(
+                        moment[:, 0],
+                        0.5 * rho * Umag_array**2 * chord_array**2,
+                        out=np.zeros_like(chord_array),
+                        where=(Umag_array > 0.0) & (chord_array > 0.0),
+                    ),
                 )
             ]
         )
+        # cm_panel_dist:
+        #   sectional airfoil moment coefficient (about local span axis), based on
+        #   intrinsic panel moment m' and local normalization q(y) * c(y)^2.
+        results_dict.update(
+            [
+                (
+                    "cmx_distribution",
+                    np.array(mx_global_3D_list) / (q_inf * projected_area * max_chord),
+                )
+            ]
+        )
+        # cmx_distribution:
+        #   per-panel contribution to global CMx, using the same normalization
+        #   as the global cmx coefficient (q_inf * S_ref * c_ref).
         results_dict.update(
             [
                 (
