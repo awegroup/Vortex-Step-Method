@@ -1421,7 +1421,7 @@ class BodyAerodynamics:
         relative_velocity_array = va_array + induced_velocity_all
         v_normal_array = np.sum(x_airf_array * relative_velocity_array, axis=1)
         v_tangential_array = np.sum(y_airf_array * relative_velocity_array, axis=1)
-        alpha_array = np.arctan(v_normal_array / v_tangential_array)
+        alpha_array = np.arctan2(v_normal_array, v_tangential_array)
 
         return alpha_array[:, np.newaxis]
 

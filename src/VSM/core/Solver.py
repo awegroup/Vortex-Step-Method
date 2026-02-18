@@ -309,7 +309,7 @@ class Solver:
         Uinfcrossz_array = jit_cross(self.va_array, self.z_airf_array)
         v_normal_array = np.sum(self.x_airf_array * relative_velocity_array, axis=1)
         v_tangential_array = np.sum(self.y_airf_array * relative_velocity_array, axis=1)
-        alpha_array = np.arctan(v_normal_array / v_tangential_array)  # alpha_eff
+        alpha_array = np.arctan2(v_normal_array, v_tangential_array)  # alpha_eff
         Umag_array = np.linalg.norm(
             relative_velocity_crossz_array, axis=1
         )  # |v_eff x z|

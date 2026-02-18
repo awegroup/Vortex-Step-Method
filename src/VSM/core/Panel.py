@@ -199,7 +199,7 @@ class Panel:
         relative_velocity = self.va + induced_velocity
         v_normal = jit_dot(self.x_airf, relative_velocity)
         v_tangential = jit_dot(self.y_airf, relative_velocity)
-        alpha = np.arctan(v_normal / v_tangential)
+        alpha = np.arctan2(v_normal, v_tangential)
         return alpha, relative_velocity
 
     def compute_cl(self, alpha: float) -> float:
