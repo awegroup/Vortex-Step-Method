@@ -58,8 +58,10 @@ def main():
     )
     body_aero_CAD_CFD_NF_combined_polars = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_NF_combined.yaml"),
+        # file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_NF_combined.yaml"),
+        file_path=(cad_derived_geometry_dir / "bart_kroes_failing_geometry.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
+        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
     )
 
     # body_aero_CAD_CFD_polars = BodyAerodynamics.instantiate(

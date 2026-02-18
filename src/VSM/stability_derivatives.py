@@ -147,16 +147,23 @@ def compute_rigid_body_stability_derivatives(
 
     def _solve_and_extract() -> CoeffDict:
         results = solver.solve(body_aero)
-        va_vector = np.asarray(body_aero.va, dtype=float)
-        if va_vector.ndim != 1 or va_vector.size != 3:
-            raise ValueError("Expected a uniform apparent velocity vector of length 3.")
-        speed = np.linalg.norm(va_vector)
-        if speed <= 0.0:
-            raise ValueError(
-                "Freestream speed must be positive to compute derivatives."
-            )
-
-        q_inf = 0.5 * solver.rho * speed**2
+        q_inf = float(results.get("q_ref", np.nan))
+        if not np.isfinite(q_inf) or q_inf <= 0.0:
+            va_vector = np.asarray(body_aero.va, dtype=float)
+            if va_vector.ndim == 1 and va_vector.size == 3:
+                speed = np.linalg.norm(va_vector)
+            elif va_vector.ndim == 2 and va_vector.shape[1] == 3:
+                speed = np.linalg.norm(np.mean(va_vector, axis=0))
+            else:
+                raise ValueError(
+                    "Unable to infer reference dynamic pressure from body_aero.va shape "
+                    f"{va_vector.shape}."
+                )
+            if speed <= 0.0:
+                raise ValueError(
+                    "Freestream speed must be positive to compute derivatives."
+                )
+            q_inf = 0.5 * solver.rho * speed**2
         reference_area = results["projected_area"]
         if reference_area <= 0.0:
             raise ValueError("Reference area must be positive.")
@@ -415,12 +422,22 @@ def compute_aircraft_frame_coeffs_from_solver(
     )
     results = solver.solve(body_aero)
 
-    va_vec = np.asarray(body_aero.va, float)
-    Va = float(np.linalg.norm(va_vec))
-    if Va <= 0:
-        raise ValueError("Speed must be >0")
-    rho = float(getattr(solver, "rho", 1.225))
-    q_inf = 0.5 * rho * Va * Va
+    q_inf = float(results.get("q_ref", np.nan))
+    if not np.isfinite(q_inf) or q_inf <= 0.0:
+        va_vec = np.asarray(body_aero.va, float)
+        if va_vec.ndim == 1 and va_vec.size == 3:
+            Va = float(np.linalg.norm(va_vec))
+        elif va_vec.ndim == 2 and va_vec.shape[1] == 3:
+            Va = float(np.linalg.norm(np.mean(va_vec, axis=0)))
+        else:
+            raise ValueError(
+                "Unable to infer reference dynamic pressure from body_aero.va shape "
+                f"{va_vec.shape}."
+            )
+        if Va <= 0:
+            raise ValueError("Speed must be >0")
+        rho = float(getattr(solver, "rho", 1.225))
+        q_inf = 0.5 * rho * Va * Va
     S = float(results["projected_area"])
     if S <= 0:
         raise ValueError("projected_area must be >0")

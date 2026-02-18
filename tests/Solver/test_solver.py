@@ -147,6 +147,51 @@ def test_solver_with_yaw_rate(solver, body_aero):
     assert not np.isnan(results["cl"])
 
 
+def test_solver_allows_distributed_va_input(body_aero):
+    """Distributed apparent velocity (n_panels, 3) should solve end-to-end."""
+    n = body_aero.n_panels
+    base_va = np.array([10.0, 0.0, 1.0])
+    scale = np.linspace(0.9, 1.1, n)[:, None]
+    distributed_va = scale * base_va
+    body_aero.va = distributed_va
+
+    solver = Solver()
+    results = solver.solve(body_aero)
+
+    panel_areas = np.array([p.chord * p.width for p in body_aero.panels], dtype=float)
+    speeds = np.linalg.norm(distributed_va, axis=1)
+    expected_speed = np.sqrt(np.sum(panel_areas * speeds**2) / np.sum(panel_areas))
+    direction = np.mean(distributed_va, axis=0)
+    direction /= np.linalg.norm(direction)
+    expected_va_ref = direction * expected_speed
+    expected_q_ref = 0.5 * solver.rho * expected_speed**2
+
+    np.testing.assert_allclose(results["va_ref"], expected_va_ref)
+    assert np.isclose(results["q_ref"], expected_q_ref)
+    assert np.isfinite(results["cl"])
+    assert np.isfinite(results["cd"])
+
+
+def test_solver_distributed_va_uses_area_weighted_rms_reference_speed(body_aero):
+    """Distributed inflow should use area-weighted RMS speed for q_ref."""
+    n = body_aero.n_panels
+    base_va = np.array([10.0, 0.0, 0.0])
+    scale = np.linspace(0.8, 1.2, n)[:, None]
+    distributed_va = scale * base_va
+    body_aero.va = distributed_va
+
+    solver = Solver()
+    results = solver.solve(body_aero)
+
+    panel_areas = np.array([p.chord * p.width for p in body_aero.panels], dtype=float)
+    speeds = np.linalg.norm(distributed_va, axis=1)
+    expected_speed = np.sqrt(np.sum(panel_areas * speeds**2) / np.sum(panel_areas))
+    expected_q_ref = 0.5 * solver.rho * expected_speed**2
+
+    assert np.isclose(np.linalg.norm(results["va_ref"]), expected_speed)
+    assert np.isclose(results["q_ref"], expected_q_ref)
+
+
 def test_body_rates_affect_panel_velocity(body_aero):
     """Rotational rates should induce the expected velocity field."""
     yaw_rate = 0.3

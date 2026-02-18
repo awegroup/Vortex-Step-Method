@@ -418,7 +418,6 @@ class BodyAerodynamics:
             )
             if r0.shape != (3,):
                 raise ValueError(f"reference_point must be shape (3,), got {r0.shape}")
-
             control_points = np.array(
                 [p.control_point for p in self.panels], dtype=float
             )
@@ -567,6 +566,49 @@ class BodyAerodynamics:
             z_airf_list,
         )
 
+    @staticmethod
+    def _compute_reference_velocity_from_distribution(
+        va_input: np.ndarray,
+        n_panels: int,
+        panel_areas: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Return a single reference velocity vector from uniform or distributed inflow.
+
+        For distributed inflow, the speed is area-weighted RMS and the direction is
+        area-weighted mean direction.
+        """
+        va_input = np.asarray(va_input, dtype=float)
+        if va_input.shape == (3,):
+            return va_input
+        if va_input.shape != (n_panels, 3):
+            raise ValueError(
+                f"'va' must be shape (3,) or ({n_panels}, 3); got {va_input.shape}"
+            )
+
+        if panel_areas is None:
+            panel_areas = np.ones(n_panels, dtype=float)
+        else:
+            panel_areas = np.asarray(panel_areas, dtype=float)
+            if panel_areas.shape != (n_panels,):
+                raise ValueError(
+                    f"panel_areas must be shape ({n_panels},), got {panel_areas.shape}"
+                )
+
+        total_area = float(np.sum(panel_areas))
+        if total_area <= 0.0:
+            raise ValueError("Total panel area must be positive.")
+
+        speeds = np.linalg.norm(va_input, axis=1)
+        reference_speed = float(np.sqrt(np.sum(panel_areas * speeds**2) / total_area))
+
+        direction = np.sum(panel_areas[:, None] * va_input, axis=0)
+        direction_norm = float(np.linalg.norm(direction))
+        if direction_norm <= 0.0:
+            direction = np.array([1.0, 0.0, 0.0], dtype=float)
+            direction_norm = 1.0
+
+        return direction / direction_norm * reference_speed
+
     def compute_AIC_matrices(
         self, aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
     ):
@@ -586,6 +628,14 @@ class BodyAerodynamics:
             "control_point" if aerodynamic_model_type == "VSM" else "aerodynamic_center"
         )
         evaluation_point_on_bound = aerodynamic_model_type == "LLT"
+        panel_areas = np.array([panel.chord * panel.width for panel in self.panels])
+        wake_velocity = self._compute_reference_velocity_from_distribution(
+            self._va, self.n_panels, panel_areas
+        )
+        wake_speed = jit_norm(wake_velocity)
+        if wake_speed <= 0.0:
+            raise ValueError("Wake reference speed must be positive.")
+        wake_unit = wake_velocity / wake_speed
 
         AIC = np.empty((3, self.n_panels, self.n_panels))
 
@@ -596,8 +646,8 @@ class BodyAerodynamics:
                     panel_jring.compute_velocity_induced_single_ring_semiinfinite(
                         ep,
                         evaluation_point_on_bound,
-                        va_norm_array[jring],
-                        va_unit_array[jring],
+                        wake_speed,
+                        wake_unit,
                         gamma=1,
                         core_radius_fraction=core_radius_fraction,
                     )
@@ -873,9 +923,6 @@ class BodyAerodynamics:
         else:
             alpha_corrected = alpha_array[:, np.newaxis]
             alpha_uncorrected = alpha_array[:, np.newaxis]
-        # Checking that va is not distributed input
-        if len(self._va) != 3:
-            raise ValueError("Calc.results not ready for va_distributed input")
 
         # Initializing variables
         cl_prescribed_va_list = []
@@ -903,10 +950,28 @@ class BodyAerodynamics:
         mz_global_3D_sum = 0
 
         spanwise_direction = self.wings[0].spanwise_direction
-        va_mag = jit_norm(self._va)
-        va = self._va
-        va_unit = va / va_mag
-        q_inf = 0.5 * rho * va_mag**2
+        # Reference inflow used for global decomposition and global coefficient
+        # normalization.
+        panel_areas = chord_array * panel_width_array
+        va_ref_vector = self._compute_reference_velocity_from_distribution(
+            self._va, len(panels), panel_areas
+        )
+
+        va_ref_mag = jit_norm(va_ref_vector)
+        if va_ref_mag <= 0.0:
+            raise ValueError("Reference freestream magnitude must be positive.")
+        va_ref_unit = va_ref_vector / va_ref_mag
+        dir_lift_ref = jit_cross(va_ref_vector, spanwise_direction)
+        dir_lift_ref_norm = jit_norm(dir_lift_ref)
+        if dir_lift_ref_norm <= 0.0:
+            raise ValueError(
+                "Reference lift direction is undefined because reference flow is "
+                "parallel to spanwise direction."
+            )
+        dir_lift_ref = dir_lift_ref / dir_lift_ref_norm
+        dir_side_ref = jit_cross(dir_lift_ref, va_ref_unit)
+
+        q_ref = 0.5 * rho * va_ref_mag**2
         if reference_point is None:
             reference_point = np.zeros(3)
         reference_point = np.asarray(reference_point, dtype=float)
@@ -956,18 +1021,27 @@ class BodyAerodynamics:
             ftotal_induced_va = lift_induced_va + drag_induced_va
 
             ### Converting forces to prescribed wing va
-            dir_lift_prescribed_va = jit_cross(va, spanwise_direction)
+            va_panel = va_array[i]
+            va_panel_mag = va_norm_array[i]
+            if va_panel_mag <= 0.0:
+                raise ValueError(
+                    f"Panel {i} has non-positive apparent velocity magnitude."
+                )
+            va_panel_unit = va_unit_array[i]
+            q_panel = 0.5 * rho * va_panel_mag**2
+
+            dir_lift_prescribed_va = jit_cross(va_panel, spanwise_direction)
             dir_lift_prescribed_va = dir_lift_prescribed_va / jit_norm(
                 dir_lift_prescribed_va
             )
             lift_prescribed_va = jit_dot(
                 lift_induced_va, dir_lift_prescribed_va
             ) + jit_dot(drag_induced_va, dir_lift_prescribed_va)
-            drag_prescribed_va = jit_dot(lift_induced_va, va_unit) + jit_dot(
-                drag_induced_va, va_unit
+            drag_prescribed_va = jit_dot(lift_induced_va, va_panel_unit) + jit_dot(
+                drag_induced_va, va_panel_unit
             )
 
-            dir_side = jit_cross(dir_lift_prescribed_va, va_unit)
+            dir_side = jit_cross(dir_lift_prescribed_va, va_panel_unit)
             side_prescribed_va = jit_dot(lift_induced_va, dir_side) + jit_dot(
                 drag_induced_va, dir_side
             )
@@ -987,12 +1061,12 @@ class BodyAerodynamics:
                     panel=panel_i,  # needed for true span & drag dirs
                     rho=rho,
                     mu=mu,
-                    q_inf=q_inf,
+                    q_inf=q_panel,
                 )
                 ftotal_induced_va += f_corr_drag + f_corr_span
 
                 # Decompose corrections into the (D, L, S) basis
-                e_D = va_unit
+                e_D = va_panel_unit
                 e_L = dir_lift_prescribed_va
                 e_S = dir_side
 
@@ -1022,9 +1096,16 @@ class BodyAerodynamics:
             fz_global_2D = jit_dot(ftotal_induced_va, np.array([0, 0, 1]))
 
             # 3D, by multiplying with the panel width
-            lift_wing_3D = lift_prescribed_va * panel_width
-            drag_wing_3D = drag_prescribed_va * panel_width
-            side_wing_3D = side_prescribed_va * panel_width
+            lift_wing_3D_local = lift_prescribed_va * panel_width
+            drag_wing_3D_local = drag_prescribed_va * panel_width
+            side_wing_3D_local = side_prescribed_va * panel_width
+            # Build panel force components in local (L, D, S) directions first,
+            # then project each on the single global reference axis.
+            lift_wing_3D = jit_dot(
+                lift_wing_3D_local * dir_lift_prescribed_va, dir_lift_ref
+            )
+            drag_wing_3D = jit_dot(drag_wing_3D_local * va_panel_unit, va_ref_unit)
+            side_wing_3D = jit_dot(side_wing_3D_local * dir_side, dir_side_ref)
             fx_global_3D = fx_global_2D * panel_width
             fy_global_3D = fy_global_2D * panel_width
             fz_global_3D = fz_global_2D * panel_width
@@ -1038,9 +1119,9 @@ class BodyAerodynamics:
             fz_global_3D_sum += fz_global_3D
 
             # Storing results that are useful
-            cl_prescribed_va_list.append(lift_prescribed_va / (q_inf * panel_chord))
-            cd_prescribed_va_list.append(drag_prescribed_va / (q_inf * panel_chord))
-            cs_prescribed_va_list.append(side_prescribed_va / (q_inf * panel_chord))
+            cl_prescribed_va_list.append(lift_prescribed_va / (q_panel * panel_chord))
+            cd_prescribed_va_list.append(drag_prescribed_va / (q_panel * panel_chord))
+            cs_prescribed_va_list.append(side_prescribed_va / (q_panel * panel_chord))
             fx_global_3D_list.append(fx_global_3D)
             fy_global_3D_list.append(fy_global_3D)
             fz_global_3D_list.append(fz_global_3D)
@@ -1160,21 +1241,23 @@ class BodyAerodynamics:
         )
         # Calculating Reynolds Number
         max_chord = max(np.array([panel.chord for panel in self.panels]))
-        reynolds_number = rho * va_mag * max_chord / mu
+        reynolds_number = rho * va_ref_mag * max_chord / mu
 
         if self._bridle_line_system is not None:
             # Calculate forces and moments for each bridle line individually
             for bridle_line in self._bridle_line_system:
                 # Calculate force for this individual bridle line
-                fa_bridle_line = self.compute_line_aerodynamic_force(va, bridle_line)
+                fa_bridle_line = self.compute_line_aerodynamic_force(
+                    va_ref_vector, bridle_line
+                )
 
                 # Add bridle forces to global force totals
                 fx_global_3D_sum += fa_bridle_line[0]
                 fy_global_3D_sum += fa_bridle_line[1]
                 fz_global_3D_sum += fa_bridle_line[2]
-                lift_wing_3D_sum += jit_dot(fa_bridle_line, dir_lift_prescribed_va)
-                drag_wing_3D_sum += jit_dot(fa_bridle_line, va_unit)
-                side_wing_3D_sum += jit_dot(fa_bridle_line, dir_side)
+                lift_wing_3D_sum += jit_dot(fa_bridle_line, dir_lift_ref)
+                drag_wing_3D_sum += jit_dot(fa_bridle_line, va_ref_unit)
+                side_wing_3D_sum += jit_dot(fa_bridle_line, dir_side_ref)
 
                 # Calculate moment for this bridle line
                 # Bridle line midpoint as moment application point
@@ -1210,17 +1293,17 @@ class BodyAerodynamics:
         results_dict.update([("lift", lift_wing_3D_sum)])
         results_dict.update([("drag", drag_wing_3D_sum)])
         results_dict.update([("side", side_wing_3D_sum)])
-        results_dict.update([("cl", lift_wing_3D_sum / (q_inf * projected_area))])
-        results_dict.update([("cd", drag_wing_3D_sum / (q_inf * projected_area))])
-        results_dict.update([("cs", side_wing_3D_sum / (q_inf * projected_area))])
+        results_dict.update([("cl", lift_wing_3D_sum / (q_ref * projected_area))])
+        results_dict.update([("cd", drag_wing_3D_sum / (q_ref * projected_area))])
+        results_dict.update([("cs", side_wing_3D_sum / (q_ref * projected_area))])
         results_dict.update(
-            [("cmx", mx_global_3D_sum / (q_inf * projected_area * max_chord))]
+            [("cmx", mx_global_3D_sum / (q_ref * projected_area * max_chord))]
         )
         results_dict.update(
-            [("cmy", my_global_3D_sum / (q_inf * projected_area * max_chord))]
+            [("cmy", my_global_3D_sum / (q_ref * projected_area * max_chord))]
         )
         results_dict.update(
-            [("cmz", mz_global_3D_sum / (q_inf * projected_area * max_chord))]
+            [("cmz", mz_global_3D_sum / (q_ref * projected_area * max_chord))]
         )
         # Local panel aerodynamics
         results_dict.update([("cl_distribution", cl_prescribed_va_list)])
@@ -1234,7 +1317,7 @@ class BodyAerodynamics:
             [
                 (
                     "cfx_distribution",
-                    np.array(fx_global_3D_list) / (q_inf * projected_area),
+                    np.array(fx_global_3D_list) / (q_ref * projected_area),
                 )
             ]
         )
@@ -1242,7 +1325,7 @@ class BodyAerodynamics:
             [
                 (
                     "cfy_distribution",
-                    np.array(fy_global_3D_list) / (q_inf * projected_area),
+                    np.array(fy_global_3D_list) / (q_ref * projected_area),
                 )
             ]
         )
@@ -1250,7 +1333,7 @@ class BodyAerodynamics:
             [
                 (
                     "cfz_distribution",
-                    np.array(fz_global_3D_list) / (q_inf * projected_area),
+                    np.array(fz_global_3D_list) / (q_ref * projected_area),
                 )
             ]
         )
@@ -1274,19 +1357,19 @@ class BodyAerodynamics:
             [
                 (
                     "cmx_distribution",
-                    np.array(mx_global_3D_list) / (q_inf * projected_area * max_chord),
+                    np.array(mx_global_3D_list) / (q_ref * projected_area * max_chord),
                 )
             ]
         )
         # cmx_distribution:
         #   per-panel contribution to global CMx, using the same normalization
-        #   as the global cmx coefficient (q_inf * S_ref * c_ref).
+        #   as the global cmx coefficient (q_ref * S_ref * c_ref).
         results_dict.update(
             [
                 (
                     "cmy_distribution",
                     np.array(my_global_3D_list)
-                    / (q_inf * projected_area * chord_array),
+                    / (q_ref * projected_area * chord_array),
                 )
             ]
         )
@@ -1295,7 +1378,7 @@ class BodyAerodynamics:
                 (
                     "cmz_distribution",
                     np.array(mz_global_3D_list)
-                    / (q_inf * projected_area * chord_array),
+                    / (q_ref * projected_area * chord_array),
                 )
             ]
         )
@@ -1308,6 +1391,8 @@ class BodyAerodynamics:
         results_dict.update([("wing_span", wing_span)])
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
+        results_dict.update([("q_ref", q_ref)])
+        results_dict.update([("va_ref", np.asarray(va_ref_vector, dtype=float))])
         results_dict.update([("center_of_pressure", x_cp)])
 
         panel_cp_locations = self.compute_panel_center_of_pressures(results_dict)
@@ -1359,7 +1444,7 @@ class BodyAerodynamics:
         yaw_rate (float): Yaw rate about the body z-axis, default is 0.0.
         pitch_rate (float): Pitch rate about the body y-axis, default is 0.0.
         roll_rate (float): Roll rate about the body x-axis, default is 0.0.
-        reference_point (np.ndarray): Reference point for moment calculation [x, y, z], default is None (uses [0, 0, 0]).
+        reference_point (np.ndarray): Reference point for body-rate inflow [x, y, z], default is None (uses [0, 0, 0]).
         """
         # Convert angles to radians
         aoa_rad = np.deg2rad(angle_of_attack)

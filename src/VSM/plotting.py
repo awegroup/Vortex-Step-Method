@@ -648,6 +648,25 @@ def plot_polars(
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         ax.set_xlim(x_min, x_max)
+        y_visible = []
+        for line in ax.get_lines():
+            x_data = np.asarray(line.get_xdata(), dtype=float)
+            y_data = np.asarray(line.get_ydata(), dtype=float)
+            if x_data.size == 0 or y_data.size == 0:
+                continue
+            finite_mask = np.isfinite(x_data) & np.isfinite(y_data)
+            in_xlim_mask = finite_mask & (x_data >= x_min) & (x_data <= x_max)
+            if np.any(in_xlim_mask):
+                y_visible.append(y_data[in_xlim_mask])
+        if y_visible:
+            y_visible = np.concatenate(y_visible)
+            y_min = float(np.min(y_visible))
+            y_max = float(np.max(y_visible))
+            if y_min == y_max:
+                padding = 0.05 * max(abs(y_min), 1.0)
+            else:
+                padding = 0.05 * (y_max - y_min)
+            ax.set_ylim(y_min - padding, y_max + padding)
         ax.grid(True)
 
     # saving plot

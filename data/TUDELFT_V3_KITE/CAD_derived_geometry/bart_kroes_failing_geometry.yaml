@@ -1,0 +1,154 @@
+wing_sections:
+  # ---------------------------------------------------------------':
+  # headers:':
+  #   - airfoil_id: integer, unique identifier for the airfoil (matches wing_airfoils)':
+  #   - LE_x: x-coordinate of leading edge':
+  #   - LE_y: y-coordinate of leading edge':
+  #   - LE_z: z-coordinate of leading edge':
+  #   - TE_x: x-coordinate of trailing edge':
+  #   - TE_y: y-coordinate of trailing edge':
+  #   - TE_z: z-coordinate of trailing edge':
+  headers: [airfoil_id, LE_x, LE_y, LE_z, TE_x, TE_y, TE_z, VUP_x, VUP_y, VUP_z]
+  data:
+  - [18, 0.540735, 4.703945, 0.921828, 0.811155, 4.744467, 0.930767, 0.000239, 1.357902,
+    0.301698]
+  - [17, 0.296109, 4.706491, 0.923748, 0.775953, 4.734992, 0.929706, 0.000937, 1.373623,
+    0.312615]
+  - [16, 0.074379, 4.705904, 0.931446, 0.74868, 4.725582, 0.934993, 0.002063, 1.398983,
+    0.330226]
+  - [15, -0.124668, 4.699687, 0.952405, 0.729011, 4.711671, 0.953671, 0.003586, 1.433293,
+    0.354052]
+  - [14, -0.298772, 4.685365, 0.99243, 0.717048, 4.690404, 0.991577, 0.005476, 1.475864,
+    0.383616]
+  - [13, -0.443555, 4.657505, 1.06352, 0.713247, 4.656397, 1.060918, 0.007702, 1.52601,
+    0.41844]
+  - [12, -0.552557, 4.611658, 1.173807, 0.718426, 4.605505, 1.170085, 0.010233, 1.58304,
+    0.458044]
+  - [11, -0.616577, 4.546098, 1.323683, 0.733869, 4.536312, 1.320699, 0.01304, 1.646267,
+    0.501952]
+  - [10, -0.684266, 4.331153, 1.780864, 0.869531, 4.318511, 1.772917, 0.019032, 1.676461,
+    1.053982]
+  - [9, -0.750025, 4.034087, 2.35085, 0.914241, 4.021749, 2.336636, 0.023989, 1.390325,
+    1.601815]
+  - [8, -0.808689, 3.669423, 2.974164, 0.949074, 3.655627, 2.956506, 0.028558, 1.379198,
+    1.765306]
+  - [7, -0.860127, 3.255752, 3.592835, 0.976661, 3.241616, 3.571433, 0.032688, 1.290075,
+    1.953351]
+  - [6, -0.904269, 2.804381, 4.170611, 0.998551, 2.794697, 4.143803, 0.036327, 0.824015,
+    2.28078]
+  - [5, -0.941081, 2.322192, 4.685521, 1.01573, 2.31188, 4.656352, 0.03943, 0.831221,
+    2.351276]
+  - [4, -0.970544, 1.829775, 5.106294, 1.028855, 1.819729, 5.074943, 0.041958, 0.77764,
+    2.426595]
+  - [3, -0.992646, 1.313266, 5.436959, 1.038368, 1.310564, 5.402634, 0.043881, 0.203071,
+    2.580468]
+  - [2, -1.007383, 0.797065, 5.658295, 1.044562, 0.794294, 5.622957, 0.045175, 0.204434,
+    2.607118]
+  - [1, -1.014753, 0.269705, 5.772185, 1.047616, 0.266362, 5.736383, 0.045826, 0.244401,
+    2.617018]
+  - [1, -1.014753, -0.269705, 5.772185, 1.047616, -0.266362, 5.736383, 0.045826, -0.244401,
+    2.617018]
+  - [2, -1.007383, -0.797065, 5.658295, 1.044562, -0.794294, 5.622957, 0.045175, -0.204434,
+    2.607118]
+  - [3, -0.992646, -1.313266, 5.436959, 1.038368, -1.310564, 5.402634, 0.043881, -0.203071,
+    2.580468]
+  - [4, -0.970544, -1.829775, 5.106294, 1.028855, -1.819729, 5.074943, 0.041958, -0.77764,
+    2.426595]
+  - [5, -0.941081, -2.322192, 4.685521, 1.01573, -2.31188, 4.656352, 0.03943, -0.831221,
+    2.351276]
+  - [6, -0.904269, -2.804381, 4.170611, 0.998551, -2.794697, 4.143803, 0.036327, -0.824015,
+    2.28078]
+  - [7, -0.860127, -3.255752, 3.592835, 0.976661, -3.241616, 3.571433, 0.032688, -1.290075,
+    1.953351]
+  - [8, -0.808689, -3.669423, 2.974164, 0.949074, -3.655627, 2.956506, 0.028558, -1.379198,
+    1.765306]
+  - [9, -0.750025, -4.034087, 2.35085, 0.914241, -4.021749, 2.336636, 0.023989, -1.390325,
+    1.601815]
+  - [10, -0.684266, -4.331153, 1.780864, 0.869531, -4.318511, 1.772917, 0.019032,
+    -1.676461, 1.053982]
+  - [11, -0.616577, -4.546098, 1.323683, 0.733869, -4.536312, 1.320699, 0.01304, -1.646267,
+    0.501952]
+  - [12, -0.552557, -4.611658, 1.173807, 0.718426, -4.605505, 1.170085, 0.010233,
+    -1.58304, 0.458044]
+  - [13, -0.443555, -4.657505, 1.06352, 0.713247, -4.656397, 1.060918, 0.007702, -1.52601,
+    0.41844]
+  - [14, -0.298772, -4.685365, 0.99243, 0.717048, -4.690404, 0.991577, 0.005476, -1.475864,
+    0.383616]
+  - [15, -0.124668, -4.699687, 0.952405, 0.729011, -4.711671, 0.953671, 0.003586,
+    -1.433293, 0.354052]
+  - [16, 0.074379, -4.705904, 0.931446, 0.74868, -4.725582, 0.934993, 0.002063, -1.398983,
+    0.330226]
+  - [17, 0.296109, -4.706491, 0.923748, 0.775953, -4.734992, 0.929706, 0.000937, -1.373623,
+    0.312615]
+  - [18, 0.540735, -4.703945, 0.921828, 0.811155, -4.744467, 0.930767, 0.000239, -1.357902,
+    0.301698]
+
+wing_airfoils:
+  # ---------------------------------------------------------------':
+  # headers:':
+  #   - airfoil_id: integer, unique identifier for the airfoil':
+  #   - type: one of [neuralfoil, breukels_regression, masure_regression, polars]':
+  #   - info_dict: dictionary with parameters depending on ''type''':
+  #':
+  # info_dict fields by type:':
+  #   - breukels_regression:':
+  #       t: Tube diameter non-dimensionalized by chord (required)':
+  #       kappa: Maximum camber height/magnitude, non-dimensionalized by chord (required)':
+  #   - neuralfoil:':
+  #       dat_file_path: Path to airfoil .dat file (x, y columns)':
+  #       model_size: NeuralFoil model size (e.g., "xxxlarge")':
+  #       xtr_lower: Lower transition location (0=forced, 1=free)':
+  #       xtr_upper: Upper transition location':
+  #       n_crit: Critical amplification factor (see guidelines below)':
+  #         n_crit guidelines:':
+  #           Sailplane:           12–14':
+  #           Motorglider:         11–13':
+  #           Clean wind tunnel:   10–12':
+  #           Average wind tunnel: 9   (standard "e^9 method")':
+  #           Dirty wind tunnel:   4–8':
+  #   - polars:':
+  #       csv_file_path: Path to polar CSV file (columns: alpha [rad], cl, cd, cm)':
+  #   - masure_regression:':
+  #       t, eta, kappa, delta, lambda, phi: Regression parameters':
+  #   - inviscid:':
+  #       no further data is required':
+  headers: [airfoil_id, type, info_dict]
+  data:
+  - [1, masure_regression, {dat_file_path: profiles/prof_1.dat, t: 0.077, eta: 0.175,
+      kappa: 0.147, delta: 7.236, lambda: 0.1, phi: 0.65, chord: 2.629, is_strut: false}]
+  - [2, masure_regression, {dat_file_path: profiles/prof_2.dat, t: 0.077, eta: 0.175,
+      kappa: 0.146, delta: 7.19, lambda: 0.1, phi: 0.65, chord: 2.616, is_strut: true}]
+  - [3, masure_regression, {dat_file_path: profiles/prof_3.dat, t: 0.077, eta: 0.175,
+      kappa: 0.144, delta: 7.099, lambda: 0.1, phi: 0.65, chord: 2.589, is_strut: false}]
+  - [4, masure_regression, {dat_file_path: profiles/prof_4.dat, t: 0.077, eta: 0.175,
+      kappa: 0.141, delta: 6.96, lambda: 0.1, phi: 0.65, chord: 2.548, is_strut: false}]
+  - [5, masure_regression, {dat_file_path: profiles/prof_5.dat, t: 0.078, eta: 0.175,
+      kappa: 0.138, delta: 6.773, lambda: 0.1, phi: 0.65, chord: 2.494, is_strut: true}]
+  - [6, masure_regression, {dat_file_path: profiles/prof_6.dat, t: 0.078, eta: 0.175,
+      kappa: 0.133, delta: 6.536, lambda: 0.1, phi: 0.65, chord: 2.425, is_strut: false}]
+  - [7, masure_regression, {dat_file_path: profiles/prof_7.dat, t: 0.079, eta: 0.175,
+      kappa: 0.127, delta: 6.246, lambda: 0.1, phi: 0.65, chord: 2.341, is_strut: false}]
+  - [8, masure_regression, {dat_file_path: profiles/prof_8.dat, t: 0.079, eta: 0.175,
+      kappa: 0.119, delta: 5.898, lambda: 0.1, phi: 0.65, chord: 2.24, is_strut: true}]
+  - [9, masure_regression, {dat_file_path: profiles/prof_9.dat, t: 0.08, eta: 0.175,
+      kappa: 0.112, delta: 5.486, lambda: 0.1, phi: 0.65, chord: 2.121, is_strut: false}]
+  - [10, masure_regression, {dat_file_path: profiles/prof_10.dat, t: 0.082, eta: 0.175,
+      kappa: 0.102, delta: 4.998, lambda: 0.1, phi: 0.65, chord: 1.98, is_strut: false}]
+  - [11, masure_regression, {dat_file_path: profiles/prof_11.dat, t: 0.088, eta: 0.175,
+      kappa: 0.09, delta: 4.413, lambda: 0.1, phi: 0.65, chord: 1.721, is_strut: true}]
+  - [12, masure_regression, {dat_file_path: profiles/prof_12.dat, t: 0.087, eta: 0.156,
+      kappa: 0.087, delta: 4.129, lambda: 0.1, phi: 0.65, chord: 1.62, is_strut: false}]
+  - [13, masure_regression, {dat_file_path: profiles/prof_13.dat, t: 0.086, eta: 0.136,
+      kappa: 0.082, delta: 3.844, lambda: 0.1, phi: 0.65, chord: 1.474, is_strut: false}]
+  - [14, masure_regression, {dat_file_path: profiles/prof_14.dat, t: 0.085, eta: 0.117,
+      kappa: 0.079, delta: 3.559, lambda: 0.1, phi: 0.65, chord: 1.295, is_strut: false}]
+  - [15, masure_regression, {dat_file_path: profiles/prof_15.dat, t: 0.084, eta: 0.098,
+      kappa: 0.074, delta: 3.274, lambda: 0.1, phi: 0.65, chord: 1.088, is_strut: false}]
+  - [16, masure_regression, {dat_file_path: profiles/prof_16.dat, t: 0.083, eta: 0.078,
+      kappa: 0.071, delta: 2.989, lambda: 0.1, phi: 0.65, chord: 0.86, is_strut: false}]
+  - [17, masure_regression, {dat_file_path: profiles/prof_17.dat, t: 0.082, eta: 0.059,
+      kappa: 0.067, delta: 2.704, lambda: 0.1, phi: 0.65, chord: 0.613, is_strut: false}]
+  - [18, masure_regression, {dat_file_path: profiles/prof_18.dat, t: 0.081, eta: 0.04,
+      kappa: 0.064, delta: 2.419, lambda: 0.1, phi: 0.65, chord: 0.349, is_strut: false}]
+  alpha_range: [-10, 31, 0.5]
+  reynolds: 1000000.0
