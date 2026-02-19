@@ -33,6 +33,16 @@ CASE_DEFINITIONS = {
 }
 
 
+def _sort_spanwise_arrays(
+    y_coords: np.ndarray, *arrays: np.ndarray
+) -> tuple[np.ndarray, ...]:
+    """Return y-sorted arrays for consistent spanwise plotting."""
+    y_arr = np.asarray(y_coords, dtype=float)
+    sort_idx = np.argsort(y_arr)
+    sorted_arrays = tuple(np.asarray(arr)[sort_idx] for arr in arrays)
+    return (y_arr[sort_idx], *sorted_arrays)
+
+
 def instantiate_body_aero(
     project_dir: Path,
     n_panels: int,
@@ -127,12 +137,12 @@ def plot_spanwise_speed_distribution_matplotlib(
     is_show: bool = False,
 ) -> None:
     """Create and save a static matplotlib plot of panel |va| over spanwise position."""
-    sort_idx = np.argsort(y_coords)
+    y_sorted, speed_sorted = _sort_spanwise_arrays(y_coords, panel_speeds)
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(
-        y_coords[sort_idx],
-        panel_speeds[sort_idx],
+        y_sorted,
+        speed_sorted,
         linestyle="None",
         marker="o",
         markersize=5,
@@ -146,8 +156,8 @@ def plot_spanwise_speed_distribution_matplotlib(
         linewidth=1.2,
         label=f"Target mean speed: {Umag:.3f} m/s",
     )
-    span_padding = 0.02 * (np.max(y_coords) - np.min(y_coords))
-    ax.set_xlim(np.min(y_coords) - span_padding, np.max(y_coords) + span_padding)
+    span_padding = 0.02 * (np.max(y_sorted) - np.min(y_sorted))
+    ax.set_xlim(np.min(y_sorted) - span_padding, np.max(y_sorted) + span_padding)
     ax.set_xlabel(r"$y$ [m]")
     ax.set_ylabel(r"$|V_a|$ [m/s]")
     ax.set_title("Spanwise apparent-velocity magnitude (distributed inflow)")
@@ -175,9 +185,7 @@ def plot_spanwise_speed_distribution_plotly(
     is_show: bool = True,
 ) -> None:
     """Create and save an interactive plotly plot of panel |va| over spanwise position."""
-    sort_idx = np.argsort(y_coords)
-    y_sorted = y_coords[sort_idx]
-    speed_sorted = panel_speeds[sort_idx]
+    y_sorted, speed_sorted = _sort_spanwise_arrays(y_coords, panel_speeds)
 
     fig = go.Figure()
     fig.add_trace(
@@ -208,6 +216,206 @@ def plot_spanwise_speed_distribution_plotly(
         fig.write_html(save_folder / "spanwise_apparent_wind_distribution.html")
     if is_show:
         fig.show()
+
+
+def plot_spanwise_input_velocity_diagnostics_matplotlib(
+    y_coords: np.ndarray,
+    va_distribution: np.ndarray,
+    Umag: float,
+    angle_of_attack: float,
+    side_slip: float,
+    save_folder: Path,
+    is_save: bool = True,
+    is_show: bool = False,
+) -> None:
+    """Create a static overview plot of prescribed spanwise input velocity components."""
+    va = np.asarray(va_distribution, dtype=float)
+    if va.ndim != 2 or va.shape[1] != 3:
+        raise ValueError("va_distribution must be shape (n_panels, 3).")
+
+    panel_speeds = np.linalg.norm(va, axis=1)
+    local_alpha_deg = np.rad2deg(
+        np.arctan2(va[:, 2], np.sqrt(va[:, 0] ** 2 + va[:, 1] ** 2))
+    )
+    local_beta_deg = np.rad2deg(np.arctan2(va[:, 1], va[:, 0]))
+
+    (
+        y_sorted,
+        vx_sorted,
+        vy_sorted,
+        vz_sorted,
+        speed_sorted,
+        alpha_sorted,
+        beta_sorted,
+    ) = _sort_spanwise_arrays(
+        y_coords,
+        va[:, 0],
+        va[:, 1],
+        va[:, 2],
+        panel_speeds,
+        local_alpha_deg,
+        local_beta_deg,
+    )
+
+    fig, axs = plt.subplots(2, 3, figsize=(14, 8), dpi=130, sharex=True)
+    entries = [
+        (axs[0, 0], vx_sorted, r"$V_{a,x}$ [m/s]", None),
+        (axs[0, 1], vy_sorted, r"$V_{a,y}$ [m/s]", None),
+        (axs[0, 2], vz_sorted, r"$V_{a,z}$ [m/s]", None),
+        (axs[1, 0], speed_sorted, r"$|V_a|$ [m/s]", Umag),
+        (axs[1, 1], alpha_sorted, r"$\alpha_{in}$ [deg]", angle_of_attack),
+        (axs[1, 2], beta_sorted, r"$\beta_{in}$ [deg]", side_slip),
+    ]
+    for ax, data, ylabel, reference_value in entries:
+        ax.plot(y_sorted, data, "o-", linewidth=1.2, markersize=4, label="panel values")
+        if reference_value is not None:
+            ax.axhline(
+                reference_value,
+                color="k",
+                linestyle="--",
+                linewidth=1.0,
+                label=f"target: {reference_value:.2f}",
+            )
+            ax.legend()
+        ax.set_ylabel(ylabel)
+        ax.grid(True)
+    for ax in axs[1, :]:
+        ax.set_xlabel(r"$y$ [m]")
+
+    fig.suptitle("Spanwise prescribed input-velocity diagnostics")
+    fig.tight_layout()
+
+    if is_save:
+        save_folder.mkdir(parents=True, exist_ok=True)
+        fig.savefig(
+            save_folder / "spanwise_input_velocity_diagnostics.pdf",
+            bbox_inches="tight",
+        )
+    if is_show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+def plot_spanwise_load_diagnostics_matplotlib(
+    y_coords: np.ndarray,
+    results_distribution: dict[str, np.ndarray],
+    save_folder: Path,
+    is_save: bool = True,
+    is_show: bool = False,
+) -> None:
+    """Create a static spanwise plot with loads and additional aerodynamic state metrics."""
+    cl_distribution = np.asarray(results_distribution["cl_distribution"], dtype=float)
+    cd_distribution = np.asarray(results_distribution["cd_distribution"], dtype=float)
+    cs_distribution = np.asarray(results_distribution["cs_distribution"], dtype=float)
+
+    force_distribution = np.asarray(results_distribution["F_distribution"], dtype=float)
+    moment_distribution = np.asarray(
+        results_distribution["M_distribution"], dtype=float
+    )
+
+    gamma_distribution = np.asarray(
+        results_distribution["gamma_distribution"], dtype=float
+    )
+    cm_panel_distribution = np.asarray(results_distribution["cm_panel_dist"], dtype=float)
+    alpha_uncorrected_deg = np.rad2deg(
+        np.asarray(results_distribution["alpha_uncorrected"], dtype=float).reshape(-1)
+    )
+    alpha_at_ac_deg = np.rad2deg(
+        np.asarray(results_distribution["alpha_at_ac"], dtype=float).reshape(-1)
+    )
+
+    (
+        y_sorted,
+        cl_sorted,
+        cd_sorted,
+        cs_sorted,
+        fx_sorted,
+        fy_sorted,
+        fz_sorted,
+        mx_sorted,
+        my_sorted,
+        mz_sorted,
+        gamma_sorted,
+        cm_panel_sorted,
+        alpha_uncorrected_sorted,
+        alpha_at_ac_sorted,
+    ) = _sort_spanwise_arrays(
+        y_coords,
+        cl_distribution,
+        cd_distribution,
+        cs_distribution,
+        force_distribution[:, 0],
+        force_distribution[:, 1],
+        force_distribution[:, 2],
+        moment_distribution[:, 0],
+        moment_distribution[:, 1],
+        moment_distribution[:, 2],
+        gamma_distribution,
+        cm_panel_distribution,
+        alpha_uncorrected_deg,
+        alpha_at_ac_deg,
+    )
+
+    fig, axs = plt.subplots(4, 3, figsize=(16, 14), dpi=130, sharex=True)
+    entries = [
+        (axs[0, 0], cl_sorted, r"$c_l$ [-]"),
+        (axs[0, 1], cd_sorted, r"$c_d$ [-]"),
+        (axs[0, 2], cs_sorted, r"$c_s$ [-]"),
+        (axs[1, 0], fx_sorted, r"$F_x$ [N]"),
+        (axs[1, 1], fy_sorted, r"$F_y$ [N]"),
+        (axs[1, 2], fz_sorted, r"$F_z$ [N]"),
+        (axs[2, 0], mx_sorted, r"$M_x$ [N m]"),
+        (axs[2, 1], my_sorted, r"$M_y$ [N m]"),
+        (axs[2, 2], mz_sorted, r"$M_z$ [N m]"),
+        (axs[3, 0], gamma_sorted, r"$\Gamma$"),
+        (axs[3, 1], cm_panel_sorted, r"$c_{m,\mathrm{panel}}$ [-]"),
+    ]
+
+    for ax, data, ylabel in entries:
+        ax.plot(y_sorted, data, "o-", linewidth=1.2, markersize=4)
+        ax.axhline(0.0, color="k", linestyle="--", linewidth=0.8, alpha=0.5)
+        ax.set_ylabel(ylabel)
+        ax.grid(True)
+
+    alpha_ax = axs[3, 2]
+    alpha_ax.plot(
+        y_sorted,
+        alpha_uncorrected_sorted,
+        "o-",
+        linewidth=1.2,
+        markersize=4,
+        label=r"$\alpha_{\mathrm{uncorr}}$",
+    )
+    alpha_ax.plot(
+        y_sorted,
+        alpha_at_ac_sorted,
+        "s-",
+        linewidth=1.2,
+        markersize=4,
+        label=r"$\alpha_{\mathrm{at\_ac}}$",
+    )
+    alpha_ax.axhline(0.0, color="k", linestyle="--", linewidth=0.8, alpha=0.5)
+    alpha_ax.set_ylabel(r"$\alpha$ [deg]")
+    alpha_ax.grid(True)
+    alpha_ax.legend()
+
+    for ax in axs[3, :]:
+        ax.set_xlabel(r"$y$ [m]")
+
+    fig.suptitle("Spanwise loads and aerodynamic-state diagnostics")
+    fig.tight_layout()
+
+    if is_save:
+        save_folder.mkdir(parents=True, exist_ok=True)
+        fig.savefig(
+            save_folder / "spanwise_load_and_state_diagnostics.pdf",
+            bbox_inches="tight",
+        )
+    if is_show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 def run_sweep(
@@ -393,6 +601,23 @@ def main() -> None:
         save_folder=save_folder,
         is_save=False,
         is_show=True,
+    )
+    plot_spanwise_input_velocity_diagnostics_matplotlib(
+        y_coords=y_coords,
+        va_distribution=va_distribution,
+        Umag=Umag,
+        angle_of_attack=angle_of_attack,
+        side_slip=side_slip,
+        save_folder=save_folder,
+        is_save=True,
+        is_show=False,
+    )
+    plot_spanwise_load_diagnostics_matplotlib(
+        y_coords=y_coords,
+        results_distribution=results_distribution,
+        save_folder=save_folder,
+        is_save=True,
+        is_show=False,
     )
 
     # Plotly geometry view, using the same helper as in tutorial.py.
