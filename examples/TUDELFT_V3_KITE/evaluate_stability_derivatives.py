@@ -62,9 +62,9 @@ step_sizes = {
     "r": 0.01,  # rad/s
 }
 
-    # Get reference point from solver for physically correct moment calculations
-    # v_rot(r) = omega x (r - r_ref)
-    reference_point = solver_base_version.reference_point
+# Get reference point from solver for physically correct moment calculations
+# v_rot(r) = omega x (r - r_ref)
+reference_point = solver_base_version.reference_point
 
 # Quick AoA sweep to mirror yaw script diagnostics
 for alpha in [-5.0, 0.0, 5.0, 10.0, 15.0]:
@@ -83,44 +83,44 @@ for alpha in [-5.0, 0.0, 5.0, 10.0, 15.0]:
         f"panels={body.n_panels}, Sproj={projected_area:.3f}, c_max={max_chord:.3f}"
     )
 
-## Compute trim-angle
-results = compute_trim_angle(
-    body_aero=make_body(),
-    solver=solver_base_version,
-    side_slip=side_slip,
-    velocity_magnitude=velocity_magnitude,
-    roll_rate=roll_rate,
-    pitch_rate=pitch_rate,
-    yaw_rate=yaw_rate,
-    alpha_min=-2.0,
-    alpha_max=13.0,
-    coarse_step=2.0,
-    fine_tolerance=0.1,
-    derivative_step=1.0,
-    max_bisection_iter=40,
-    reference_point=reference_point,
-)
-print(f"results: {results}")
+    ## Compute trim-angle
+    results = compute_trim_angle(
+        body_aero=make_body(),
+        solver=solver_base_version,
+        side_slip=side_slip,
+        velocity_magnitude=velocity_magnitude,
+        roll_rate=roll_rate,
+        pitch_rate=pitch_rate,
+        yaw_rate=yaw_rate,
+        alpha_min=-2.0,
+        alpha_max=13.0,
+        coarse_step=2.0,
+        fine_tolerance=0.1,
+        derivative_step=1.0,
+        max_bisection_iter=40,
+        reference_point=reference_point,
+    )
+    print(f"results: {results}")
 
     trim_angle = results["trim_angle"]
     dcmy_dalpha = results["dCMy_dalpha"]
     print(f"Trim angle found at {trim_angle:.3f} degrees.")
     print(f"Pitching moment derivative at trim angle: {dcmy_dalpha:.3f} per radian.")
 
-## Compute stability derivatives (non-dimensionalized)
-derivatives = compute_rigid_body_stability_derivatives(
-    body_aero=make_body(),
-    solver=solver_base_version,
-    angle_of_attack=trim_angle,
-    side_slip=side_slip,
-    velocity_magnitude=velocity_magnitude,
-    roll_rate=roll_rate,
-    pitch_rate=pitch_rate,
-    yaw_rate=yaw_rate,
-    step_sizes=step_sizes,
-    reference_point=reference_point,
-    nondimensionalize_rates=True,  # Convert rate derivatives to per hat-rate
-)
+    ## Compute stability derivatives (non-dimensionalized)
+    derivatives = compute_rigid_body_stability_derivatives(
+        body_aero=make_body(),
+        solver=solver_base_version,
+        angle_of_attack=trim_angle,
+        side_slip=side_slip,
+        velocity_magnitude=velocity_magnitude,
+        roll_rate=roll_rate,
+        pitch_rate=pitch_rate,
+        yaw_rate=yaw_rate,
+        step_sizes=step_sizes,
+        reference_point=reference_point,
+        nondimensionalize_rates=True,  # Convert rate derivatives to per hat-rate
+    )
 
     print("\nComputed stability derivatives (VSM frame, x rearward, y right, z up):")
     print("=" * 60)
