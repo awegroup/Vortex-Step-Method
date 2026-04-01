@@ -22,6 +22,8 @@ from VSM.core.Solver import Solver
 from VSM.fitting import fit_and_evaluate_model
 from VSM.plot_styling import set_plot_style, PALETTE
 
+# Default step sizes for finite differences
+
 
 def main():
     """Analyze tow angle geometry and compare with experimental data."""
@@ -30,36 +32,38 @@ def main():
     # SETUP
     # ========================================================================
     PROJECT_DIR = Path(__file__).resolve().parents[2]
-
-    file_path = (
-        PROJECT_DIR
-        / "data"
-        / "TUDELFT_V3_KITE"
-        / "CAD_derived_geometry"
-        / "aero_geometry_CAD_CFD_polars.yaml"
+    n_panels = 18
+    spanwise_panel_distribution = "uniform"
+    cad_derived_geometry_dir = (
+        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
     )
+    ml_models_dir = PROJECT_DIR / "data" / "ml_models"
+
     save_folder = PROJECT_DIR / "results" / "TUDELFT_V3_KITE"
     save_folder.mkdir(parents=True, exist_ok=True)
 
     set_plot_style()
 
     # Settings
-    n_panels = 40
+    n_panels = 18
     spanwise_panel_distribution = "uniform"
     reference_point = np.array([0.0, 0.0, 0.0])
-    solver = Solver(reference_point=reference_point)
+    solver = Solver(
+        reference_point=np.array([0.0, 0.0, 0.0]),
+        gamma_initial_distribution_type="zero",
+    )
 
     # Load kite geometry (without bridles for cleaner analysis)
     print("Loading kite geometry...")
     body_aero = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=file_path,
+        file_path=cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml",
         spanwise_panel_distribution=spanwise_panel_distribution,
-        bridle_path=None,
+        ml_models_dir=ml_models_dir,
     )
 
     # Flow conditions
-    Umag = 20.0  # m/s
+    Umag = 5.0  # m/s
 
     # Experimental data (from flight tests)
     mean_aoa_exp_reelout = 6.37
@@ -70,7 +74,7 @@ def main():
     # ========================================================================
     # COMPUTE TOW ANGLE VS ANGLE OF ATTACK
     # ========================================================================
-    angle_of_attack_range = np.linspace(-5, 10, 61)
+    angle_of_attack_range = np.linspace(-5, 15, 61)
 
     # Get front bridle attachment point
     corner_points = np.array([panel.corner_points for panel in body_aero.panels])
@@ -90,7 +94,7 @@ def main():
     # Sweep angle of attack
     gamma = None
     for i, alpha in enumerate(angle_of_attack_range):
-        body_aero.va_initialize(Umag, alpha, side_slip=0.0)
+        body_aero.va_initialize(Umag=Umag, angle_of_attack=alpha, side_slip=0.0)
         results = solver.solve(body_aero, gamma_distribution=gamma)
 
         center_of_pressure[i, :] = results["center_of_pressure"]
@@ -102,6 +106,10 @@ def main():
         # Store force coefficients
         cl[i] = np.sqrt(results["cl"] ** 2 + results["cs"] ** 2)
         cd[i] = results["cd"]
+        print(
+            f"α={alpha:.1f}°, Tow angle={tow_angle[i]*180/np.pi:.2f}°, "
+            f"CL={cl[i]:.3f}, CD={cd[i]:.4f}"
+        )
 
     # ========================================================================
     # FIT POLYNOMIAL MODELS
@@ -139,9 +147,9 @@ def main():
     ax.plot(
         angle_of_attack_range,
         tow_angle * 180 / np.pi,
-        linewidth=2,
-        color=PALETTE["Dark Blue"],
-        label="VSM simulation",
+        # linewidth=2,
+        # color=PALETTE["Sky Blue"],
+        # label="VSM simulation",
     )
 
     # Experimental ranges
@@ -161,8 +169,8 @@ def main():
         label="Reel-in range",
     )
 
-    ax.set_xlabel(r"Angle of attack, $\alpha_\mathrm{w}$ [$^\circ$]")
-    ax.set_ylabel(r"Tow angle, $\lambda_{\mathrm{b}}$ [$^\circ$]")
+    ax.set_xlabel(r"Angle of attack, $\alpha_\mathrm{w}$ ($^\circ$)")
+    ax.set_ylabel(r"Tow angle, $\lambda_{\mathrm{b}}$ ($^\circ$)")
     ax.legend(loc="upper right", frameon=True)
     ax.grid(True, alpha=0.3)
 

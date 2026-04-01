@@ -629,9 +629,8 @@ def running_VSM(
     vel: float,
     angle_of_attack: float,
     side_slip: float,
-    yaw_rate: float,
-    pitch_rate: float,
-    roll_rate: float,
+    body_rates: List[float] = [0.0, 0.0, 0.0],
+    body_axis: List[List[float]] = [[0, 0, 1], [0, 1, 0], [1, 0, 0]],
 ) -> Dict[str, Any]:
     """Run the Vortex Source Method on the given wing_aero object, based on AoA."""
     # setting va
@@ -640,9 +639,8 @@ def running_VSM(
         vel,
         angle_of_attack,
         side_slip,
-        yaw_rate,
-        pitch_rate,
-        roll_rate,
+        body_rates=body_rates,
+        body_axis=body_axis,
     )
 
     # configuring the solver
@@ -696,7 +694,9 @@ def add_case_information(
     )
     add_text_annotations(fig, x=1, y=0.94, title=f"side slip = {side_slip:.2f} [deg]")
     add_text_annotations(fig, x=1, y=0.91, title=f"yaw rate = {yaw_rate:.2f} [rad/s]")
-    add_text_annotations(fig, x=1, y=0.88, title=f"pitch rate = {pitch_rate:.2f} [rad/s]")
+    add_text_annotations(
+        fig, x=1, y=0.88, title=f"pitch rate = {pitch_rate:.2f} [rad/s]"
+    )
     add_text_annotations(fig, x=1, y=0.85, title=f"roll rate = {roll_rate:.2f} [rad/s]")
     add_text_annotations(fig, x=1, y=0.82, title="-------------------")
     add_text_annotations(
@@ -761,9 +761,8 @@ def update_plot(
         vel,
         angle_of_attack,
         side_slip,
-        yaw_rate,
-        pitch_rate,
-        roll_rate,
+        body_rates=[yaw_rate, pitch_rate, roll_rate],
+        body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
     )
 
     # Populating the plot with updated aerodynamic details
