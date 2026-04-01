@@ -64,12 +64,12 @@ def main():
     )
     body_aero_CAD_CFD_polars_with_bridles = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
+        # file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
+        file_path=(cad_derived_geometry_dir / "config_kite_CAD_CFD_polars.yaml"),
         spanwise_panel_distribution=spanwise_panel_distribution,
         bridle_path=(
             cad_derived_geometry_dir / "struc_geometry_manually_adjusted.yaml"
         ),
-        ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
     )
     body_aero_CAD_neuralfoil = BodyAerodynamics.instantiate(
         n_panels=n_panels,

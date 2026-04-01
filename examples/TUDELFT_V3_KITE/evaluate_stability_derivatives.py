@@ -62,9 +62,9 @@ step_sizes = {
     "r": 0.01,  # rad/s
 }
 
-# Get reference point from solver for physically correct moment calculations
-# v_rot(r) = omega × (r - r_ref)
-reference_point = solver_base_version.reference_point
+    # Get reference point from solver for physically correct moment calculations
+    # v_rot(r) = omega x (r - r_ref)
+    reference_point = solver_base_version.reference_point
 
 # Quick AoA sweep to mirror yaw script diagnostics
 for alpha in [-5.0, 0.0, 5.0, 10.0, 15.0]:
@@ -102,10 +102,10 @@ results = compute_trim_angle(
 )
 print(f"results: {results}")
 
-trim_angle = results["trim_angle"]
-dCMy_dalpha = results["dCMy_dalpha"]
-print(f"Trim angle found at {trim_angle:.3f} degrees.")
-print(f"Pitching moment derivative at trim angle: {dCMy_dalpha:.3f} per radian.")
+    trim_angle = results["trim_angle"]
+    dcmy_dalpha = results["dCMy_dalpha"]
+    print(f"Trim angle found at {trim_angle:.3f} degrees.")
+    print(f"Pitching moment derivative at trim angle: {dcmy_dalpha:.3f} per radian.")
 
 ## Compute stability derivatives (non-dimensionalized)
 derivatives = compute_rigid_body_stability_derivatives(
@@ -122,21 +122,20 @@ derivatives = compute_rigid_body_stability_derivatives(
     nondimensionalize_rates=True,  # Convert rate derivatives to per hat-rate
 )
 
-print("\nComputed stability derivatives (VSM frame, x rearward, y right, z up):")
-print("=" * 60)
-print("Angle derivatives (per radian):")
-for key, value in derivatives.items():
-    if "alpha" in key or "beta" in key:
-        print(f"  {key}: {value:+.6f}")
+    print("\nComputed stability derivatives (VSM frame, x rearward, y right, z up):")
+    print("=" * 60)
+    print("Angle derivatives (per radian):")
+    for key, value in derivatives.items():
+        if "alpha" in key or "beta" in key:
+            print(f"  {key}: {value:+.6f}")
 
-print("\nRate derivatives (per hat-rate, dimensionless):")
-for key, value in derivatives.items():
-    if any(rate in key for rate in ["_dp", "_dq", "_dr"]):
-        print(f"  {key}: {value:+.6f}")
+    print("\nRate derivatives (per hat-rate, dimensionless):")
+    for key, value in derivatives.items():
+        if any(rate in key for rate in ["_dp", "_dq", "_dr"]):
+            print(f"  {key}: {value:+.6f}")
 
-# Apply reference frame transformation using the VSM module function
-
-derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
+    # Apply reference frame transformation using the VSM module function
+    derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
 
 coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
 angle_keys = [f"d{coeff}_dalpha" for coeff in coeffs] + [
