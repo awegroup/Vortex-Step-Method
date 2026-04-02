@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 from scipy.optimize import least_squares
@@ -65,7 +65,7 @@ def solve_quasi_steady_state(
     body_aero: BodyAerodynamics,
     center_of_gravity: np.ndarray,
     reference_point: np.ndarray,
-    system_model: Any,
+    system_model: Any,  # AWETrim class
     x_guess: np.ndarray,
     *,
     solver: Solver | None = None,
@@ -209,21 +209,6 @@ def solve_quasi_steady_state(
             [cmx, cmy, cmz, cfx / force_residual_scale, cfy / force_residual_scale]
         )
 
-    def numerical_jacobian(
-        func: Callable[[np.ndarray], np.ndarray], x: np.ndarray, eps: float = 1e-4
-    ):
-        x = np.asarray(x, dtype=float)
-        f0 = func(x)
-        jac = np.zeros((f0.size, x.size))
-        for i in range(x.size):
-            step = eps * max(1.0, abs(x[i]))
-            xp = x.copy()
-            xm = x.copy()
-            xp[i] += step
-            xm[i] -= step
-            jac[:, i] = (func(xp) - func(xm)) / (2 * step)
-        return f0, jac
-
     span_global = bounds_upper - bounds_lower
     local_lower = np.maximum(bounds_lower, x_guess - window_fraction * span_global)
     local_upper = np.minimum(bounds_upper, x_guess + window_fraction * span_global)
@@ -297,11 +282,6 @@ def solve_quasi_steady_state(
 
     trim_residual = None
     trim_jacobian = None
-    if opt_success:
-        trim_residual, trim_jacobian = numerical_jacobian(moment_residual, opt.x)
-        rad_factor = 180.0 / np.pi
-        trim_jacobian[:, 1] *= rad_factor
-        trim_jacobian[:, 2] *= rad_factor
 
     x_cp = res.get("center_of_pressure", np.nan)
     x_cp_arr = np.asarray(x_cp, dtype=float)
@@ -338,3 +318,350 @@ def solve_quasi_steady_state(
         "trim_residual": trim_residual,
         "trim_jacobian": trim_jacobian,
     }
+
+
+def compute_quasi_steady_trim_jacobian(
+    body_aero: BodyAerodynamics,
+    center_of_gravity: np.ndarray,
+    reference_point: np.ndarray,
+    system_model: Any,
+    x_state: np.ndarray,
+    *,
+    solver: Solver | None = None,
+    transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
+    include_gravity: bool = False,
+    axes: AxisDefinition = DEFAULT_AXES,
+    force_residual_scale: float = 1.0,
+    eps: float = 1e-4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute residual and numerical Jacobian at a given quasi-steady state x."""
+
+    if solver is None:
+        solver = Solver(
+            reference_point=reference_point, gamma_initial_distribution_type="zero"
+        )
+
+    transformation_C_from_VSM = np.asarray(transformation_C_from_VSM, dtype=float)
+    center_of_gravity = _as_3vector(center_of_gravity)
+    reference_point = _as_3vector(reference_point)
+    x_state = np.asarray(x_state, dtype=float)
+
+    if x_state.shape != (5,):
+        raise ValueError(
+            "x_state must be shape (5,) for [vtau, roll, pitch, yaw, course_rate_body]."
+        )
+    if transformation_C_from_VSM.shape != (3, 3):
+        raise ValueError("transformation_C_from_VSM must be shape (3, 3).")
+
+    def evaluate_kinematics(x: np.ndarray) -> dict[str, np.ndarray]:
+        kite_speed, _roll, _pitch, _yaw, course_rate_body = x
+        system_model.timeder_angle_course_body = course_rate_body
+        system_model.speed_tangential = kite_speed
+
+        inertial_force = -system_model.mass_wing * _as_3vector(
+            transformation_C_from_VSM @ system_model.acceleration_course_body
+        )
+        gravity_force = _as_3vector(
+            transformation_C_from_VSM @ system_model.force_gravity
+        )
+        wind_velocity = _as_3vector(
+            transformation_C_from_VSM @ system_model.wind.velocity_wind(system_model)
+        )
+        kite_velocity = _as_3vector(
+            transformation_C_from_VSM @ system_model.velocity_kite
+        )
+        apparent_velocity = _as_3vector(
+            transformation_C_from_VSM @ system_model.velocity_apparent_wind
+        )
+
+        return {
+            "va": apparent_velocity,
+            "inertial_force": inertial_force,
+            "gravity_force": gravity_force,
+            "wind_velocity": wind_velocity,
+            "kite_velocity": kite_velocity,
+            "apparent_velocity": apparent_velocity,
+        }
+
+    def moment_residual(x: np.ndarray) -> np.ndarray:
+        kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = x
+
+        body = copy.deepcopy(body_aero)
+        _apply_attitude(body, roll_deg, pitch_deg, yaw_deg, axes, reference_point)
+
+        kin = evaluate_kinematics(x)
+        va = _as_3vector(kin["va"])
+        inertial_force = _as_3vector(kin["inertial_force"])
+        gravity_force = (
+            _as_3vector(kin.get("gravity_force", np.zeros(3, dtype=float)))
+            if include_gravity
+            else np.zeros(3, dtype=float)
+        )
+
+        aoa_course_deg = np.rad2deg(np.arctan2(va[2], va[0]))
+        beta_course_deg = np.rad2deg(np.arctan2(va[1], np.linalg.norm(va[[0, 2]])))
+        umag = np.linalg.norm(va)
+
+        body.va_initialize(
+            Umag=umag,
+            angle_of_attack=aoa_course_deg,
+            side_slip=beta_course_deg,
+            body_rates=course_rate_body,
+            body_axis=axes.radial,
+            reference_point=reference_point,
+            rates_in_body_frame=False,
+        )
+
+        res = solver.solve(body)
+        cmx = res.get("cmx")
+        cmy = res.get("cmy")
+        cmz = res.get("cmz")
+
+        fx = res.get("Fx", np.nan)
+        fy = res.get("Fy", np.nan)
+        fz = res.get("Fz", np.nan)
+        total_aero_force = np.array([fx, fy, fz], dtype=float)
+
+        projected_area = body.wings[0].compute_projected_area()
+        q_inf = 0.5 * solver.rho * umag**2
+        max_chord = max(panel.chord for panel in body.panels)
+        denom = q_inf * projected_area * max_chord if projected_area > 0 else 1.0
+
+        moment_vec = np.cross(center_of_gravity - reference_point, inertial_force)
+        if include_gravity:
+            moment_vec += np.cross(center_of_gravity - reference_point, gravity_force)
+
+        delta_cm = moment_vec / denom
+        cmx += delta_cm[0]
+        cmy += delta_cm[1]
+        cmz += delta_cm[2]
+
+        net_force = total_aero_force + inertial_force + gravity_force
+        cfx = np.dot(net_force, axes.course) / (
+            0.5 * solver.rho * umag**2 * projected_area
+        )
+        cfy = np.dot(net_force, axes.normal) / (
+            0.5 * solver.rho * umag**2 * projected_area
+        )
+
+        return np.array(
+            [cmx, cmy, cmz, cfx / force_residual_scale, cfy / force_residual_scale]
+        )
+
+    x = np.asarray(x_state, dtype=float)
+    residual = moment_residual(x)
+    jac = np.zeros((residual.size, x.size))
+    for i in range(x.size):
+        step = eps * max(1.0, abs(x[i]))
+        xp = x.copy()
+        xm = x.copy()
+        xp[i] += step
+        xm[i] -= step
+        jac[:, i] = (moment_residual(xp) - moment_residual(xm)) / (2 * step)
+
+    rad_factor = 180.0 / np.pi
+    jac[:, 1] *= rad_factor
+    jac[:, 2] *= rad_factor
+
+    return residual, jac
+
+
+def _as_sequence(value: Sequence[float] | float) -> list[float]:
+    if isinstance(value, np.ndarray):
+        return [float(v) for v in value.tolist()]
+    if isinstance(value, (list, tuple)):
+        return [float(v) for v in value]
+    return [float(value)]
+
+
+def run_quasi_steady_sweep(
+    *,
+    build_body: Callable[[dict[str, float]], BodyAerodynamics],
+    system_model: Any,
+    center_of_gravity: np.ndarray,
+    reference_point: np.ndarray,
+    x_guess: np.ndarray,
+    principal_axis: str,
+    secondary_axis: str,
+    sweep_values: Mapping[str, Sequence[float] | float],
+    update_system_model: Callable[[Any, dict[str, float]], None] | None = None,
+    solver_factory: Callable[[np.ndarray], Solver] | None = None,
+    bounds_lower: np.ndarray = DEFAULT_BOUNDS_LOWER,
+    bounds_upper: np.ndarray = DEFAULT_BOUNDS_UPPER,
+    transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
+    include_gravity: bool = False,
+    axes: AxisDefinition = DEFAULT_AXES,
+    moment_tolerance: float = 1e-3,
+    force_residual_scale: float = 1.0,
+    window_fraction: float = 0.15,
+    max_nfev: int = 400,
+    f_scale: float = 0.15,
+) -> list[dict[str, Any]]:
+    """Run a principal/secondary parameter sweep using solve_quasi_steady_state.
+
+    sweep_values should include scalar or sequence values for each variable of interest.
+    principal_axis provides the x-axis sweep and secondary_axis defines curve families.
+    """
+
+    if principal_axis not in sweep_values:
+        raise KeyError(f"principal_axis '{principal_axis}' missing from sweep_values")
+    if secondary_axis not in sweep_values:
+        raise KeyError(f"secondary_axis '{secondary_axis}' missing from sweep_values")
+
+    principal_values = _as_sequence(sweep_values[principal_axis])
+    secondary_values = _as_sequence(sweep_values[secondary_axis])
+    if principal_axis == secondary_axis:
+        secondary_values = [secondary_values[0]]
+
+    base_values = {key: _as_sequence(value)[0] for key, value in sweep_values.items()}
+
+    current_guess = np.asarray(x_guess, dtype=float).copy()
+    rows: list[dict[str, Any]] = []
+
+    for secondary_value in secondary_values:
+        current_guess = np.asarray(x_guess, dtype=float).copy()
+        for principal_value in principal_values:
+            case_values = dict(base_values)
+            case_values[principal_axis] = principal_value
+            case_values[secondary_axis] = secondary_value
+
+            if update_system_model is not None:
+                update_system_model(system_model, case_values)
+
+            body = build_body(case_values)
+            solver = (
+                solver_factory(reference_point)
+                if solver_factory is not None
+                else Solver(
+                    reference_point=reference_point,
+                    gamma_initial_distribution_type="zero",
+                )
+            )
+
+            result = solve_quasi_steady_state(
+                body_aero=body,
+                center_of_gravity=center_of_gravity,
+                reference_point=reference_point,
+                system_model=system_model,
+                x_guess=current_guess,
+                solver=solver,
+                bounds_lower=bounds_lower,
+                bounds_upper=bounds_upper,
+                transformation_C_from_VSM=transformation_C_from_VSM,
+                include_gravity=include_gravity,
+                axes=axes,
+                moment_tolerance=moment_tolerance,
+                force_residual_scale=force_residual_scale,
+                window_fraction=window_fraction,
+                max_nfev=max_nfev,
+                f_scale=f_scale,
+            )
+
+            rows.append(
+                {
+                    "principal_axis": principal_axis,
+                    "secondary_axis": secondary_axis,
+                    "principal_value": principal_value,
+                    "secondary_value": secondary_value,
+                    "case_values": case_values,
+                    "result": result,
+                }
+            )
+
+            if result.get("success", False):
+                current_guess = np.asarray(result["opt_x"], dtype=float)
+
+    return rows
+
+
+def quasi_steady_sweep_rows_to_dataframe(sweep_rows: Sequence[Mapping[str, Any]]):
+    """Convert run_quasi_steady_sweep output rows into a flat pandas DataFrame."""
+    import pandas as pd
+
+    rows = []
+    for row in sweep_rows:
+        result = row["result"]
+        opt_x = np.asarray(result["opt_x"], dtype=float)
+        cmx, cmy, cmz = np.asarray(result["cm"], dtype=float)
+        rows.append(
+            {
+                "principal_axis": row["principal_axis"],
+                "secondary_axis": row["secondary_axis"],
+                "principal_value": float(row["principal_value"]),
+                "secondary_value": float(row["secondary_value"]),
+                "kite_speed": float(opt_x[0]),
+                "roll_deg": float(opt_x[1]),
+                "pitch_deg": float(opt_x[2]),
+                "yaw_deg": float(opt_x[3]),
+                "course_rate_rad_s": float(opt_x[4]),
+                "aoa_center_deg": float(result["aoa_deg"]),
+                "aoa_course_deg": float(result["aoa_course_deg"]),
+                "beta_center_deg": float(result["side_slip_deg"]),
+                "beta_course_deg": float(result["side_slip_course_deg"]),
+                "aero_roll_deg": float(result["aero_roll_deg"]),
+                "cl": float(result["cl"]),
+                "cd": float(result["cd"]),
+                "cmx": float(cmx),
+                "cmy": float(cmy),
+                "cmz": float(cmz),
+                "norm_cm": float(np.linalg.norm([cmx, cmy, cmz])),
+                "success": bool(result["success"]),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def plot_quasi_steady_sweep_dataframe(
+    df,
+    principal_axis: str,
+    secondary_axis: str,
+    *,
+    show: bool = True,
+):
+    """Plot standard quasi-steady sweep figures from a dataframe."""
+    import matplotlib.pyplot as plt
+
+    if df.empty:
+        return
+
+    x_col = "principal_value"
+    line_col = "secondary_value"
+
+    fig1, ax1 = plt.subplots(3, 1, figsize=(7, 9), sharex=True)
+    for sec_val in sorted(df[line_col].dropna().unique()):
+        sub = df[df[line_col] == sec_val].sort_values(x_col)
+        label = f"{secondary_axis}={sec_val:.3f}"
+        ax1[0].plot(sub[x_col], sub["course_rate_rad_s"], "o-", label=label)
+        ax1[1].plot(sub[x_col], sub["beta_center_deg"], "o-", label=label)
+        ax1[2].plot(sub[x_col], sub["aero_roll_deg"], "o-", label=label)
+
+    ax1[0].axhline(0, color="k", linewidth=0.8)
+    ax1[0].set_ylabel("course rate [rad/s]")
+    ax1[0].legend()
+    ax1[1].set_ylabel("Sideslip center [deg]")
+    ax1[2].set_xlabel(principal_axis)
+    ax1[2].set_ylabel("Aero roll angle [deg]")
+    fig1.suptitle(
+        f"Quasi-steady sweep (x={principal_axis}, series={secondary_axis})",
+        y=0.995,
+    )
+    fig1.tight_layout()
+
+    fig2, ax2 = plt.subplots(3, 1, figsize=(7, 9), sharex=True)
+    for sec_val in sorted(df[line_col].dropna().unique()):
+        sub = df[df[line_col] == sec_val].sort_values(x_col)
+        label = f"{secondary_axis}={sec_val:.3f}"
+        ax2[0].plot(sub[x_col], sub["aoa_center_deg"], "o-", label=label)
+        ax2[1].plot(sub[x_col], sub["cl"], "o-", label=label)
+        ax2[2].plot(sub[x_col], sub["cd"], "o-", label=label)
+
+    ax2[0].set_ylabel("AoA center [deg]")
+    ax2[0].legend()
+    ax2[1].set_ylabel("Lift coeff")
+    ax2[2].set_ylabel("Drag coeff")
+    ax2[2].set_xlabel(principal_axis)
+    fig2.tight_layout()
+
+    if show:
+        plt.show()

@@ -4,13 +4,19 @@ from pathlib import Path
 import time
 import numpy as np
 from VSM.core.BodyAerodynamics import BodyAerodynamics
-from VSM.quasi_steady_state import DEFAULT_AXES, solve_quasi_steady_state
+from VSM.quasi_steady_state import (
+    compute_quasi_steady_trim_jacobian,
+    DEFAULT_AXES,
+    plot_quasi_steady_sweep_dataframe,
+    quasi_steady_sweep_rows_to_dataframe,
+    run_quasi_steady_sweep,
+)
 from awetrim.system.system_model import SystemModel
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 
-include_gravity = False  # toggle to include gravity in moments and plots
+include_gravity = True  # toggle to include gravity in moments and plots
 
 # Bounds and defaults (aoa, sideslip, course_rate_body)
 kite_speed_bounds = (2.0, 80.0)  # m/s
@@ -24,6 +30,22 @@ roll_bounds = (
     -5,
     5,
 )  # deg, small roll allowed for numerical reasons; not a physical roll
+
+principal_axis = "tilt_deg"
+secondary_axis = "course_deg"
+sweep_values = {
+    "tilt_deg": np.linspace(0.0, 12.0, 7),
+    "course_deg": np.array([0.0, 90.0, 180.0]),  # course sweep in radians
+    "wind_speed": [4.0],
+    "elevation_deg": [0.0],
+    "azimuth_deg": [0.0],
+    "radial_speed": [0.0],
+    "distance_radial": [200.0],
+}
+
+is_plot_results = True
+is_save_csv = True
+compute_jacobian_once = True
 
 
 spanwise_panel_distribution = "uniform"
@@ -54,7 +76,8 @@ def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
 
 
 def main():
-    tilt = 2  # deg
+    jacobian_once_remaining = compute_jacobian_once
+
     system_model = SystemModel()
     system_model.mass_wing = 10.0  # kg
     system_model.angle_elevation = np.deg2rad(0)
@@ -69,8 +92,6 @@ def main():
     x_guess = np.array([25, 0, 0, 0, 0], dtype=float)
 
     n_panels = 18
-
-    base_body = build_base_body(tilt, n_panels)
 
     bounds_lower = np.array(
         [
@@ -91,13 +112,28 @@ def main():
         ]
     )
 
+    def update_system_model_for_case(system, case_values: dict[str, float]) -> None:
+        system.angle_elevation = np.deg2rad(case_values["elevation_deg"])
+        system.angle_azimuth = np.deg2rad(case_values["azimuth_deg"])
+        system.angle_course = np.deg2rad(case_values["course_deg"])
+        system.speed_radial = case_values["radial_speed"]
+        system.distance_radial = case_values["distance_radial"]
+        system.wind.speed_wind_ref = case_values["wind_speed"]
+
+    def build_body_for_case(case_values: dict[str, float]) -> BodyAerodynamics:
+        return build_base_body(case_values["tilt_deg"], n_panels)
+
     start_time = time.time()
-    opt_result = solve_quasi_steady_state(
-        body_aero=base_body,
+    sweep_rows = run_quasi_steady_sweep(
+        build_body=build_body_for_case,
+        system_model=system_model,
         center_of_gravity=center_gravity,
         reference_point=reference_point,
-        system_model=system_model,
         x_guess=x_guess,
+        principal_axis=principal_axis,
+        secondary_axis=secondary_axis,
+        sweep_values=sweep_values,
+        update_system_model=update_system_model_for_case,
         bounds_lower=bounds_lower,
         bounds_upper=bounds_upper,
         include_gravity=include_gravity,
@@ -108,67 +144,107 @@ def main():
         arr = np.asarray(vec, dtype=float).reshape(3)
         return f"[{arr[0]: .3f}, {arr[1]: .3f}, {arr[2]: .3f}]"
 
-    opt_x = opt_result["opt_x"]
-    cmx, cmy, cmz = np.asarray(opt_result["cm"], dtype=float)
-    total_aero_force = np.asarray(opt_result["total_aero_force_vec"], dtype=float)
-    inertial_force = np.asarray(opt_result["inertial_force"], dtype=float)
-    gravity_force = np.asarray(opt_result["gravity_force"], dtype=float)
-    net_force = total_aero_force + inertial_force + gravity_force
-    wind_vel = np.asarray(opt_result["wind_vel_world"], dtype=float)
-    kite_vel = np.asarray(opt_result["kite_vel_world"], dtype=float)
-    va_vel = np.asarray(opt_result["va_vel_world"], dtype=float)
+    for row in sweep_rows:
+        opt_result = row["result"]
+        opt_x = opt_result["opt_x"]
+        cmx, cmy, cmz = np.asarray(opt_result["cm"], dtype=float)
+        total_aero_force = np.asarray(opt_result["total_aero_force_vec"], dtype=float)
+        inertial_force = np.asarray(opt_result["inertial_force"], dtype=float)
+        gravity_force = np.asarray(opt_result["gravity_force"], dtype=float)
+        net_force = total_aero_force + inertial_force + gravity_force
+        wind_vel = np.asarray(opt_result["wind_vel_world"], dtype=float)
+        kite_vel = np.asarray(opt_result["kite_vel_world"], dtype=float)
+        va_vel = np.asarray(opt_result["va_vel_world"], dtype=float)
 
-    print("\n=== Quasi-Steady Trim Summary ===")
-    print(f"success               : {opt_result['success']}")
-    print(f"kite_speed [m/s]      : {opt_x[0]: .3f}")
-    print(f"roll [deg]            : {opt_x[1]: .3f}")
-    print(f"pitch [deg]           : {opt_x[2]: .3f}")
-    print(f"yaw [deg]             : {opt_x[3]: .3f}")
-    print(f"course_rate [rad/s]   : {opt_x[4]: .4f}")
-    print(f"Umag [m/s]            : {opt_result['Umag']: .3f}")
-    print(f"aoa_center [deg]      : {opt_result['aoa_deg']: .3f}")
-    print(f"aoa_course [deg]      : {opt_result['aoa_course_deg']: .3f}")
-    print(f"beta_center [deg]     : {opt_result['side_slip_deg']: .3f}")
-    print(f"beta_course [deg]     : {opt_result['side_slip_course_deg']: .3f}")
-    print(f"cm = [cmx,cmy,cmz]    : [{cmx: .4e}, {cmy: .4e}, {cmz: .4e}]")
-    print(f"cl, cd                : {opt_result['cl']: .5f}, {opt_result['cd']: .5f}")
-    print(f"aero_force [N]        : {fmt_vec(total_aero_force)}")
-    print(f"inertial_force [N]    : {fmt_vec(inertial_force)}")
-    print(f"gravity_force [N]     : {fmt_vec(gravity_force)}")
-    print(f"net_force [N]         : {fmt_vec(net_force)}")
-    print(f"wind_velocity [m/s]   : {fmt_vec(wind_vel)}")
-    print(f"kite_velocity [m/s]   : {fmt_vec(kite_vel)}")
-    print(f"apparent_velocity [m/s]: {fmt_vec(va_vel)}")
+        print("\n=== Quasi-Steady Trim Summary ===")
+        print(
+            f"case ({principal_axis}={row['principal_value']:.3f}, "
+            f"{secondary_axis}={row['secondary_value']:.3f})"
+        )
+        print(f"success               : {opt_result['success']}")
+        print(f"kite_speed [m/s]      : {opt_x[0]: .3f}")
+        print(f"roll [deg]            : {opt_x[1]: .3f}")
+        print(f"pitch [deg]           : {opt_x[2]: .3f}")
+        print(f"yaw [deg]             : {opt_x[3]: .3f}")
+        print(f"course_rate [rad/s]   : {opt_x[4]: .4f}")
+        print(f"Umag [m/s]            : {opt_result['Umag']: .3f}")
+        print(f"aoa_center [deg]      : {opt_result['aoa_deg']: .3f}")
+        print(f"aoa_course [deg]      : {opt_result['aoa_course_deg']: .3f}")
+        print(f"beta_center [deg]     : {opt_result['side_slip_deg']: .3f}")
+        print(f"beta_course [deg]     : {opt_result['side_slip_course_deg']: .3f}")
+        print(f"cm = [cmx,cmy,cmz]    : [{cmx: .4e}, {cmy: .4e}, {cmz: .4e}]")
+        print(
+            f"cl, cd                : {opt_result['cl']: .5f}, {opt_result['cd']: .5f}"
+        )
+        print(f"aero_force [N]        : {fmt_vec(total_aero_force)}")
+        print(f"inertial_force [N]    : {fmt_vec(inertial_force)}")
+        print(f"gravity_force [N]     : {fmt_vec(gravity_force)}")
+        print(f"net_force [N]         : {fmt_vec(net_force)}")
+        print(f"wind_velocity [m/s]   : {fmt_vec(wind_vel)}")
+        print(f"kite_velocity [m/s]   : {fmt_vec(kite_vel)}")
+        print(f"apparent_velocity [m/s]: {fmt_vec(va_vel)}")
+
+        if jacobian_once_remaining and opt_result.get("success", False):
+            _, jac = compute_quasi_steady_trim_jacobian(
+                body_aero=build_body_for_case(row["case_values"]),
+                center_of_gravity=center_gravity,
+                reference_point=reference_point,
+                system_model=system_model,
+                x_state=opt_result["opt_x"],
+                include_gravity=include_gravity,
+                axes=DEFAULT_AXES,
+            )
+
+            row_labels = ["cmx", "cmy", "cmz", "cfx", "cfy"]
+            col_labels = [
+                "d/d_vtau (kite_speed)",
+                "d/d_roll_rad",
+                "d/d_pitch_rad",
+                "d/d_yaw_rad",
+                "d/d_course_rate_body",
+            ]
+            header = ["residual\\wrt"] + col_labels
+            col_widths = [max(len(h), 13) for h in header]
+
+            def fmt_row(label, values):
+                cells = [label.ljust(col_widths[0])]
+                for j, val in enumerate(values):
+                    if abs(val) < 1e-8:
+                        val = 0.0
+                    cells.append(f"{val: .3e}".rjust(col_widths[j + 1]))
+                return "  ".join(cells)
+
+            header_line = "  ".join(
+                h.ljust(col_widths[i]) for i, h in enumerate(header)
+            )
+            print("Jacobian near trim (central diff):")
+            print(header_line)
+            for i, label in enumerate(row_labels):
+                print(fmt_row(label, jac[i, :]))
+
+            jacobian_once_remaining = False
 
     end_time = time.time()
     print(f"Optimization took {end_time - start_time:.2f} seconds.")
 
-    jac = opt_result.get("trim_jacobian")
-    if jac is not None:
-        row_labels = ["cmx", "cmy", "cmz", "cfx", "cfy"]
-        col_labels = [
-            "d/d_vtau (kite_speed)",
-            "d/d_roll_rad",
-            "d/d_pitch_rad",
-            "d/d_yaw_rad",
-            "d/d_course_rate_body",
-        ]
-        header = ["residual\\wrt"] + col_labels
-        col_widths = [max(len(h), 13) for h in header]
+    df = quasi_steady_sweep_rows_to_dataframe(sweep_rows)
+    if df.empty:
+        return
 
-        def fmt_row(label, values):
-            cells = [label.ljust(col_widths[0])]
-            for j, val in enumerate(values):
-                if abs(val) < 1e-8:
-                    val = 0.0
-                cells.append(f"{val: .3e}".rjust(col_widths[j + 1]))
-            return "  ".join(cells)
+    if is_save_csv:
+        save_dir = PROJECT_DIR / "results" / "TUDELFT_V3_KITE"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        out_path = save_dir / "quasi_steady_sweep.csv"
+        df.to_csv(out_path, index=False)
+        print(f"Saved sweep results to {out_path}")
 
-        header_line = "  ".join(h.ljust(col_widths[i]) for i, h in enumerate(header))
-        print("Jacobian near trim (central diff):")
-        print(header_line)
-        for i, label in enumerate(row_labels):
-            print(fmt_row(label, jac[i, :]))
+    if is_plot_results:
+        plot_quasi_steady_sweep_dataframe(
+            df,
+            principal_axis=principal_axis,
+            secondary_axis=secondary_axis,
+            show=True,
+        )
 
 
 if __name__ == "__main__":
