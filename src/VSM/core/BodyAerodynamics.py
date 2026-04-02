@@ -1372,6 +1372,36 @@ class BodyAerodynamics:
         results_dict.update([("alpha_at_ac", alpha_corrected)])
         results_dict.update([("alpha_uncorrected", alpha_uncorrected)])
         results_dict.update([("alpha_geometric", alpha_geometric)])
+
+        # AoA and sideslip referenced to the center chord local frame.
+        center_idx_left = (len(self.panels) - 1) // 2
+        center_idx_right = len(self.panels) // 2
+        center_panels = [self.panels[center_idx_left], self.panels[center_idx_right]]
+
+        y_center = np.mean([panel.y_airf for panel in center_panels], axis=0)
+        x_center = np.mean([panel.x_airf for panel in center_panels], axis=0)
+        z_center = np.mean([panel.z_airf for panel in center_panels], axis=0)
+
+        y_center = y_center / np.linalg.norm(y_center)
+        x_center = x_center / np.linalg.norm(x_center)
+        z_center = z_center / np.linalg.norm(z_center)
+
+        va_center = np.asarray(self._va, dtype=float).reshape(3)
+        va_center_mag = np.linalg.norm(va_center)
+        if va_center_mag < 1e-12:
+            alpha_center_chord_deg = np.nan
+            beta_center_chord_deg = np.nan
+        else:
+            v_chord = np.dot(va_center, y_center)
+            v_normal = np.dot(va_center, x_center)
+            v_span = np.dot(va_center, z_center)
+            alpha_center_chord_deg = np.rad2deg(np.arctan2(v_normal, v_chord))
+            beta_center_chord_deg = np.rad2deg(
+                np.arctan2(v_span, np.linalg.norm([v_chord, v_normal]))
+            )
+
+        results_dict.update([("alpha_center_chord_deg", alpha_center_chord_deg)])
+        results_dict.update([("beta_center_chord_deg", beta_center_chord_deg)])
         results_dict.update([("gamma_distribution", gamma_new)])
         results_dict.update([("area_all_panels", area_all_panels)])
         results_dict.update([("projected_area", projected_area)])

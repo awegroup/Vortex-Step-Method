@@ -4,25 +4,8 @@ from pathlib import Path
 import time
 import numpy as np
 from VSM.core.BodyAerodynamics import BodyAerodynamics
-from VSM.core.Solver import Solver
 from VSM.quasi_steady_state import DEFAULT_AXES, solve_quasi_steady_state
 from awetrim.system.system_model import SystemModel
-
-transformation_C_from_CR = np.array(
-    [
-        [-1, 0, 0],
-        [0, -1, 0],
-        [0, 0, 1],
-    ],
-    dtype=float,
-)
-
-
-def as_3vector(value: np.ndarray) -> np.ndarray:
-    vector = np.asarray(value, dtype=float).reshape(-1)
-    if vector.size != 3:
-        raise ValueError(f"Expected a 3-vector, got shape {np.asarray(value).shape}")
-    return vector
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -71,7 +54,7 @@ def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
 
 
 def main():
-    tilt = 0  # deg
+    tilt = 2  # deg
     system_model = SystemModel()
     system_model.mass_wing = 10.0  # kg
     system_model.angle_elevation = np.deg2rad(0)
@@ -88,9 +71,6 @@ def main():
     n_panels = 18
 
     base_body = build_base_body(tilt, n_panels)
-    solver = Solver(
-        reference_point=reference_point, gamma_initial_distribution_type="zero"
-    )
 
     bounds_lower = np.array(
         [
@@ -111,51 +91,55 @@ def main():
         ]
     )
 
-    def evaluate_kinematics(x: np.ndarray) -> dict:
-        kite_speed, _roll, _pitch, _yaw, course_rate_body = x
-        system_model.timeder_angle_course_body = course_rate_body
-        system_model.speed_tangential = kite_speed
-
-        inertial_force = -system_model.mass_wing * as_3vector(
-            transformation_C_from_CR @ system_model.acceleration_course_body
-        )
-        gravity_force = as_3vector(
-            transformation_C_from_CR @ system_model.force_gravity
-        )
-        wind_velocity = as_3vector(
-            transformation_C_from_CR @ system_model.wind.velocity_wind(system_model)
-        )
-        kite_velocity = as_3vector(
-            transformation_C_from_CR @ system_model.velocity_kite
-        )
-        apparent_velocity = as_3vector(
-            transformation_C_from_CR @ system_model.velocity_apparent_wind
-        )
-
-        return {
-            "va": apparent_velocity,
-            "inertial_force": inertial_force,
-            "gravity_force": gravity_force,
-            "wind_velocity": wind_velocity,
-            "kite_velocity": kite_velocity,
-            "apparent_velocity": apparent_velocity,
-        }
-
     start_time = time.time()
     opt_result = solve_quasi_steady_state(
-        base_body,
-        solver,
-        x_guess,
-        evaluate_kinematics,
-        bounds_lower,
-        bounds_upper,
-        reference_point=reference_point,
+        body_aero=base_body,
         center_of_gravity=center_gravity,
+        reference_point=reference_point,
+        system_model=system_model,
+        x_guess=x_guess,
+        bounds_lower=bounds_lower,
+        bounds_upper=bounds_upper,
         include_gravity=include_gravity,
         axes=DEFAULT_AXES,
     )
-    print("Optimization result:")
-    print(opt_result["opt_x"])
+
+    def fmt_vec(vec: np.ndarray) -> str:
+        arr = np.asarray(vec, dtype=float).reshape(3)
+        return f"[{arr[0]: .3f}, {arr[1]: .3f}, {arr[2]: .3f}]"
+
+    opt_x = opt_result["opt_x"]
+    cmx, cmy, cmz = np.asarray(opt_result["cm"], dtype=float)
+    total_aero_force = np.asarray(opt_result["total_aero_force_vec"], dtype=float)
+    inertial_force = np.asarray(opt_result["inertial_force"], dtype=float)
+    gravity_force = np.asarray(opt_result["gravity_force"], dtype=float)
+    net_force = total_aero_force + inertial_force + gravity_force
+    wind_vel = np.asarray(opt_result["wind_vel_world"], dtype=float)
+    kite_vel = np.asarray(opt_result["kite_vel_world"], dtype=float)
+    va_vel = np.asarray(opt_result["va_vel_world"], dtype=float)
+
+    print("\n=== Quasi-Steady Trim Summary ===")
+    print(f"success               : {opt_result['success']}")
+    print(f"kite_speed [m/s]      : {opt_x[0]: .3f}")
+    print(f"roll [deg]            : {opt_x[1]: .3f}")
+    print(f"pitch [deg]           : {opt_x[2]: .3f}")
+    print(f"yaw [deg]             : {opt_x[3]: .3f}")
+    print(f"course_rate [rad/s]   : {opt_x[4]: .4f}")
+    print(f"Umag [m/s]            : {opt_result['Umag']: .3f}")
+    print(f"aoa_center [deg]      : {opt_result['aoa_deg']: .3f}")
+    print(f"aoa_course [deg]      : {opt_result['aoa_course_deg']: .3f}")
+    print(f"beta_center [deg]     : {opt_result['side_slip_deg']: .3f}")
+    print(f"beta_course [deg]     : {opt_result['side_slip_course_deg']: .3f}")
+    print(f"cm = [cmx,cmy,cmz]    : [{cmx: .4e}, {cmy: .4e}, {cmz: .4e}]")
+    print(f"cl, cd                : {opt_result['cl']: .5f}, {opt_result['cd']: .5f}")
+    print(f"aero_force [N]        : {fmt_vec(total_aero_force)}")
+    print(f"inertial_force [N]    : {fmt_vec(inertial_force)}")
+    print(f"gravity_force [N]     : {fmt_vec(gravity_force)}")
+    print(f"net_force [N]         : {fmt_vec(net_force)}")
+    print(f"wind_velocity [m/s]   : {fmt_vec(wind_vel)}")
+    print(f"kite_velocity [m/s]   : {fmt_vec(kite_vel)}")
+    print(f"apparent_velocity [m/s]: {fmt_vec(va_vel)}")
+
     end_time = time.time()
     print(f"Optimization took {end_time - start_time:.2f} seconds.")
 

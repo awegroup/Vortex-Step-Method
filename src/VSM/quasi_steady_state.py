@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any, Callable
 
 import numpy as np
 from scipy.optimize import least_squares
@@ -27,7 +27,18 @@ DEFAULT_AXES = AxisDefinition(
 )
 
 
-KinematicsEvaluator = Callable[[np.ndarray], Mapping[str, Any]]
+DEFAULT_TRANSFORMATION_C_FROM_VSM = np.array(
+    [
+        [-1.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ],
+    dtype=float,
+)
+
+# Bounds for x = [kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body].
+DEFAULT_BOUNDS_LOWER = np.array([2.0, -5.0, -5.0, -6.0, -2.0], dtype=float)
+DEFAULT_BOUNDS_UPPER = np.array([80.0, 5.0, 5.0, 6.0, 2.0], dtype=float)
 
 
 def _as_3vector(value: np.ndarray) -> np.ndarray:
@@ -51,19 +62,20 @@ def _apply_attitude(
 
 
 def solve_quasi_steady_state(
-    base_body: BodyAerodynamics,
-    solver: Solver,
-    x_guess: np.ndarray,
-    evaluate_kinematics: KinematicsEvaluator,
-    bounds_lower: np.ndarray,
-    bounds_upper: np.ndarray,
-    *,
-    reference_point: np.ndarray,
+    body_aero: BodyAerodynamics,
     center_of_gravity: np.ndarray,
+    reference_point: np.ndarray,
+    system_model: Any,
+    x_guess: np.ndarray,
+    *,
+    solver: Solver | None = None,
+    bounds_lower: np.ndarray = DEFAULT_BOUNDS_LOWER,
+    bounds_upper: np.ndarray = DEFAULT_BOUNDS_UPPER,
+    transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
     moment_tolerance: float = 1e-3,
-    force_residual_scale: float = 10.0,
+    force_residual_scale: float = 1.0,
     window_fraction: float = 0.15,
     max_nfev: int = 400,
     f_scale: float = 0.15,
@@ -78,8 +90,16 @@ def solve_quasi_steady_state(
     - "gravity_force", "wind_velocity", "kite_velocity", "apparent_velocity"
     """
 
+    if solver is None:
+        solver = Solver(
+            reference_point=reference_point, gamma_initial_distribution_type="zero"
+        )
+
     bounds_lower = np.asarray(bounds_lower, dtype=float)
     bounds_upper = np.asarray(bounds_upper, dtype=float)
+    transformation_C_from_VSM = np.asarray(transformation_C_from_VSM, dtype=float)
+    center_of_gravity = _as_3vector(center_of_gravity)
+    reference_point = _as_3vector(reference_point)
     x_guess = np.asarray(x_guess, dtype=float)
 
     if (
@@ -91,10 +111,43 @@ def solve_quasi_steady_state(
             "x_guess and bounds must be shape (5,) for [vtau, roll, pitch, yaw, course_rate_body]."
         )
 
+    if transformation_C_from_VSM.shape != (3, 3):
+        raise ValueError("transformation_C_from_VSM must be shape (3, 3).")
+
+    def evaluate_kinematics(x: np.ndarray) -> dict[str, np.ndarray]:
+        kite_speed, _roll, _pitch, _yaw, course_rate_body = x
+        system_model.timeder_angle_course_body = course_rate_body
+        system_model.speed_tangential = kite_speed
+
+        inertial_force = -system_model.mass_wing * _as_3vector(
+            transformation_C_from_VSM @ system_model.acceleration_course_body
+        )
+        gravity_force = _as_3vector(
+            transformation_C_from_VSM @ system_model.force_gravity
+        )
+        wind_velocity = _as_3vector(
+            transformation_C_from_VSM @ system_model.wind.velocity_wind(system_model)
+        )
+        kite_velocity = _as_3vector(
+            transformation_C_from_VSM @ system_model.velocity_kite
+        )
+        apparent_velocity = _as_3vector(
+            transformation_C_from_VSM @ system_model.velocity_apparent_wind
+        )
+
+        return {
+            "va": apparent_velocity,
+            "inertial_force": inertial_force,
+            "gravity_force": gravity_force,
+            "wind_velocity": wind_velocity,
+            "kite_velocity": kite_velocity,
+            "apparent_velocity": apparent_velocity,
+        }
+
     def moment_residual(x: np.ndarray) -> np.ndarray:
         kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = x
 
-        body = copy.deepcopy(base_body)
+        body = copy.deepcopy(body_aero)
         _apply_attitude(body, roll_deg, pitch_deg, yaw_deg, axes, reference_point)
 
         kin = evaluate_kinematics(x)
@@ -106,14 +159,14 @@ def solve_quasi_steady_state(
             else np.zeros(3, dtype=float)
         )
 
-        aoa_deg = np.rad2deg(np.arctan2(va[2], va[0]))
-        beta_deg = np.rad2deg(np.arctan2(va[1], np.linalg.norm(va[[0, 2]])))
+        aoa_course_deg = np.rad2deg(np.arctan2(va[2], va[0]))
+        beta_course_deg = np.rad2deg(np.arctan2(va[1], np.linalg.norm(va[[0, 2]])))
         umag = np.linalg.norm(va)
 
         body.va_initialize(
             Umag=umag,
-            angle_of_attack=aoa_deg,
-            side_slip=beta_deg,
+            angle_of_attack=aoa_course_deg,
+            side_slip=beta_course_deg,
             body_rates=course_rate_body,
             body_axis=axes.radial,
             reference_point=reference_point,
@@ -200,7 +253,7 @@ def solve_quasi_steady_state(
     opt_success = bool(opt.success and physical_success)
 
     kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = opt.x
-    body = copy.deepcopy(base_body)
+    body = copy.deepcopy(body_aero)
     _apply_attitude(body, roll_deg, pitch_deg, yaw_deg, axes, reference_point)
 
     kin = evaluate_kinematics(opt.x)
@@ -220,6 +273,8 @@ def solve_quasi_steady_state(
     )
 
     res = solver.solve(body)
+    aoa_center_chord_deg = float(res.get("alpha_center_chord_deg", aoa_deg))
+    beta_center_chord_deg = float(res.get("beta_center_chord_deg", beta_deg))
     fx = res.get("Fx", np.nan)
     fy = res.get("Fy", np.nan)
     fz = res.get("Fz", np.nan)
@@ -257,9 +312,11 @@ def solve_quasi_steady_state(
     return {
         "opt_x": opt.x,
         "cm": np.array([cmx, cmy, cmz], dtype=float),
-        "side_slip_deg": beta_deg,
+        "side_slip_deg": beta_center_chord_deg,
+        "side_slip_course_deg": beta_deg,
         "aero_roll_deg": aero_roll_deg,
-        "aoa_deg": aoa_deg,
+        "aoa_deg": aoa_center_chord_deg,
+        "aoa_course_deg": aoa_deg,
         "success": opt_success,
         "gravity_force": gravity_force,
         "inertial_force": inertial_force,
