@@ -168,7 +168,7 @@ def test_body_rates_affect_panel_velocity(body_aero):
     assert np.allclose(body_aero.body_rates, expected_rates)
 
     for panel in body_aero.panels:
-        expected_velocity = np.cross(expected_rates, panel.control_point)
+        expected_velocity = -np.cross(expected_rates, panel.control_point)
         np.testing.assert_allclose(panel.va, expected_velocity, atol=1e-12)
 
 

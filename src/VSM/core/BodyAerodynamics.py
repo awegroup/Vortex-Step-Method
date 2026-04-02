@@ -518,7 +518,7 @@ class BodyAerodynamics:
                 [p.control_point for p in self.panels], dtype=float
             )
             # v_rot = [p,q,r] x (r - r0)
-            va_distribution += np.cross(self._body_rates, control_points - r0)
+            va_distribution += -np.cross(self._body_rates, control_points - r0)
 
         # push to panels
         for i, panel in enumerate(self.panels):
@@ -1375,6 +1375,7 @@ class BodyAerodynamics:
         results_dict.update([("gamma_distribution", gamma_new)])
         results_dict.update([("area_all_panels", area_all_panels)])
         results_dict.update([("projected_area", projected_area)])
+        results_dict.update([("va_distribution", va_array)])
         results_dict.update([("wing_span", wing_span)])
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
