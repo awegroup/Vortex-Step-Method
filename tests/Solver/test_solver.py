@@ -86,7 +86,7 @@ def test_solver_initialization(solver):
 def test_solver_with_simple_wing(solver, body_aero):
     """Test solver with a simple wing configuration."""
     # Set up flight conditions
-    body_aero.va_initialize(Umag=10.0, angle_of_attack=5.0, side_slip=0.0, yaw_rate=0.0)
+    body_aero.va_initialize(Umag=10.0, angle_of_attack=5.0, side_slip=0.0)
 
     # Solve
     results = solver.solve(body_aero)
@@ -126,9 +126,7 @@ def test_solver_convergence(solver, body_aero):
 
 def test_solver_with_sideslip(solver, body_aero):
     """Test solver with sideslip angle."""
-    body_aero.va_initialize(
-        Umag=10.0, angle_of_attack=5.0, side_slip=10.0, yaw_rate=0.0
-    )
+    body_aero.va_initialize(Umag=10.0, angle_of_attack=5.0, side_slip=10.0)
 
     results = solver.solve(body_aero)
 
@@ -138,7 +136,13 @@ def test_solver_with_sideslip(solver, body_aero):
 
 def test_solver_with_yaw_rate(solver, body_aero):
     """Test solver with yaw rate."""
-    body_aero.va_initialize(Umag=10.0, angle_of_attack=5.0, side_slip=0.0, yaw_rate=0.1)
+    body_aero.va_initialize(
+        Umag=10.0,
+        angle_of_attack=5.0,
+        side_slip=0.0,
+        body_rates=0.1,
+        body_axis=np.array([0, 0, 1]),
+    )
 
     results = solver.solve(body_aero)
 
@@ -156,9 +160,8 @@ def test_body_rates_affect_panel_velocity(body_aero):
         Umag=0.0,
         angle_of_attack=0.0,
         side_slip=0.0,
-        yaw_rate=yaw_rate,
-        pitch_rate=pitch_rate,
-        roll_rate=roll_rate,
+        body_rates=[yaw_rate, pitch_rate, roll_rate],
+        body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
     )
 
     expected_rates = np.array([roll_rate, pitch_rate, yaw_rate])

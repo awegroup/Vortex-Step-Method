@@ -518,7 +518,7 @@ class BodyAerodynamics:
                 [p.control_point for p in self.panels], dtype=float
             )
             # v_rot = [p,q,r] x (r - r0)
-            va_distribution += -np.cross(self._body_rates, control_points - r0)
+            va_distribution += np.cross(self._body_rates, control_points - r0)
 
         # push to panels
         for i, panel in enumerate(self.panels):
