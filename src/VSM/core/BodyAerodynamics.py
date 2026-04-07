@@ -1494,7 +1494,20 @@ class BodyAerodynamics:
         x_center = x_center / np.linalg.norm(x_center)
         z_center = z_center / np.linalg.norm(z_center)
 
-        va_center = np.asarray(self._va, dtype=float).reshape(3)
+        va_input = np.asarray(self._va, dtype=float)
+        if va_input.shape == (3,):
+            va_center = va_input
+        elif va_input.shape == (len(self.panels), 3):
+            if center_idx_left == center_idx_right:
+                va_center = va_input[center_idx_left]
+            else:
+                va_center = 0.5 * (
+                    va_input[center_idx_left] + va_input[center_idx_right]
+                )
+        else:
+            raise ValueError(
+                f"'_va' must be shape (3,) or ({len(self.panels)}, 3); got {va_input.shape}"
+            )
         va_center_mag = np.linalg.norm(va_center)
         if va_center_mag < 1e-12:
             alpha_center_chord_deg = np.nan
