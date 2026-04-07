@@ -139,9 +139,8 @@ def compute_rigid_body_stability_derivatives(
             Umag=velocity_magnitude,
             angle_of_attack=angle_of_attack,
             side_slip=side_slip,
-            yaw_rate=rates["r"],
-            pitch_rate=rates["q"],
-            roll_rate=rates["p"],
+            body_rates=[rates["r"], rates["q"], rates["p"]],
+            body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             reference_point=reference_point,
         )
 
@@ -183,9 +182,7 @@ def compute_rigid_body_stability_derivatives(
             Umag=velocity_magnitude,
             angle_of_attack=alpha_deg,
             side_slip=beta_deg,
-            yaw_rate=rates["r"],
-            pitch_rate=rates["q"],
-            roll_rate=rates["p"],
+            body_rates=[rates["r"], rates["q"], rates["p"]],
             reference_point=reference_point,
         )
         return _solve_and_extract()
@@ -238,9 +235,8 @@ def compute_rigid_body_stability_derivatives(
             Umag=velocity_magnitude,
             angle_of_attack=angle_of_attack,
             side_slip=side_slip,
-            yaw_rate=rates_plus["r"],
-            pitch_rate=rates_plus["q"],
-            roll_rate=rates_plus["p"],
+            body_rates=[rates_plus["r"], rates_plus["q"], rates_plus["p"]],
+            body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             reference_point=reference_point,
         )
         coeff_plus = _solve_and_extract()
@@ -250,9 +246,8 @@ def compute_rigid_body_stability_derivatives(
             Umag=velocity_magnitude,
             angle_of_attack=angle_of_attack,
             side_slip=side_slip,
-            yaw_rate=rates_minus["r"],
-            pitch_rate=rates_minus["q"],
-            roll_rate=rates_minus["p"],
+            body_rates=[rates_minus["r"], rates_minus["q"], rates_minus["p"]],
+            body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             reference_point=reference_point,
         )
         coeff_minus = _solve_and_extract()

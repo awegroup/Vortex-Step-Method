@@ -62,6 +62,9 @@ class BodyAerodynamics:
         self.cd_cable = 1.1
         self.cf_cable = 0.01
 
+        # Track the cumulative geometry rotation applied to the body.
+        self.geometry_rotation = np.eye(3)
+
         # Build the initial panel list from the wing geometry.
         self._build_panels()
 
@@ -330,6 +333,62 @@ class BodyAerodynamics:
         else:
             return cls([wing_instance])
 
+    def rotate(
+        self,
+        *,
+        angle_deg: float | None = None,
+        angle_rad: float | None = None,
+        axis: np.ndarray | list = np.array([0.0, 0.0, 1.0]),
+        point: np.ndarray | list = np.zeros(3),
+    ) -> None:
+        """Rotate the full geometry about an axis passing through a point."""
+
+        if (angle_deg is None) == (angle_rad is None):
+            raise ValueError("Provide exactly one of angle_deg or angle_rad.")
+
+        theta = np.deg2rad(angle_deg) if angle_rad is None else float(angle_rad)
+
+        axis_vec = np.asarray(axis, dtype=float)
+        if axis_vec.shape != (3,):
+            raise ValueError(f"axis must be a 3-vector, got shape {axis_vec.shape}")
+        norm = np.linalg.norm(axis_vec)
+        if norm == 0:
+            raise ValueError("axis must be non-zero.")
+        axis_vec /= norm
+
+        origin = np.asarray(point, dtype=float)
+        if origin.shape != (3,):
+            raise ValueError(
+                f"point must be a 3-vector specifying the rotation center, got {origin.shape}"
+            )
+
+        # Rodrigues' rotation formula
+        kx, ky, kz = axis_vec
+        K = np.array(
+            [[0, -kz, ky], [kz, 0, -kx], [-ky, kx, 0]],
+            dtype=float,
+        )
+        R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * (K @ K)
+
+        def rotate_point(p: np.ndarray) -> np.ndarray:
+            return origin + R @ (np.asarray(p, dtype=float) - origin)
+
+        for wing in self.wings:
+            for section in wing.sections:
+                section.LE_point = rotate_point(section.LE_point)
+                section.TE_point = rotate_point(section.TE_point)
+
+            # Keep spanwise direction aligned with the rotated geometry
+            rotated_span = R @ wing.spanwise_direction
+            norm_rotated_span = np.linalg.norm(rotated_span)
+            if norm_rotated_span == 0:
+                raise ValueError("Rotation produced zero spanwise direction vector.")
+            wing.spanwise_direction = rotated_span / norm_rotated_span
+
+        self.geometry_rotation = R @ self.geometry_rotation
+
+        self._build_panels()
+
     ###########################
     ## GETTER FUNCTIONS
     ###########################
@@ -375,10 +434,10 @@ class BodyAerodynamics:
         self,
         va: np.ndarray,
         *,  # the asterisk forces the following args to be keyword-only
-        roll_rate: float = 0.0,
-        pitch_rate: float = 0.0,
-        yaw_rate: float = 0.0,
+        body_rates: np.ndarray | float = 0.0,
+        body_axis: np.ndarray | float | None = None,
         reference_point: np.ndarray | None = None,
+        rates_in_body_frame: bool = False,
     ) -> None:
         """
         Set the apparent velocity distribution and optional rigid-body rates.
@@ -388,8 +447,12 @@ class BodyAerodynamics:
         va : array-like
             - shape (3,) for a uniform freestream vector, or
             - shape (n_panels, 3) for a per-panel apparent velocity.
-        roll_rate, pitch_rate, yaw_rate : float
-            Body rates in rad/s (p, q, r).
+        body_rates : float or array-like
+            Single angular rate or a sequence of rates (rad/s). When multiple rates are
+            provided they are paired with the corresponding axes in body_axis.
+        body_axis : array-like, optional
+            Single 3-vector or an array of shape (n_rates, 3) for the body rotation
+            axes (need not be unit length). If None, defaults to +z for all rates.
         reference_point : array-like, optional
             3-vector r0 for rotational inflow. Default is (0,0,0).
             v_rot(r) = omega x (r - r0).
@@ -406,11 +469,43 @@ class BodyAerodynamics:
         else:
             raise ValueError(f"'va' must be shape (3,) or ({n}, 3); got {va.shape}")
 
-        # store body rates for introspection
-        self._body_rates = np.array([roll_rate, pitch_rate, yaw_rate], dtype=float)
+        rates_array = np.atleast_1d(np.asarray(body_rates, dtype=float)).ravel()
+        if rates_array.ndim != 1:
+            raise ValueError(
+                f"body_rates must be a scalar or 1D array, got shape {rates_array.shape}"
+            )
 
+        if body_axis is None:
+            axes_array = np.tile(
+                np.array([0.0, 0.0, 1.0], dtype=float), (len(rates_array), 1)
+            )
+        else:
+            axes_array = np.asarray(body_axis, dtype=float)
+            if axes_array.shape == (3,):
+                axes_array = np.tile(axes_array, (len(rates_array), 1))
+            elif axes_array.shape != (len(rates_array), 3):
+                raise ValueError(
+                    "body_axis must be shape (3,) or (n_rates, 3); "
+                    f"got {axes_array.shape} for {len(rates_array)} rates"
+                )
+
+        axis_units = []
+        for axis_vec in axes_array:
+            norm = np.linalg.norm(axis_vec)
+            if norm < 1e-12:
+                raise ValueError("body_axis must be nonzero")
+            axis_units.append(axis_vec / norm)
+
+        omega_vec = np.zeros(3, dtype=float)
+        for rate, axis_unit in zip(rates_array, axis_units):
+            omega_vec += rate * axis_unit  # combine multiple rate/axis contributions
+
+        # store body rates for introspection
+        self._body_rates = omega_vec
+        if not rates_in_body_frame:
+            self._body_rates = self.geometry_rotation @ self._body_rates
         # add rotational inflow only if any rate is nonzero
-        if (roll_rate != 0.0) or (pitch_rate != 0.0) or (yaw_rate != 0.0):
+        if np.any(self._body_rates != 0.0):
             r0 = (
                 np.zeros(3, dtype=float)
                 if reference_point is None
@@ -422,7 +517,7 @@ class BodyAerodynamics:
                 [p.control_point for p in self.panels], dtype=float
             )
             # v_rot = [p,q,r] x (r - r0)
-            va_distribution += np.cross(self._body_rates, control_points - r0)
+            va_distribution += -np.cross(self._body_rates, control_points - r0)
 
         # push to panels
         for i, panel in enumerate(self.panels):
@@ -1385,9 +1480,40 @@ class BodyAerodynamics:
         results_dict.update([("alpha_at_ac", alpha_corrected)])
         results_dict.update([("alpha_uncorrected", alpha_uncorrected)])
         results_dict.update([("alpha_geometric", alpha_geometric)])
+
+        # AoA and sideslip referenced to the center chord local frame.
+        center_idx_left = (len(self.panels) - 1) // 2
+        center_idx_right = len(self.panels) // 2
+        center_panels = [self.panels[center_idx_left], self.panels[center_idx_right]]
+
+        y_center = np.mean([panel.y_airf for panel in center_panels], axis=0)
+        x_center = np.mean([panel.x_airf for panel in center_panels], axis=0)
+        z_center = np.mean([panel.z_airf for panel in center_panels], axis=0)
+
+        y_center = y_center / np.linalg.norm(y_center)
+        x_center = x_center / np.linalg.norm(x_center)
+        z_center = z_center / np.linalg.norm(z_center)
+
+        va_center = np.asarray(self._va, dtype=float).reshape(3)
+        va_center_mag = np.linalg.norm(va_center)
+        if va_center_mag < 1e-12:
+            alpha_center_chord_deg = np.nan
+            beta_center_chord_deg = np.nan
+        else:
+            v_chord = np.dot(va_center, y_center)
+            v_normal = np.dot(va_center, x_center)
+            v_span = np.dot(va_center, z_center)
+            alpha_center_chord_deg = np.rad2deg(np.arctan2(v_normal, v_chord))
+            beta_center_chord_deg = np.rad2deg(
+                np.arctan2(v_span, np.linalg.norm([v_chord, v_normal]))
+            )
+
+        results_dict.update([("alpha_center_chord_deg", alpha_center_chord_deg)])
+        results_dict.update([("beta_center_chord_deg", beta_center_chord_deg)])
         results_dict.update([("gamma_distribution", gamma_new)])
         results_dict.update([("area_all_panels", area_all_panels)])
         results_dict.update([("projected_area", projected_area)])
+        results_dict.update([("va_distribution", va_array)])
         results_dict.update([("wing_span", wing_span)])
         results_dict.update([("aspect_ratio_projected", aspect_ratio_projected)])
         results_dict.update([("Rey", reynolds_number)])
@@ -1429,10 +1555,10 @@ class BodyAerodynamics:
         Umag: float = 3.15,
         angle_of_attack: float = 6.8,
         side_slip: float = 0.0,
-        yaw_rate: float = 0.0,
-        pitch_rate: float = 0.0,
-        roll_rate: float = 0.0,
+        body_rates: np.ndarray = 0,
+        body_axis: np.ndarray = None,
         reference_point: np.ndarray = None,
+        rates_in_body_frame: bool = False,
     ):
         """
         Initializes the apparent velocity (va) and body rates for the WingAero object.
@@ -1441,10 +1567,9 @@ class BodyAerodynamics:
         Umag (float): Magnitude of the velocity.
         angle_of_attack (float): Angle of attack in degrees.
         side_slip (float): Sideslip angle in degrees.
-        yaw_rate (float): Yaw rate about the body z-axis, default is 0.0.
-        pitch_rate (float): Pitch rate about the body y-axis, default is 0.0.
-        roll_rate (float): Roll rate about the body x-axis, default is 0.0.
-        reference_point (np.ndarray): Reference point for body-rate inflow [x, y, z], default is None (uses [0, 0, 0]).
+        body_rate (np.ndarray): Body rates [p, q, r], default is None.
+        body_axis (np.ndarray): Axis for body rotation (same frame as other rates), default is None.
+        reference_point (np.ndarray): Reference point for moment calculation [x, y, z], default is None (uses [0, 0, 0]).
         """
         # Convert angles to radians
         aoa_rad = np.deg2rad(angle_of_attack)
@@ -1464,10 +1589,10 @@ class BodyAerodynamics:
                 )
                 * Umag
             ),
-            roll_rate=roll_rate,
-            pitch_rate=pitch_rate,
-            yaw_rate=yaw_rate,
+            body_rates=body_rates,
+            body_axis=body_axis,
             reference_point=reference_point,
+            rates_in_body_frame=rates_in_body_frame,
         )
 
     def update_effective_angle_of_attack_if_VSM(

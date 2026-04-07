@@ -4,6 +4,7 @@ from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
 from VSM.plotting import (
     plot_polars,
+    plot_distribution,
 )
 
 
@@ -56,15 +57,20 @@ def main():
 
     ### Step 1: Instantiate BodyAerodynamics objects from different YAML configs
     cad_derived_geometry_dir = (
-        Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
+        Path(PROJECT_DIR)
+        / "data"
+        / "TUDELFT_V3_KITE"
+        / "CAD_derived_geometry"
+        / "aero_geometry_CAD_masure_regression.yaml"
     )
+    v9_dir = Path(PROJECT_DIR) / "data" / "V9_KITE" / "config_kite.yaml"
+
+    file_path = cad_derived_geometry_dir
     body_aero_masure_regression = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(
-            cad_derived_geometry_dir / "aero_geometry_CAD_masure_regression.yaml"
-        ),
+        file_path=file_path,
         ml_models_dir=(Path(PROJECT_DIR) / "data" / "ml_models"),
-        spanwise_panel_distribution=spanwise_panel_distribution,
+        # spanwise_panel_distribution=spanwise_panel_distribution,
     )
 
     # Step 2: Set inflow conditions for each aerodynamic object
@@ -72,13 +78,24 @@ def main():
     Set the wind speed, angle of attack, side slip, and yaw rate for each BodyAerodynamics object.
     This initializes the apparent wind vector and prepares the objects for analysis.
     """
-    Umag = 3.15
+    Umag = 15
     angle_of_attack = 6.8
     side_slip = 0
     yaw_rate = 0
 
     body_aero_masure_regression.va_initialize(
         Umag, angle_of_attack, side_slip, yaw_rate
+    )
+
+    plot_geometry(
+        body_aero_masure_regression,
+        title="TUDELFT_V3_KITE",
+        data_type=".pdf",
+        save_path=".",
+        is_save=False,
+        is_show=True,
+        view_elevation=0,
+        view_azimuth=-180,
     )
 
     # Step 5: Plot polar curves for different angles of attack and side slip angles, and save results
@@ -120,7 +137,7 @@ def main():
             "Wind Tunnel Data Poland 2025",
         ],
         literature_path_list=[path_cfd_lebesque_alpha, path_wt_data],
-        angle_range=np.linspace(0, 20, 21),
+        angle_range=np.linspace(0, 10, 11),
         angle_type="angle_of_attack",
         angle_of_attack=0,
         side_slip=0,
@@ -130,7 +147,40 @@ def main():
         data_type=".pdf",
         save_path=Path(save_folder),
         is_save=True,
-        is_show=False,
+        is_show=True,
+    )
+    plot_polars(
+        solver_list=[
+            solver_base_version,
+        ],
+        body_aero_list=[
+            body_aero_masure_regression,
+        ],
+        label_list=["VSM No Aoa Correction"],
+        angle_range=[0, 3, 6, 9, 12, 15],
+        angle_type="side_slip",
+        angle_of_attack=6.8,
+        side_slip=0,
+        yaw_rate=-1.5,
+        Umag=Umag,
+        title="betasweep",
+        data_type=".pdf",
+        save_path=Path(save_folder),
+        is_save=True,
+        is_show=True,
+        steering="roll",
+    )
+    plot_distribution(
+        alpha_list=[6.8],
+        Umag=Umag,
+        side_slip=0,
+        yaw_rate=0,
+        pitch_rate=0,
+        roll_rate=0,
+        solver_list=[solver_aoa_correction, solver_base_version],
+        body_aero_list=[body_aero_masure_regression, body_aero_masure_regression],
+        label_list=["VSM Aoa Correction", "VSM No Aoa Correction"],
+        is_save=False,
     )
 
 

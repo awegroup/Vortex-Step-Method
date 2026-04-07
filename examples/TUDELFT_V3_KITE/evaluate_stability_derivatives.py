@@ -1,7 +1,10 @@
 from pathlib import Path
 import numpy as np
+
+# from VSM import trim_angle
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.core.Solver import Solver
+
 from VSM.stability_derivatives import (
     compute_rigid_body_stability_derivatives,
     map_derivatives_to_aircraft_frame,
@@ -9,60 +12,80 @@ from VSM.stability_derivatives import (
 from VSM.trim_angle import compute_trim_angle
 
 
-def print_combined(title, keys, derivatives, derivatives_aircraft) -> None:
-    print(f"\n{title}")
-    header = f"  {'Derivative':<18}{'VSM':>14}{'Aircraft':>14}"
-    print(header)
-    print("  " + "-" * (len(header) - 2))
-    for key in keys:
-        if key not in derivatives and key not in derivatives_aircraft:
-            continue
-        vsm_val = f"{derivatives[key]:+.6f}" if key in derivatives else "     n/a"
-        ac_val = (
-            f"{derivatives_aircraft[key]:+.6f}"
-            if key in derivatives_aircraft
-            else "     n/a"
-        )
-        print(f"  {key:<18}{vsm_val:>14}{ac_val:>14}")
+# Default step sizes for finite differences
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+n_panels = 18
+spanwise_panel_distribution = "uniform"
+cad_derived_geometry_dir = (
+    Path(PROJECT_DIR) / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
+)
+ml_models_dir = PROJECT_DIR / "data" / "ml_models"
 
 
-def main() -> None:
-    # Default step sizes for finite differences
-    project_dir = Path(__file__).resolve().parents[2]
-    n_panels = 100
-    spanwise_panel_distribution = "uniform"
-    solver_base_version = Solver(reference_point=np.array([0.0, 0.0, 0.0]))
+def make_body() -> BodyAerodynamics:
+    """Instantiate a fresh body with the same config as the yaw sweep."""
 
-    cad_derived_geometry_dir = (
-        project_dir / "data" / "TUDELFT_V3_KITE" / "CAD_derived_geometry"
-    )
-    body_aero_cad_cfd_polars = BodyAerodynamics.instantiate(
+    body = BodyAerodynamics.instantiate(
         n_panels=n_panels,
-        file_path=(cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"),
+        file_path=cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml",
         spanwise_panel_distribution=spanwise_panel_distribution,
+        ml_models_dir=ml_models_dir,
+    )
+    # # Match the yaw sweep tilt rotation (even 0 deg, to mirror panel rebuild)
+    # body.rotate(
+    #     angle_deg=tilt_deg,
+    #     axis=np.array([1.0, 0.0, 0.0]),
+    #     point=np.array([0.5, 0.0, 7.0]),
+    # )
+    return body
+
+
+solver_base_version = Solver(
+    reference_point=np.array([0.0, 0.0, 0.0]), gamma_initial_distribution_type="zero"
+)
+
+# Tilt angle (deg) used in yaw sweep: 0 or 11 depending on case; set to desired value
+tilt_deg = 0.0
+body_aero_CAD_CFD_polars = make_body()
+
+### inputs for stability derivatives
+side_slip = 0.0
+velocity_magnitude = 10.0
+roll_rate = 0.0
+pitch_rate = 0.0
+yaw_rate = 0.0
+step_sizes = {
+    "alpha": 1.0,  # degrees
+    "beta": 1.0,  # degrees
+    "p": 0.01,  # rad/s
+    "q": 0.01,  # rad/s
+    "r": 0.01,  # rad/s
+}
+
+# Get reference point from solver for physically correct moment calculations
+# v_rot(r) = omega x (r - r_ref)
+reference_point = solver_base_version.reference_point
+
+# Quick AoA sweep to mirror yaw script diagnostics
+for alpha in [-5.0, 0.0, 5.0, 10.0, 15.0]:
+    body = make_body()
+    solver = Solver(
+        reference_point=reference_point, gamma_initial_distribution_type="zero"
+    )
+    body.va_initialize(Umag=velocity_magnitude, angle_of_attack=alpha)
+    solved = solver.solve(body)
+    cmy = solved.get("cmy", np.nan)
+    cl = solved.get("cl", np.nan)
+    projected_area = body.wings[0].compute_projected_area()
+    max_chord = max(p.chord for p in body.panels)
+    print(
+        f"alpha: {alpha:.1f} deg, CMy: {cmy:.6f}, CL: {cl:.6f}, "
+        f"panels={body.n_panels}, Sproj={projected_area:.3f}, c_max={max_chord:.3f}"
     )
 
-    # Inputs for stability derivatives
-    side_slip = 0.0
-    velocity_magnitude = 10.0
-    roll_rate = 0.0
-    pitch_rate = 0.0
-    yaw_rate = 0.0
-    step_sizes = {
-        "alpha": 1.0,  # degrees
-        "beta": 1.0,  # degrees
-        "p": 0.1,  # rad/s
-        "q": 0.1,  # rad/s
-        "r": 0.1,  # rad/s
-    }
-
-    # Get reference point from solver for physically correct moment calculations
-    # v_rot(r) = omega x (r - r_ref)
-    reference_point = solver_base_version.reference_point
-
-    # Compute trim-angle
+    ## Compute trim-angle
     results = compute_trim_angle(
-        body_aero=body_aero_cad_cfd_polars,
+        body_aero=make_body(),
         solver=solver_base_version,
         side_slip=side_slip,
         velocity_magnitude=velocity_magnitude,
@@ -84,9 +107,9 @@ def main() -> None:
     print(f"Trim angle found at {trim_angle:.3f} degrees.")
     print(f"Pitching moment derivative at trim angle: {dcmy_dalpha:.3f} per radian.")
 
-    # Compute stability derivatives (non-dimensionalized)
+    ## Compute stability derivatives (non-dimensionalized)
     derivatives = compute_rigid_body_stability_derivatives(
-        body_aero=body_aero_cad_cfd_polars,
+        body_aero=make_body(),
         solver=solver_base_version,
         angle_of_attack=trim_angle,
         side_slip=side_slip,
@@ -114,26 +137,36 @@ def main() -> None:
     # Apply reference frame transformation using the VSM module function
     derivatives_aircraft = map_derivatives_to_aircraft_frame(derivatives)
 
-    coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
-    angle_keys = [f"d{coeff}_dalpha" for coeff in coeffs] + [
-        f"d{coeff}_dbeta" for coeff in coeffs
-    ]
-    rate_keys = (
-        [f"d{coeff}_dp" for coeff in coeffs]
-        + [f"d{coeff}_dq" for coeff in coeffs]
-        + [f"d{coeff}_dr" for coeff in coeffs]
-    )
-
-    print_combined(
-        "Angle derivatives (per radian)", angle_keys, derivatives, derivatives_aircraft
-    )
-    print_combined(
-        "Rate derivatives (per hat-rate, dimensionless)",
-        rate_keys,
-        derivatives,
-        derivatives_aircraft,
-    )
+coeffs = ["Cx", "Cy", "Cz", "CMx", "CMy", "CMz"]
+angle_keys = [f"d{coeff}_dalpha" for coeff in coeffs] + [
+    f"d{coeff}_dbeta" for coeff in coeffs
+]
+rate_keys = (
+    [f"d{coeff}_dp" for coeff in coeffs]
+    + [f"d{coeff}_dq" for coeff in coeffs]
+    + [f"d{coeff}_dr" for coeff in coeffs]
+)
 
 
-if __name__ == "__main__":
-    main()
+def print_combined(title, keys) -> None:
+    print(f"\n{title}")
+    header = f"  {'Derivative':<18}{'VSM':>14}{'Aircraft':>14}"
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for key in keys:
+        if key not in derivatives and key not in derivatives_aircraft:
+            continue
+        vsm_val = f"{derivatives[key]:+.6f}" if key in derivatives else "     n/a"
+        ac_val = (
+            f"{derivatives_aircraft[key]:+.6f}"
+            if key in derivatives_aircraft
+            else "     n/a"
+        )
+        print(f"  {key:<18}{vsm_val:>14}{ac_val:>14}")
+
+
+print_combined("Angle derivatives (per radian)", angle_keys)
+print_combined(
+    "Rate derivatives (per hat-rate, dimensionless)",
+    rate_keys,
+)

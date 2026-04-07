@@ -119,9 +119,8 @@ def plot_distribution(
                 Umag=Umag,
                 angle_of_attack=alpha,
                 side_slip=side_slip,
-                yaw_rate=yaw_rate,
-                pitch_rate=pitch_rate,
-                roll_rate=roll_rate,
+                body_rates=yaw_rate,
+                body_axis=np.array([0, 0, 1]),
             )
 
             y_coordinates_list.append(body_aero.compute_y_coordinates())
@@ -378,18 +377,16 @@ def generate_3D_polar_data(
                 Umag,
                 angle_i,
                 side_slip,
-                yaw_rate,
-                pitch_rate,
-                roll_rate,
+                body_rates=[yaw_rate, pitch_rate, roll_rate],
+                body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             )
         elif angle_type == "side_slip":
             body_aero.va_initialize(
                 Umag,
                 angle_of_attack,
                 angle_i,
-                yaw_rate,
-                pitch_rate,
-                roll_rate,
+                body_rates=[yaw_rate, pitch_rate, roll_rate],
+                body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             )
         else:
             raise ValueError(
@@ -528,6 +525,7 @@ def plot_polars(
     )  # Create a copy to preserve original labels
 
     print("\n=== Generating solver data ===")
+
     for i, (solver, body_aero, label) in enumerate(
         zip(solver_list, body_aero_list, label_list[: len(solver_list)])
     ):
@@ -570,7 +568,7 @@ def plot_polars(
             elif steering == "roll":
                 polar_data[3] = np.degrees(np.arctan2(df["CS"], df["CL"]))
         if angle_type == "angle_of_attack":
-            polar_data[3] = df["CL"].values / df["CD"].values
+            polar_data[3] = df["CD"].values / df["CL"].values ** 2
         if "CMx" in df.columns:
             polar_data[4] = df["CMx"].values
         if "CMy" in df.columns:
@@ -586,8 +584,8 @@ def plot_polars(
     y_label_list = [
         r"$C_{\mathrm{L}}$",
         r"$C_{\mathrm{D}}$",
-        r"$C_{\mathrm{L}}/C_{\mathrm{D}}$",
-        r"$C_{mx}$ (Roll)",
+        r"$Mac suggestion$",
+        r"$Mac suggestion$",
         r"$C_{my}$ (Pitch)",
         r"$C_{mz}$ (Yaw)",
     ]
@@ -597,6 +595,13 @@ def plot_polars(
         elif steering == "roll":
             y_label_list[2] = r"$\phi_a$"
 
+    if steering == "sideforce":
+        required_cs = 15 * Umag * yaw_rate / (0.5 * 1.225 * Umag**2 * 19.75)
+        axs_flat[2].plot(
+            [angle_range[0], angle_range[-1]],
+            [required_cs, required_cs],
+            label="Required Side Force",
+        )
     # plotting the actyual data
     color_cycle = plt.rcParams["axes.prop_cycle"].by_key().get(
         "color", ["C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7"]
@@ -608,7 +613,9 @@ def plot_polars(
                 continue
             y_data = polar_data_list[data_idx][ax_idx + 1]
             if angle_type == "angle_of_attack" and ax_idx == 2:
-                y_data = polar_data_list[data_idx][1] / polar_data_list[data_idx][2]
+                y_data = (
+                    polar_data_list[data_idx][2] / polar_data_list[data_idx][1] ** 2
+                )
             ax.plot(
                 polar_data_list[data_idx][0],
                 y_data,

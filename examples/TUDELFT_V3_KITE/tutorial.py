@@ -94,13 +94,29 @@ def main():
     angle_of_attack = 6.8
     side_slip = 0
     yaw_rate = 0
-    body_aero_CAD_CFD_polars.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
-    body_aero_CAD_CFD_polars_with_bridles.va_initialize(
-        Umag, angle_of_attack, side_slip, yaw_rate
+    body_aero_CAD_CFD_polars.va_initialize(
+        Umag, angle_of_attack, side_slip, body_rates=yaw_rate
     )
-    body_aero_CAD_neuralfoil.va_initialize(Umag, angle_of_attack, side_slip, yaw_rate)
+    body_aero_CAD_CFD_polars_with_bridles.va_initialize(
+        Umag,
+        angle_of_attack,
+        side_slip,
+        body_rates=yaw_rate,
+        body_axis=np.array([0, 0, 1]),
+    )
+    body_aero_CAD_neuralfoil.va_initialize(
+        Umag,
+        angle_of_attack,
+        side_slip,
+        body_rates=yaw_rate,
+        body_axis=np.array([0, 0, 1]),
+    )
     body_aero_masure_regression.va_initialize(
-        Umag, angle_of_attack, side_slip, yaw_rate
+        Umag,
+        angle_of_attack,
+        side_slip,
+        body_rates=yaw_rate,
+        body_axis=np.array([0, 0, 1]),
     )
 
     # Step 3: Plot the kite geometry using Matplotlib
