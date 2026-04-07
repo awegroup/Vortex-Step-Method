@@ -70,6 +70,195 @@ def set_axes_equal(ax):
     ax.set_zlim3d([z_mid - max_range / 2, z_mid + max_range / 2])
 
 
+def plot_trim_geometry(
+    body_aero,
+    view_elevation=15,
+    view_azimuth=-120,
+):
+    """
+    Plots the wing panels and filaments in 3D.
+
+    Args:
+        body_aero: WingAerodynamics object
+        title: title of the plot
+        data_type: type of the data to be saved | default: ".pdf"
+        save_path: path to save the plot | default: None
+        is_save: boolean to save the plot | default: False
+        is_show: boolean to show the plot | default: True
+        view_elevation: elevation of the view | default: 15
+        view_azimuth: azimuth of the view | default: -120
+
+    Returns:
+        None
+    """
+
+    # Set the plot style
+    set_plot_style()
+
+    # defining variables
+    panels = body_aero.panels
+
+    # Extract corner points, control points, and aerodynamic centers from panels
+    corner_points = np.array([panel.corner_points for panel in panels])
+    control_points = np.array([panel.control_point for panel in panels])
+    aerodynamic_centers = np.array([panel.aerodynamic_center for panel in panels])
+
+    # Create a 3D plot
+    fig = plt.figure(figsize=(14, 14))
+    ax = fig.add_subplot(111, projection="3d")
+
+    # Plot each panel
+    for i, panel in enumerate(panels):
+        # Get the corner points of the current panel and close the loop by adding the first point again
+        x_corners = np.append(corner_points[i, :, 0], corner_points[i, 0, 0])
+        y_corners = np.append(corner_points[i, :, 1], corner_points[i, 0, 1])
+        z_corners = np.append(corner_points[i, :, 2], corner_points[i, 0, 2])
+
+        # Plot the panel edges
+        ax.plot(
+            x_corners,
+            y_corners,
+            z_corners,
+            color="grey",
+            # label="Panel Edges" if i == 0 else "",
+            linewidth=1,
+        )
+
+        # Create a list of tuples representing the vertices of the polygon
+        verts = [list(zip(x_corners, y_corners, z_corners))]
+        poly = Poly3DCollection(verts, color="grey", alpha=0.1)
+        ax.add_collection3d(poly)
+
+    z_offset = 4.0  # lift the plane above the kite for better visibility
+    geom_rot = getattr(body_aero, "geometry_rotation", np.eye(3))
+
+    # Plot velocity vectors (va, kite, wind) rotated consistently with geometry_rotation
+    def plot_rotated_vector(vec, color, label, width=3):
+        if vec is None:
+            return
+        vec = np.asarray(vec, dtype=float)
+        if vec.shape != (3,) or np.linalg.norm(vec) < 1e-9:
+            return
+        rotated_vec = geom_rot @ vec
+        extents_vec = np.ptp(corner_points.reshape(-1, 3), axis=0)
+        scale = 0.8 * np.max(extents_vec)
+        if scale < 1e-6:
+            scale = 1.0
+        origin = np.mean(corner_points.reshape(-1, 3), axis=0)
+        end = origin + scale * rotated_vec / np.linalg.norm(rotated_vec)
+        plot_line_segment(ax, [origin, end], color, width=width)
+
+    # Plot longitudinal plane (normal along body Y rotated by geometry_rotation)
+    normal = geom_rot @ np.array([0.0, 1.0, 0.0])
+    normal_norm = np.linalg.norm(normal)
+    if normal_norm > 0:
+        normal = normal / normal_norm
+        u_vec = geom_rot @ np.array([1.0, 0.0, 0.0])
+        # If nearly parallel, pick another axis
+        if abs(np.dot(u_vec, normal)) > 0.99:
+            u_vec = geom_rot @ np.array([0.0, 0.0, 1.0])
+        u_vec = u_vec / np.linalg.norm(u_vec)
+        v_vec = np.cross(normal, u_vec)
+        v_vec = v_vec / np.linalg.norm(v_vec)
+
+        extents = np.ptp(corner_points.reshape(-1, 3), axis=0)
+        span_extent = np.max(extents) * 0.6
+        v_extent = np.max(extents) * 1.0  # elongate in vertical-ish direction
+        # Order corners to form a proper quad (avoid diagonal triangulation look)
+        corners_plane = [
+            -span_extent * u_vec - v_extent * v_vec + np.array([0.0, 0.0, z_offset]),
+            span_extent * u_vec - v_extent * v_vec + np.array([0.0, 0.0, z_offset]),
+            span_extent * u_vec + v_extent * v_vec + np.array([0.0, 0.0, z_offset]),
+            -span_extent * u_vec + v_extent * v_vec + np.array([0.0, 0.0, z_offset]),
+        ]
+        plane_poly = Poly3DCollection([corners_plane], color="lightblue", alpha=0.12)
+        ax.add_collection3d(plane_poly)
+        # outline
+        plane_loop = corners_plane + [corners_plane[0]]
+        ax.plot(
+            [p[0] for p in plane_loop],
+            [p[1] for p in plane_loop],
+            [p[2] for p in plane_loop],
+            color="lightblue",
+            alpha=0.4,
+            linewidth=1.0,
+            # label="Longitudinal plane",
+        )
+
+    # # Plot lateral plane (normal along body X rotated by geometry_rotation)
+    # normal_lat = geom_rot @ np.array([1.0, 0.0, 0.0])
+    # normal_lat_norm = np.linalg.norm(normal_lat)
+    # if normal_lat_norm > 0:
+    #     normal_lat = normal_lat / normal_lat_norm
+    #     u_lat = geom_rot @ np.array([0.0, 1.0, 0.0])
+    #     if abs(np.dot(u_lat, normal_lat)) > 0.99:
+    #         u_lat = geom_rot @ np.array([0.0, 0.0, 1.0])
+    #     u_lat = u_lat / np.linalg.norm(u_lat)
+    #     v_lat = np.cross(normal_lat, u_lat)
+    #     v_lat = v_lat / np.linalg.norm(v_lat)
+
+    #     extents_lat = np.ptp(corner_points.reshape(-1, 3), axis=0)
+    #     span_lat = np.max(extents_lat) * 0.6
+    #     v_lat_extent = np.max(extents_lat) * 1.0
+    #     corners_lat = [
+    #         -span_lat * u_lat - v_lat_extent * v_lat + np.array([0.0, 0.0, z_offset]),
+    #         span_lat * u_lat - v_lat_extent * v_lat + np.array([0.0, 0.0, z_offset]),
+    #         span_lat * u_lat + v_lat_extent * v_lat + np.array([0.0, 0.0, z_offset]),
+    #         -span_lat * u_lat + v_lat_extent * v_lat + np.array([0.0, 0.0, z_offset]),
+    #     ]
+    #     plane_lat = Poly3DCollection([corners_lat], color="lightgray", alpha=0.10)
+    #     ax.add_collection3d(plane_lat)
+    #     plane_lat_loop = corners_lat + [corners_lat[0]]
+    #     ax.plot(
+    #         [p[0] for p in plane_lat_loop],
+    #         [p[1] for p in plane_lat_loop],
+    #         [p[2] for p in plane_lat_loop],
+    #         color="gray",
+    #         alpha=0.35,
+    #         linewidth=1.0,
+    #         # label="Lateral plane",
+    #     )
+
+    # Plot basic bridle lines if present (thin, semi-transparent, no arrows)
+    if hasattr(body_aero, "_bridle_line_system") and body_aero._bridle_line_system:
+        for i, bridle_line in enumerate(body_aero._bridle_line_system):
+            p1, p2, diameter = bridle_line
+            width = 0.5
+            ax.plot(
+                [p1[0], p2[0]],
+                [p1[1], p2[1]],
+                [p1[2], p2[2]],
+                color="black",
+                alpha=0.2,
+                linewidth=width,
+                # label="Bridle" if i == 0 else "",
+            )
+
+    # Add legends for the first occurrence of each label
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys())
+
+    # Add axis labels
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+
+    # Set equal axis limits
+    set_axes_equal(ax)
+
+    # Flip the z-axis (to stick to body reference frame)
+    # ax.invert_zaxis()
+
+    # Set the initial view
+    ax.view_init(elev=view_elevation, azim=view_azimuth)
+
+    # Ensure the figure is fully rendered
+    fig.canvas.draw()
+
+    return fig, ax
+
+
 def creating_geometry_plot(
     body_aero,
     title,
@@ -223,8 +412,8 @@ def plot_geometry(
         fig = creating_geometry_plot(
             body_aero,
             title=title + "_angled_view",
-            view_elevation=15,
-            view_azimuth=-120,
+            view_elevation=view_elevation,
+            view_azimuth=view_azimuth,
         )
         save_plot(fig, save_path, title + "_angled_view", data_type)
         plt.close()
@@ -262,8 +451,8 @@ def plot_geometry(
         fig = creating_geometry_plot(
             body_aero,
             title=title,
-            view_elevation=15,
-            view_azimuth=-120,
+            view_elevation=view_elevation,
+            view_azimuth=view_azimuth,
         )
         plt.show()
     elif is_show and is_save:

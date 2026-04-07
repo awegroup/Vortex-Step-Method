@@ -111,12 +111,12 @@ def compute_trim_angle(
             Umag=velocity_magnitude,
             angle_of_attack=alpha_deg,
             side_slip=side_slip,
-            yaw_rate=yaw_rate,
-            pitch_rate=pitch_rate,
-            roll_rate=roll_rate,
+            body_rates=[yaw_rate, pitch_rate, roll_rate],
+            body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             reference_point=reference_point,
         )
         solved = solver.solve(body_aero)
+        print(f"alpha: {alpha_deg:.3f} deg, cl: {solved.get('cl', np.nan):.4f}")
         return _extract_cmy(solved)
 
     def _compute_derivative(alpha_deg: float, delta_deg: float) -> float:
@@ -132,6 +132,10 @@ def compute_trim_angle(
         cmy_coarse.append(cmy_value)
 
     cmy_coarse_array = np.asarray(cmy_coarse)
+    import matplotlib.pyplot as plt
+
+    plt.plot(alpha_coarse, cmy_coarse_array, marker="o")
+    plt.show()
     valid_mask = ~np.isnan(cmy_coarse_array)
     valid_alphas = alpha_coarse[valid_mask]
     valid_cmy = cmy_coarse_array[valid_mask]
