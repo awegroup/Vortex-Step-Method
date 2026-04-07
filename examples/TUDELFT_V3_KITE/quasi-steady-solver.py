@@ -43,9 +43,9 @@ sweep_values = {
     "distance_radial": [200.0],
 }
 
-is_plot_results = True
+is_plot_results = False
 is_save_csv = True
-compute_jacobian_once = True
+compute_jacobian_once = False
 
 
 spanwise_panel_distribution = "uniform"
@@ -63,9 +63,9 @@ def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
         file_path=geometry_yaml,
         spanwise_panel_distribution=spanwise_panel_distribution,
         # ml_models_dir=ml_models_dir,
-        bridle_path=(
-            cad_derived_geometry_dir / "struc_geometry_manually_adjusted.yaml"
-        ),
+        # Disabled for this benchmark because current structural YAML uses a
+        # schema that is not consumed by BodyAerodynamics.instantiate yet.
+        bridle_path=None,
     )
     base.rotate(
         angle_deg=tilt_deg,
@@ -138,6 +138,8 @@ def main():
         bounds_upper=bounds_upper,
         include_gravity=include_gravity,
         axes=DEFAULT_AXES,
+        use_gamma_warm_start=True,
+        return_timing_breakdown=True,
     )
 
     def fmt_vec(vec: np.ndarray) -> str:
@@ -226,6 +228,49 @@ def main():
 
     end_time = time.time()
     print(f"Optimization took {end_time - start_time:.2f} seconds.")
+
+    timing_keys = [
+        "residual_evaluations",
+        "residual_total_s",
+        "solver_s",
+        "body_copy_rotate_s",
+        "kinematics_s",
+        "postprocess_s",
+    ]
+    timing_totals = {k: 0.0 for k in timing_keys}
+    timing_count = 0
+    for row in sweep_rows:
+        timing = row["result"].get("timing_breakdown")
+        if timing is None:
+            continue
+        timing_count += 1
+        for key in timing_keys:
+            timing_totals[key] += float(timing.get(key, 0.0))
+
+    if timing_count > 0 and timing_totals["residual_total_s"] > 0:
+        residual_total = timing_totals["residual_total_s"]
+        print("\n=== Quasi-steady Timing Breakdown (aggregate over sweep) ===")
+        print(f"Solved cases                    : {timing_count}")
+        print(
+            f"Residual evaluations            : {int(timing_totals['residual_evaluations'])}"
+        )
+        print(f"Residual total [s]              : {residual_total:.3f}")
+        print(
+            f"solver.solve [s]                : {timing_totals['solver_s']:.3f} "
+            f"({100.0 * timing_totals['solver_s'] / residual_total:.1f}%)"
+        )
+        print(
+            f"copy+rotate body [s]            : {timing_totals['body_copy_rotate_s']:.3f} "
+            f"({100.0 * timing_totals['body_copy_rotate_s'] / residual_total:.1f}%)"
+        )
+        print(
+            f"kinematics eval [s]             : {timing_totals['kinematics_s']:.3f} "
+            f"({100.0 * timing_totals['kinematics_s'] / residual_total:.1f}%)"
+        )
+        print(
+            f"residual postprocess [s]        : {timing_totals['postprocess_s']:.3f} "
+            f"({100.0 * timing_totals['postprocess_s'] / residual_total:.1f}%)"
+        )
 
     df = quasi_steady_sweep_rows_to_dataframe(sweep_rows)
     if df.empty:

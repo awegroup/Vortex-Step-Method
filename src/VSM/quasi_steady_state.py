@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -56,9 +57,102 @@ def _apply_attitude(
     axes: AxisDefinition,
     reference_point: np.ndarray,
 ) -> None:
-    body.rotate(angle_deg=roll_deg, axis=axes.course, point=reference_point)
-    body.rotate(angle_deg=pitch_deg, axis=axes.normal, point=reference_point)
-    body.rotate(angle_deg=yaw_deg, axis=axes.radial, point=reference_point)
+    combined_rotation = _compose_attitude_rotation(
+        roll_deg=roll_deg,
+        pitch_deg=pitch_deg,
+        yaw_deg=yaw_deg,
+        axes=axes,
+    )
+
+    origin = _as_3vector(reference_point)
+
+    def rotate_point(point: np.ndarray) -> np.ndarray:
+        return origin + combined_rotation @ (_as_3vector(point) - origin)
+
+    for wing in body.wings:
+        for section in wing.sections:
+            section.LE_point = rotate_point(section.LE_point)
+            section.TE_point = rotate_point(section.TE_point)
+
+        rotated_span = combined_rotation @ wing.spanwise_direction
+        span_norm = np.linalg.norm(rotated_span)
+        if span_norm == 0.0:
+            raise ValueError(
+                "Combined attitude produced zero spanwise direction vector."
+            )
+        wing.spanwise_direction = rotated_span / span_norm
+
+    body.geometry_rotation = combined_rotation @ body.geometry_rotation
+    body._build_panels()
+
+
+def _rotation_matrix(axis: np.ndarray, angle_deg: float) -> np.ndarray:
+    theta = np.deg2rad(angle_deg)
+    axis_vec = _as_3vector(axis)
+    axis_norm = np.linalg.norm(axis_vec)
+    if axis_norm == 0.0:
+        raise ValueError("Rotation axis must be non-zero.")
+    axis_unit = axis_vec / axis_norm
+    kx, ky, kz = axis_unit
+    skew = np.array(
+        [[0.0, -kz, ky], [kz, 0.0, -kx], [-ky, kx, 0.0]],
+        dtype=float,
+    )
+    return np.eye(3) + np.sin(theta) * skew + (1.0 - np.cos(theta)) * (skew @ skew)
+
+
+def _compose_attitude_rotation(
+    *,
+    roll_deg: float,
+    pitch_deg: float,
+    yaw_deg: float,
+    axes: AxisDefinition,
+) -> np.ndarray:
+    roll_matrix = _rotation_matrix(axes.course, roll_deg)
+    pitch_matrix = _rotation_matrix(axes.normal, pitch_deg)
+    yaw_matrix = _rotation_matrix(axes.radial, yaw_deg)
+    return yaw_matrix @ pitch_matrix @ roll_matrix
+
+
+def _set_body_attitude_from_baseline(
+    body: BodyAerodynamics,
+    *,
+    baseline_sections: list[list[tuple[np.ndarray, np.ndarray]]],
+    baseline_spanwise: list[np.ndarray],
+    roll_deg: float,
+    pitch_deg: float,
+    yaw_deg: float,
+    axes: AxisDefinition,
+    reference_point: np.ndarray,
+) -> None:
+    combined_rotation = _compose_attitude_rotation(
+        roll_deg=roll_deg,
+        pitch_deg=pitch_deg,
+        yaw_deg=yaw_deg,
+        axes=axes,
+    )
+    origin = _as_3vector(reference_point)
+
+    def rotate_point(point: np.ndarray) -> np.ndarray:
+        return origin + combined_rotation @ (_as_3vector(point) - origin)
+
+    for wing, wing_sections, spanwise_base in zip(
+        body.wings, baseline_sections, baseline_spanwise
+    ):
+        for section, (le_base, te_base) in zip(wing.sections, wing_sections):
+            section.LE_point = rotate_point(le_base)
+            section.TE_point = rotate_point(te_base)
+
+        rotated_span = combined_rotation @ spanwise_base
+        span_norm = np.linalg.norm(rotated_span)
+        if span_norm == 0.0:
+            raise ValueError(
+                "Combined attitude produced zero spanwise direction vector."
+            )
+        wing.spanwise_direction = rotated_span / span_norm
+
+    body.geometry_rotation = combined_rotation
+    body._build_panels()
 
 
 def solve_quasi_steady_state(
@@ -74,11 +168,13 @@ def solve_quasi_steady_state(
     transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
-    moment_tolerance: float = 1e-3,
+    moment_tolerance: float = 1e-2,
     force_residual_scale: float = 1.0,
     window_fraction: float = 0.15,
     max_nfev: int = 400,
     f_scale: float = 0.15,
+    use_gamma_warm_start: bool = False,
+    return_timing_breakdown: bool = False,
 ) -> dict:
     """
     Solve a quasi-steady trim problem for x=[kite_speed, roll, pitch, yaw, course_rate_body].
@@ -144,12 +240,62 @@ def solve_quasi_steady_state(
             "apparent_velocity": apparent_velocity,
         }
 
+    timing_counters = {
+        "residual_evaluations": 0,
+        "residual_total_s": 0.0,
+        "body_copy_rotate_s": 0.0,
+        "kinematics_s": 0.0,
+        "solver_s": 0.0,
+        "postprocess_s": 0.0,
+        "warm_start_attempts": 0,
+        "warm_start_fallbacks": 0,
+    }
+    warm_start_gamma: np.ndarray | None = None
+    cached_eval: dict[str, Any] = {"x": None, "payload": None}
+    working_body = copy.deepcopy(body_aero)
+    baseline_sections: list[list[tuple[np.ndarray, np.ndarray]]] = []
+    baseline_spanwise: list[np.ndarray] = []
+    for wing in working_body.wings:
+        baseline_sections.append(
+            [
+                (
+                    np.asarray(section.LE_point, dtype=float).copy(),
+                    np.asarray(section.TE_point, dtype=float).copy(),
+                )
+                for section in wing.sections
+            ]
+        )
+        baseline_spanwise.append(
+            np.asarray(wing.spanwise_direction, dtype=float).copy()
+        )
+
     def moment_residual(x: np.ndarray) -> np.ndarray:
+        nonlocal warm_start_gamma
+
+        x = np.asarray(x, dtype=float)
+        cached_x = cached_eval["x"]
+        if cached_x is not None and np.array_equal(x, cached_x):
+            payload = cached_eval["payload"]
+            return np.asarray(payload["residual"], dtype=float)
+
+        eval_t0 = perf_counter()
         kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = x
 
-        body = copy.deepcopy(body_aero)
-        _apply_attitude(body, roll_deg, pitch_deg, yaw_deg, axes, reference_point)
+        t0 = perf_counter()
+        body = working_body
+        _set_body_attitude_from_baseline(
+            body,
+            baseline_sections=baseline_sections,
+            baseline_spanwise=baseline_spanwise,
+            roll_deg=roll_deg,
+            pitch_deg=pitch_deg,
+            yaw_deg=yaw_deg,
+            axes=axes,
+            reference_point=reference_point,
+        )
+        timing_counters["body_copy_rotate_s"] += perf_counter() - t0
 
+        t0 = perf_counter()
         kin = evaluate_kinematics(x)
         va = _as_3vector(kin["va"])
         inertial_force = _as_3vector(kin["inertial_force"])
@@ -158,9 +304,10 @@ def solve_quasi_steady_state(
             if include_gravity
             else np.zeros(3, dtype=float)
         )
+        timing_counters["kinematics_s"] += perf_counter() - t0
 
         aoa_course_deg = np.rad2deg(np.arctan2(va[2], va[0]))
-        beta_course_deg = np.rad2deg(np.arctan2(va[1], np.linalg.norm(va[[0, 2]])))
+        beta_course_deg = np.rad2deg(np.arctan2(va[1], np.hypot(va[0], va[2])))
         umag = np.linalg.norm(va)
 
         body.va_initialize(
@@ -173,7 +320,22 @@ def solve_quasi_steady_state(
             rates_in_body_frame=False,
         )
 
-        res = solver.solve(body)
+        t0 = perf_counter()
+        if use_gamma_warm_start and warm_start_gamma is not None:
+            timing_counters["warm_start_attempts"] += 1
+            res = solver.solve(body, gamma_distribution=warm_start_gamma)
+            if not bool(res.get("gamma_converged", True)):
+                timing_counters["warm_start_fallbacks"] += 1
+                res = solver.solve(body)
+        else:
+            res = solver.solve(body)
+        timing_counters["solver_s"] += perf_counter() - t0
+
+        if use_gamma_warm_start:
+            gamma_new = res.get("gamma_distribution")
+            if gamma_new is not None and bool(res.get("gamma_converged", True)):
+                warm_start_gamma = np.asarray(gamma_new, dtype=float).copy()
+
         cmx = res.get("cmx")
         cmy = res.get("cmy")
         cmz = res.get("cmz")
@@ -205,9 +367,27 @@ def solve_quasi_steady_state(
             0.5 * solver.rho * umag**2 * projected_area
         )
 
-        return np.array(
+        t0 = perf_counter()
+        residual = np.array(
             [cmx, cmy, cmz, cfx / force_residual_scale, cfy / force_residual_scale]
         )
+        timing_counters["postprocess_s"] += perf_counter() - t0
+        timing_counters["residual_evaluations"] += 1
+        timing_counters["residual_total_s"] += perf_counter() - eval_t0
+
+        cached_eval["x"] = x.copy()
+        cached_eval["payload"] = {
+            "residual": residual,
+            "kin": kin,
+            "va": va,
+            "umag": umag,
+            "course_rate_body": course_rate_body,
+            "res": res,
+            "gravity_force": gravity_force,
+            "inertial_force": inertial_force,
+        }
+
+        return residual
 
     span_global = bounds_upper - bounds_lower
     local_lower = np.maximum(bounds_lower, x_guess - window_fraction * span_global)
@@ -229,6 +409,7 @@ def solve_quasi_steady_state(
 
     cm_best = moment_residual(opt.x)
     cmx, cmy, cmz, cfx, cfy = cm_best
+    kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = opt.x
 
     physical_success = (
         np.abs(cmx) < moment_tolerance
@@ -237,27 +418,20 @@ def solve_quasi_steady_state(
     )
     opt_success = bool(opt.success and physical_success)
 
-    kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = opt.x
-    body = copy.deepcopy(body_aero)
-    _apply_attitude(body, roll_deg, pitch_deg, yaw_deg, axes, reference_point)
-
-    kin = evaluate_kinematics(opt.x)
-    va = _as_3vector(kin["va"])
-    aoa_deg = np.rad2deg(np.arctan2(va[2], va[0]))
-    beta_deg = np.rad2deg(np.arctan2(va[1], np.linalg.norm(va[[0, 2]])))
-    umag = np.linalg.norm(va)
-
-    body.va_initialize(
-        Umag=umag,
-        angle_of_attack=aoa_deg,
-        side_slip=beta_deg,
-        body_rates=course_rate_body,
-        body_axis=axes.radial,
-        reference_point=reference_point,
-        rates_in_body_frame=False,
+    payload = (
+        cached_eval["payload"] if np.array_equal(opt.x, cached_eval["x"]) else None
     )
+    if payload is None:
+        _ = moment_residual(opt.x)
+        payload = cached_eval["payload"]
 
-    res = solver.solve(body)
+    kin = payload["kin"]
+    va = _as_3vector(payload["va"])
+    aoa_deg = np.rad2deg(np.arctan2(va[2], va[0]))
+    beta_deg = np.rad2deg(np.arctan2(va[1], np.hypot(va[0], va[2])))
+    umag = float(payload["umag"])
+
+    res = payload["res"]
     aoa_center_chord_deg = float(res.get("alpha_center_chord_deg", aoa_deg))
     beta_center_chord_deg = float(res.get("beta_center_chord_deg", beta_deg))
     fx = res.get("Fx", np.nan)
@@ -273,12 +447,8 @@ def solve_quasi_steady_state(
     lift_aero_force = np.dot(total_aero_force, lift_dir)
     aero_roll_deg = np.rad2deg(np.arctan2(side_aero_force, lift_aero_force))
 
-    inertial_force = _as_3vector(kin["inertial_force"])
-    gravity_force = (
-        _as_3vector(kin.get("gravity_force", np.zeros(3, dtype=float)))
-        if include_gravity
-        else np.zeros(3, dtype=float)
-    )
+    inertial_force = _as_3vector(payload["inertial_force"])
+    gravity_force = _as_3vector(payload["gravity_force"])
 
     trim_residual = None
     trim_jacobian = None
@@ -289,7 +459,7 @@ def solve_quasi_steady_state(
         x_cp_arr if x_cp_arr.size == 3 else np.array([float(x_cp_arr), 0.0, 0.0])
     )
 
-    return {
+    result = {
         "opt_x": opt.x,
         "cm": np.array([cmx, cmy, cmz], dtype=float),
         "side_slip_deg": beta_center_chord_deg,
@@ -318,6 +488,25 @@ def solve_quasi_steady_state(
         "trim_residual": trim_residual,
         "trim_jacobian": trim_jacobian,
     }
+
+    if return_timing_breakdown:
+        residual_total = float(timing_counters["residual_total_s"])
+        if residual_total > 0.0:
+            timing_counters["solver_share"] = (
+                timing_counters["solver_s"] / residual_total
+            )
+            timing_counters["copy_rotate_share"] = (
+                timing_counters["body_copy_rotate_s"] / residual_total
+            )
+            timing_counters["kinematics_share"] = (
+                timing_counters["kinematics_s"] / residual_total
+            )
+            timing_counters["postprocess_share"] = (
+                timing_counters["postprocess_s"] / residual_total
+            )
+        result["timing_breakdown"] = timing_counters
+
+    return result
 
 
 def compute_quasi_steady_trim_jacobian(
@@ -496,6 +685,8 @@ def run_quasi_steady_sweep(
     window_fraction: float = 0.15,
     max_nfev: int = 400,
     f_scale: float = 0.15,
+    use_gamma_warm_start: bool = False,
+    return_timing_breakdown: bool = False,
 ) -> list[dict[str, Any]]:
     """Run a principal/secondary parameter sweep using solve_quasi_steady_state.
 
@@ -555,6 +746,8 @@ def run_quasi_steady_sweep(
                 window_fraction=window_fraction,
                 max_nfev=max_nfev,
                 f_scale=f_scale,
+                use_gamma_warm_start=use_gamma_warm_start,
+                return_timing_breakdown=return_timing_breakdown,
             )
 
             rows.append(

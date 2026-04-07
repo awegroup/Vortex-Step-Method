@@ -185,15 +185,13 @@ class Solver:
             va_unit_array,
         )
 
-        if (
-            gamma_distribution is not None
-            and self.gamma_initial_distribution_type == "previous"
-        ):
-            gamma_initial = gamma_distribution
-        elif (
-            gamma_distribution is None
-            and self.gamma_initial_distribution_type == "previous"
-        ):
+        if gamma_distribution is not None:
+            gamma_initial = np.asarray(gamma_distribution, dtype=float)
+            if gamma_initial.shape != (self.n_panels,):
+                raise ValueError(
+                    "gamma_distribution must match number of panels in solve()."
+                )
+        elif self.gamma_initial_distribution_type == "previous":
             gamma_initial = np.zeros(self.n_panels)
         elif self.gamma_initial_distribution_type == "elliptical":
             gamma_initial = body_aero.compute_circulation_distribution_elliptical_wing()
@@ -278,6 +276,7 @@ class Solver:
             self.reference_point,
             self.is_aoa_corrected,
         )
+        results["gamma_converged"] = bool(converged)
         return results
 
     def compute_aerodynamic_quantities(self, gamma: np.ndarray) -> tuple:
