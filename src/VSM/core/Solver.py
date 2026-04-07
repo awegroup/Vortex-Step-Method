@@ -38,7 +38,7 @@ class Solver:
         relaxation_factor: float = 0.01,
         core_radius_fraction: float = 0.05,  # Following Damiani et al. (2019) https://docs.nrel.gov/docs/fy19osti/72777.pdf
         gamma_loop_type: str = "base",
-        gamma_initial_distribution_type: str = "elliptical",
+        gamma_initial_distribution_type: str = "zero",
         is_only_f_and_gamma_output: bool = False,
         is_with_viscous_drag_correction: bool = False,
         reference_point: np.ndarray | list | tuple | None = None,
