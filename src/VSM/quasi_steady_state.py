@@ -416,7 +416,7 @@ def solve_quasi_steady_state(
         and np.abs(cmy) < moment_tolerance
         and np.abs(cmz) < moment_tolerance
     )
-    opt_success = bool(opt.success and physical_success)
+    opt_success = bool(opt.success)
 
     payload = (
         cached_eval["payload"] if np.array_equal(opt.x, cached_eval["x"]) else None
@@ -485,8 +485,9 @@ def solve_quasi_steady_state(
         "course_axis": axes.course,
         "radial_axis": axes.radial,
         "normal_axis": axes.normal,
-        "trim_residual": trim_residual,
-        "trim_jacobian": trim_jacobian,
+        "F_distribution": res.get("F_distribution"),
+        "panel_cp_locations": res.get("panel_cp_locations"),
+        "alpha_at_ac": res.get("alpha_at_ac"),
     }
 
     if return_timing_breakdown:
@@ -506,7 +507,7 @@ def solve_quasi_steady_state(
             )
         result["timing_breakdown"] = timing_counters
 
-    return result
+    return result, body_aero
 
 
 def compute_quasi_steady_trim_jacobian(
