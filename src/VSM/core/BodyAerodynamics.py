@@ -826,7 +826,8 @@ class BodyAerodynamics:
         F_norm_sq = np.dot(F, F)
 
         if F_norm_sq == 0:
-            raise ValueError("Force vector must not be zero.")
+            logging.warning("Force vector is zero, cannot compute center of pressure.")
+            return None
 
         r0_moment = r0 + np.cross(F, M0) / F_norm_sq
         F_unit = F / np.linalg.norm(F)
