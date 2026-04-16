@@ -6,6 +6,7 @@ import numpy as np
 from VSM.core.BodyAerodynamics import BodyAerodynamics
 from VSM.quasi_steady_state import (
     compute_quasi_steady_trim_jacobian,
+    compute_quasi_steady_fast_timescales,
     DEFAULT_AXES,
     plot_quasi_steady_sweep_dataframe,
     quasi_steady_sweep_rows_to_dataframe,
@@ -34,8 +35,8 @@ roll_bounds = (
 principal_axis = "tilt_deg"
 secondary_axis = "course_deg"
 sweep_values = {
-    "tilt_deg": np.linspace(0.0, 12.0, 7),
-    "course_deg": np.array([0.0, 90.0, 180.0]),  # course sweep in radians
+    "tilt_deg": np.linspace(0.0, 12.0, 5),
+    "course_deg": np.array([90]),  # course sweep in radians
     "wind_speed": [4.0],
     "elevation_deg": [0.0],
     "azimuth_deg": [0.0],
@@ -45,7 +46,7 @@ sweep_values = {
 
 is_plot_results = False
 is_save_csv = True
-compute_jacobian_once = False
+compute_jacobian_once = True
 
 
 spanwise_panel_distribution = "uniform"
@@ -54,7 +55,7 @@ cad_derived_geometry_dir = (
 )
 geometry_yaml = cad_derived_geometry_dir / "aero_geometry_CAD_CFD_polars.yaml"
 reference_point = np.array([0, 0.0, 0.0])
-center_gravity = np.array([0.5, 0.0, 10.0])
+center_gravity = np.array([0.5, 0.0, 5.0])
 
 
 def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
@@ -77,15 +78,18 @@ def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
 
 def main():
     jacobian_once_remaining = compute_jacobian_once
+    from awetrim.system.tether import RigidLumpedTether
 
-    system_model = SystemModel()
-    system_model.mass_wing = 10.0  # kg
-    system_model.angle_elevation = np.deg2rad(0)
-    system_model.angle_azimuth = np.deg2rad(0)
-    system_model.angle_course = np.deg2rad(0)
-    system_model.speed_radial = 0.0
+    tether = RigidLumpedTether(diameter=0.01)
+    system_model = SystemModel(tether=tether)
+    # system_model = SystemModel()
+    system_model.mass_wing = 30.0  # kg
+    system_model.angle_elevation = np.deg2rad(30)
+    system_model.angle_azimuth = np.deg2rad(30)
+    system_model.angle_course = np.deg2rad(90)
+    system_model.speed_radial = 1.5
     system_model.distance_radial = 200
-    system_model.wind.speed_wind_ref = 4.0
+    system_model.wind.speed_wind_ref = 8.0
     system_model.timeder_speed_tangential = 0.0
     system_model.timeder_speed_radial = 0.0
 
@@ -138,8 +142,13 @@ def main():
         bounds_upper=bounds_upper,
         include_gravity=include_gravity,
         axes=DEFAULT_AXES,
-        use_gamma_warm_start=True,
+        use_gamma_warm_start=False,
         return_timing_breakdown=True,
+        # Tighter optimizer tuning to drive course/normal forces to near-zero
+        moment_tolerance=1e-4,  # Stricter moment equilibrium
+        force_residual_scale=0.1,  # Weight forces 10x more heavily
+        max_nfev=3000,  # Significantly more iterations for stubborn cases
+        f_scale=0.05,  # Even tighter loss function scaling
     )
 
     def fmt_vec(vec: np.ndarray) -> str:
@@ -197,6 +206,18 @@ def main():
                 axes=DEFAULT_AXES,
             )
 
+            # Compute timescale analysis
+            timescale_result = compute_quasi_steady_fast_timescales(
+                body_aero=build_body_for_case(row["case_values"]),
+                center_of_gravity=center_gravity,
+                reference_point=reference_point,
+                system_model=system_model,
+                x_state=opt_result["opt_x"],
+                include_gravity=include_gravity,
+                axes=DEFAULT_AXES,
+                radial_distance=row["case_values"].get("distance_radial", 200.0),
+            )
+
             row_labels = ["cmx", "cmy", "cmz", "cfx", "cfy"]
             col_labels = [
                 "d/d_vtau (kite_speed)",
@@ -224,7 +245,54 @@ def main():
             for i, label in enumerate(row_labels):
                 print(fmt_row(label, jac[i, :]))
 
-            jacobian_once_remaining = False
+            # Print timescale analysis
+            print("\n=== Fast Timescale Analysis ===\n")
+
+            eig_long = timescale_result["eig_long"]
+            vec_long = timescale_result["vec_long"]
+            T_fast_long = timescale_result["Tfast_long"]
+            eps_long = timescale_result["epsilon_long"]
+            stable_long = timescale_result["stable_long"]
+
+            long_var_names = ["v_tau", "pitch"]
+
+            print("Longitudinal (v_tau, pitch):")
+            for i, (lam, T_f, eps) in enumerate(zip(eig_long, T_fast_long, eps_long)):
+                mode_vec = vec_long[:, i]
+                mag = np.abs(mode_vec)
+                dominant_idx = np.argmax(mag)
+                dominant_var = long_var_names[dominant_idx]
+                print(f"  λ[{i}] = {lam.real: .6f} + {lam.imag: .6f}j")
+                print(f"    T_fast = {T_f: .6f} s,  ε = {eps: .6e}")
+                print(
+                    f"    Mode composition: {', '.join(f'{long_var_names[j]}={mode_vec[j].real: .4f}' for j in range(len(long_var_names)))}"
+                )
+                print(f"    Dominant: {dominant_var}")
+            print(f"  Stable: {stable_long}")
+
+            eig_lat = timescale_result["eig_lateral"]
+            vec_lat = timescale_result["vec_lateral"]
+            T_fast_lat = timescale_result["Tfast_lateral"]
+            eps_lat = timescale_result["epsilon_lateral"]
+            stable_lat = timescale_result["stable_lateral"]
+
+            lat_var_names = ["yaw", "course_rate", "roll"]
+
+            print("\nLateral-directional (yaw, course_rate, roll):")
+            for i, (lam, T_f, eps) in enumerate(zip(eig_lat, T_fast_lat, eps_lat)):
+                mode_vec = vec_lat[:, i]
+                mag = np.abs(mode_vec)
+                dominant_idx = np.argmax(mag)
+                dominant_var = lat_var_names[dominant_idx]
+                print(f"  λ[{i}] = {lam.real: .6f} + {lam.imag: .6f}j")
+                print(f"    T_fast = {T_f: .6f} s,  ε = {eps: .6e}")
+                print(
+                    f"    Mode composition: {', '.join(f'{lat_var_names[j]}={mode_vec[j].real: .4f}' for j in range(len(lat_var_names)))}"
+                )
+                print(f"    Dominant: {dominant_var}")
+            print(f"  Stable: {stable_lat}")
+
+            # jacobian_once_remaining = False
 
     end_time = time.time()
     print(f"Optimization took {end_time - start_time:.2f} seconds.")
