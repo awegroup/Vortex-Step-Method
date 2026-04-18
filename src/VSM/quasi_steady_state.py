@@ -422,6 +422,7 @@ def solve_quasi_steady_state(
     res = payload["res"]
     aoa_center_chord_deg = float(res.get("alpha_center_chord_deg", aoa_deg))
     beta_center_chord_deg = float(res.get("beta_center_chord_deg", beta_deg))
+
     fx = res.get("Fx", np.nan)
     fy = res.get("Fy", np.nan)
     fz = res.get("Fz", np.nan)
@@ -461,8 +462,8 @@ def solve_quasi_steady_state(
         "success_physical": physical_success,
         "gravity_force": gravity_force,
         "inertial_force": inertial_force,
-        "cl": res.get("cl", np.nan),
-        "cd": res.get("cd", np.nan),
+        "cl": res.get("cl"),
+        "cd": res.get("cd"),
         "total_aero_force_vec": total_aero_force,
         "x_cp_point": x_cp_point,
         "wind_vel_world": _as_3vector(
@@ -480,6 +481,8 @@ def solve_quasi_steady_state(
         "panel_cp_locations": res.get("panel_cp_locations"),
         "alpha_at_ac": res.get("alpha_at_ac"),
         "gamma_distribution": res.get("gamma_distribution"),
+        "cl": res.get("cl"),
+        "cd": res.get("cd"),
     }
 
     if return_timing_breakdown:
