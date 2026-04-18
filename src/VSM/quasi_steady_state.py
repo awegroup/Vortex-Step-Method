@@ -173,7 +173,7 @@ def solve_quasi_steady_state(
     max_nfev: int = 400,
     f_scale: float = 0.15,
     return_timing_breakdown: bool = False,
-) -> dict:
+) -> tuple[dict, BodyAerodynamics]:
     """
     Solve a quasi-steady trim problem for x=[kite_speed, roll, pitch, yaw, course_rate_body].
 
@@ -717,7 +717,7 @@ def run_quasi_steady_sweep(
                 )
             )
 
-            result = solve_quasi_steady_state(
+            result, _ = solve_quasi_steady_state(
                 body_aero=body,
                 center_of_gravity=center_of_gravity,
                 reference_point=reference_point,
@@ -730,7 +730,6 @@ def run_quasi_steady_sweep(
                 include_gravity=include_gravity,
                 axes=axes,
                 moment_tolerance=moment_tolerance,
-                force_residual_scale=force_residual_scale,
                 window_fraction=window_fraction,
                 max_nfev=max_nfev,
                 f_scale=f_scale,
@@ -749,6 +748,9 @@ def run_quasi_steady_sweep(
             )
 
             if result.get("success", False):
+                print(
+                    f"Sweep case {principal_axis}={principal_value}, {secondary_axis}={secondary_value} succeeded with opt_x={result['opt_x']}"
+                )
                 current_guess = np.asarray(result["opt_x"], dtype=float)
 
     return rows

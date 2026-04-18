@@ -142,13 +142,9 @@ def main():
         bounds_upper=bounds_upper,
         include_gravity=include_gravity,
         axes=DEFAULT_AXES,
-        use_gamma_warm_start=False,
         return_timing_breakdown=True,
         # Tighter optimizer tuning to drive course/normal forces to near-zero
         moment_tolerance=1e-4,  # Stricter moment equilibrium
-        force_residual_scale=0.1,  # Weight forces 10x more heavily
-        max_nfev=3000,  # Significantly more iterations for stubborn cases
-        f_scale=0.05,  # Even tighter loss function scaling
     )
 
     def fmt_vec(vec: np.ndarray) -> str:
