@@ -5,6 +5,7 @@ the trim solution and the associated fast-mode eigenstructure.
 """
 
 from pathlib import Path
+from time import perf_counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,7 +32,10 @@ GEOMETRY_YAML = (
     / "aero_geometry_CAD_CFD_polars.yaml"
 )
 REFERENCE_POINT = np.array([0.0, 0.0, 0.0], dtype=float)
-CENTER_OF_GRAVITY = np.array([0.5, 0.0, 3.0], dtype=float)
+CENTER_OF_GRAVITY = np.array([0.5, 0.0, 5.0], dtype=float)
+
+MOMENT_TOLERANCE = 1e-6
+FORCE_TOLERANCE = MOMENT_TOLERANCE
 
 
 def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
@@ -50,8 +54,8 @@ def build_base_body(tilt_deg: float, n_panels: int) -> BodyAerodynamics:
 
 
 def build_system_model(case_values: dict[str, float]) -> SystemModel:
-    system = SystemModel(tether=RigidLumpedTether(diameter=0.01))
-    system.mass_wing = 35.0
+    system = SystemModel(tether=RigidLumpedTether(diameter=1e-6))
+    system.mass_wing = 0.0
     system.angle_elevation = np.deg2rad(case_values["elevation_deg"])
     system.angle_azimuth = np.deg2rad(case_values["azimuth_deg"])
     system.angle_course = np.deg2rad(case_values["course_deg"])
@@ -88,10 +92,10 @@ def solve_single_quasi_steady_state(
         bounds_upper=bounds_upper,
         include_gravity=include_gravity,
         axes=DEFAULT_AXES,
-        moment_tolerance=1e-4,
-        force_residual_scale=0.1,
-        max_nfev=3000,
-        f_scale=0.05,
+        moment_tolerance=MOMENT_TOLERANCE,
+        max_nfev=400,
+        f_scale=0.15,
+        window_fraction=1,
     )
 
     timescale_result = compute_quasi_steady_fast_timescales(
@@ -106,6 +110,111 @@ def solve_single_quasi_steady_state(
     )
 
     return result, timescale_result
+
+
+def profile_two_quasi_steady_solves(
+    case_values: dict[str, float],
+    x_guess: np.ndarray,
+    *,
+    n_panels: int = 18,
+    include_gravity: bool = True,
+) -> tuple[dict, dict]:
+    """Profile two trim solves; second uses first solution as warm-start guess."""
+
+    bounds_lower = np.array([2.0, -5.0, -5.0, -6.0, -2.0], dtype=float)
+    bounds_upper = np.array([80.0, 5.0, 5.0, 6.0, 2.0], dtype=float)
+
+    def run_once(x_start: np.ndarray) -> tuple[dict, float]:
+        system_model = build_system_model(case_values)
+        body = build_base_body(case_values["tilt_deg"], n_panels=n_panels)
+
+        tic = perf_counter()
+        result, _ = solve_quasi_steady_state(
+            body_aero=body,
+            center_of_gravity=CENTER_OF_GRAVITY,
+            reference_point=REFERENCE_POINT,
+            system_model=system_model,
+            x_guess=np.asarray(x_start, dtype=float),
+            bounds_lower=bounds_lower,
+            bounds_upper=bounds_upper,
+            include_gravity=include_gravity,
+            axes=DEFAULT_AXES,
+            moment_tolerance=MOMENT_TOLERANCE,
+            max_nfev=3000,
+            f_scale=0.05,
+            window_fraction=1,
+            return_timing_breakdown=True,
+        )
+        elapsed_s = perf_counter() - tic
+        return result, elapsed_s
+
+    first_result, elapsed_first_s = run_once(
+        np.asarray(x_guess, dtype=float),
+    )
+    second_result, elapsed_second_s = run_once(
+        np.asarray(first_result["opt_x"], dtype=float),
+    )
+
+    timing_first = first_result.get("timing_breakdown", {})
+    timing_second = second_result.get("timing_breakdown", {})
+
+    print("\n=== Two-Run Quasi-Steady Profiling ===")
+    print("Second run uses first run opt_x as x_guess (better initial guess).")
+    print(
+        f"run1 elapsed [s]      : {elapsed_first_s:.3f} "
+        f"(evals={timing_first.get('residual_evaluations', 'n/a')})"
+    )
+    print(
+        f"run2 elapsed [s]      : {elapsed_second_s:.3f} "
+        f"(evals={timing_second.get('residual_evaluations', 'n/a')})"
+    )
+    if elapsed_first_s > 0.0:
+        speedup = elapsed_first_s / max(elapsed_second_s, 1e-12)
+        print(f"run2 speedup [x]      : {speedup:.2f}")
+    print(f"run1 solver share     : {timing_first.get('solver_share', np.nan):.3f}")
+    print(f"run2 solver share     : {timing_second.get('solver_share', np.nan):.3f}")
+
+    opt_x_first = np.asarray(first_result.get("opt_x", np.full(5, np.nan)), dtype=float)
+    opt_x_second = np.asarray(
+        second_result.get("opt_x", np.full(5, np.nan)), dtype=float
+    )
+    delta_opt_x = opt_x_second - opt_x_first
+
+    cm_first = np.asarray(first_result.get("cm", np.full(3, np.nan)), dtype=float)
+    cm_second = np.asarray(second_result.get("cm", np.full(3, np.nan)), dtype=float)
+    cf_first = np.array(
+        [
+            float(first_result.get("cfx", np.nan)),
+            float(first_result.get("cfy", np.nan)),
+        ],
+        dtype=float,
+    )
+    cf_second = np.array(
+        [
+            float(second_result.get("cfx", np.nan)),
+            float(second_result.get("cfy", np.nan)),
+        ],
+        dtype=float,
+    )
+
+    print("\n=== Warm-Start vs Cold-Start Solution Comparison ===")
+    print("state vector order      : [kite_speed, roll, pitch, yaw, course_rate]")
+    print(f"opt_x cold-start        : {np.array2string(opt_x_first, precision=6)}")
+    print(f"opt_x warm-start        : {np.array2string(opt_x_second, precision=6)}")
+    print(f"delta opt_x (warm-cold) : {np.array2string(delta_opt_x, precision=6)}")
+    print(f"||delta opt_x||_2       : {np.linalg.norm(delta_opt_x):.3e}")
+    print(f"cm cold-start           : {np.array2string(cm_first, precision=6)}")
+    print(f"cm warm-start           : {np.array2string(cm_second, precision=6)}")
+    print(
+        f"delta cm (warm-cold)    : {np.array2string(cm_second - cm_first, precision=6)}"
+    )
+    print(f"cf cold-start           : {np.array2string(cf_first, precision=6)}")
+    print(f"cf warm-start           : {np.array2string(cf_second, precision=6)}")
+    print(
+        f"delta cf (warm-cold)    : {np.array2string(cf_second - cf_first, precision=6)}"
+    )
+
+    return first_result, second_result
 
 
 def _mode_time_response(
@@ -305,9 +414,19 @@ def plot_stability_modes_animation(
 def _print_summary(trim_result: dict, timescale_result: dict) -> None:
     opt_x = np.asarray(trim_result["opt_x"], dtype=float)
     cm = np.asarray(trim_result["cm"], dtype=float)
+    cfx = float(trim_result.get("cfx", np.nan))
+    cfy = float(trim_result.get("cfy", np.nan))
+    success_optimizer = bool(
+        trim_result.get("success_optimizer", trim_result["success"])
+    )
+    success_physical = bool(trim_result.get("success_physical", False))
+
+    moments_ok = bool(np.all(np.abs(cm) < MOMENT_TOLERANCE))
+    forces_ok = bool(np.abs(cfx) < FORCE_TOLERANCE and np.abs(cfy) < FORCE_TOLERANCE)
 
     print("\n=== Single-State Quasi-Steady Trim Summary ===")
-    print(f"success               : {trim_result['success']}")
+    print(f"success_optimizer     : {success_optimizer}")
+    print(f"success_physical      : {success_physical}")
     print(f"kite_speed [m/s]      : {opt_x[0]: .3f}")
     print(f"roll [deg]            : {opt_x[1]: .3f}")
     print(f"pitch [deg]           : {opt_x[2]: .3f}")
@@ -316,34 +435,79 @@ def _print_summary(trim_result: dict, timescale_result: dict) -> None:
     print(f"aoa_center [deg]      : {trim_result['aoa_deg']: .3f}")
     print(f"beta_center [deg]     : {trim_result['side_slip_deg']: .3f}")
     print(f"cm = [cmx,cmy,cmz]    : [{cm[0]: .4e}, {cm[1]: .4e}, {cm[2]: .4e}]")
+    print(f"cf = [cfx,cfy]        : [{cfx: .4e}, {cfy: .4e}]")
+    print(
+        "trim check            : "
+        f"moments_zero={moments_ok} (tol={MOMENT_TOLERANCE:.1e}), "
+        f"forces_zero={forces_ok} (tol={FORCE_TOLERANCE:.1e})"
+    )
 
     print("\nLongitudinal eigenvalues:")
+    tfast_long = np.asarray(timescale_result.get("Tfast_long", []), dtype=float)
+    eps_long = np.asarray(
+        timescale_result.get(
+            "epsilon_long",
+            timescale_result.get("eps_fast_long", np.full_like(tfast_long, np.nan)),
+        ),
+        dtype=float,
+    )
     for idx, eig in enumerate(np.asarray(timescale_result["eig_long"])):
-        print(f"  lambda_long[{idx}] = {eig.real: .6f} + {eig.imag: .6f}j")
+        t_fast = tfast_long[idx] if idx < tfast_long.size else np.nan
+        eps_val = eps_long[idx] if idx < eps_long.size else np.nan
+        print(
+            f"  lambda_long[{idx}] = {eig.real: .6f} + {eig.imag: .6f}j | "
+            f"T_fast={t_fast: .6f} s | eps={eps_val: .3e}"
+        )
 
     print("\nLateral eigenvalues:")
+    tfast_lat = np.asarray(timescale_result.get("Tfast_lateral", []), dtype=float)
+    eps_lat = np.asarray(
+        timescale_result.get(
+            "epsilon_lateral",
+            timescale_result.get("eps_fast_lateral", np.full_like(tfast_lat, np.nan)),
+        ),
+        dtype=float,
+    )
     for idx, eig in enumerate(np.asarray(timescale_result["eig_lateral"])):
-        print(f"  lambda_lat[{idx}] = {eig.real: .6f} + {eig.imag: .6f}j")
+        t_fast = tfast_lat[idx] if idx < tfast_lat.size else np.nan
+        eps_val = eps_lat[idx] if idx < eps_lat.size else np.nan
+        print(
+            f"  lambda_lat[{idx}] = {eig.real: .6f} + {eig.imag: .6f}j | "
+            f"T_fast={t_fast: .6f} s | eps={eps_val: .3e}"
+        )
 
 
 def main() -> None:
     case_values = {
-        "tilt_deg": 12.0,
+        "tilt_deg": 5.0,
         "course_deg": 90.0,
-        "wind_speed": 3.0,
-        "elevation_deg": 30.0,
-        "azimuth_deg": 30.0,
-        "radial_speed": 1.5,
+        "wind_speed": 5.0,
+        "elevation_deg": 0.0,
+        "azimuth_deg": 0.0,
+        "radial_speed": 0,
         "distance_radial": 200.0,
     }
-    x_guess = np.array([25.0, 0.0, 0.0, 0.0, 0.0], dtype=float)
+    x_guess = np.array([20.0, 0.0, 0.0, 0.0, 0.0], dtype=float)
 
-    trim_result, timescale_result = solve_single_quasi_steady_state(
+    _, trim_result = profile_two_quasi_steady_solves(
         case_values=case_values,
         x_guess=x_guess,
         n_panels=18,
         include_gravity=True,
     )
+
+    system_model = build_system_model(case_values)
+    timescale_result = compute_quasi_steady_fast_timescales(
+        body_aero=build_base_body(case_values["tilt_deg"], n_panels=18),
+        center_of_gravity=CENTER_OF_GRAVITY,
+        reference_point=REFERENCE_POINT,
+        system_model=system_model,
+        x_state=np.asarray(trim_result["opt_x"], dtype=float),
+        include_gravity=True,
+        axes=DEFAULT_AXES,
+        radial_distance=float(case_values.get("distance_radial", 200.0)),
+    )
+
     _print_summary(trim_result, timescale_result)
 
     body_for_animation = build_base_body(case_values["tilt_deg"], n_panels=18)

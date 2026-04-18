@@ -169,11 +169,9 @@ def solve_quasi_steady_state(
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
     moment_tolerance: float = 1e-2,
-    force_residual_scale: float = 1.0,
     window_fraction: float = 0.15,
     max_nfev: int = 400,
     f_scale: float = 0.15,
-    use_gamma_warm_start: bool = False,
     return_timing_breakdown: bool = False,
 ) -> dict:
     """
@@ -247,9 +245,10 @@ def solve_quasi_steady_state(
         "kinematics_s": 0.0,
         "solver_s": 0.0,
         "postprocess_s": 0.0,
-        "warm_start_attempts": 0,
-        "warm_start_fallbacks": 0,
     }
+
+    # Residual-component scaling can be enabled after defining moment_residual.
+    residual_scales = np.ones(5, dtype=float)
     warm_start_gamma: np.ndarray | None = None
     cached_eval: dict[str, Any] = {"x": None, "payload": None}
     working_body = copy.deepcopy(body_aero)
@@ -321,20 +320,8 @@ def solve_quasi_steady_state(
         )
 
         t0 = perf_counter()
-        if use_gamma_warm_start and warm_start_gamma is not None:
-            timing_counters["warm_start_attempts"] += 1
-            res = solver.solve(body, gamma_distribution=warm_start_gamma)
-            if not bool(res.get("gamma_converged", True)):
-                timing_counters["warm_start_fallbacks"] += 1
-                res = solver.solve(body)
-        else:
-            res = solver.solve(body)
+        res = solver.solve(body)
         timing_counters["solver_s"] += perf_counter() - t0
-
-        if use_gamma_warm_start:
-            gamma_new = res.get("gamma_distribution")
-            if gamma_new is not None and bool(res.get("gamma_converged", True)):
-                warm_start_gamma = np.asarray(gamma_new, dtype=float).copy()
 
         cmx = res.get("cmx")
         cmy = res.get("cmy")
@@ -353,15 +340,13 @@ def solve_quasi_steady_state(
         moment_vec = np.cross(center_of_gravity - reference_point, inertial_force)
         if include_gravity:
             moment_vec += np.cross(center_of_gravity - reference_point, gravity_force)
+
         delta_cm = moment_vec / denom
         cmx += delta_cm[0]
         cmy += delta_cm[1]
         cmz += delta_cm[2]
-        tether_force = transformation_C_from_VSM @ _as_3vector(
-            system_model.drag_tether_at_kite + system_model.force_gravity_tether_at_kite
-        )
 
-        net_force = total_aero_force + inertial_force + gravity_force + tether_force
+        net_force = total_aero_force + inertial_force + gravity_force
         cfx = np.dot(net_force, axes.course) / (
             0.5 * solver.rho * umag**2 * projected_area
         )
@@ -370,9 +355,8 @@ def solve_quasi_steady_state(
         )
 
         t0 = perf_counter()
-        residual = np.array(
-            [cmx, cmy, cmz, cfx / force_residual_scale, cfy / force_residual_scale]
-        )
+        residual = np.array([cmx, cmy, cmz, cfx, cfy])
+        residual = residual * residual_scales
         timing_counters["postprocess_s"] += perf_counter() - t0
         timing_counters["residual_evaluations"] += 1
         timing_counters["residual_total_s"] += perf_counter() - eval_t0
@@ -413,21 +397,13 @@ def solve_quasi_steady_state(
     cmx, cmy, cmz, cfx, cfy = cm_best
     kite_speed, roll_deg, pitch_deg, yaw_deg, course_rate_body = opt.x
 
-    # Physical trim success: moments + course/normal forces zero; radial force unconstrained.
-    # Force residual is scaled by dividing by force_residual_scale, so actual force tolerance
-    # should be inversely proportional: moment_tolerance / force_residual_scale.
-    force_tolerance = (
-        moment_tolerance / force_residual_scale
-        if force_residual_scale > 0
-        else moment_tolerance
-    )
     physical_success = (
         np.abs(cmx) < moment_tolerance
         and np.abs(cmy) < moment_tolerance
         and np.abs(cmz) < moment_tolerance
-        and np.abs(cfx) < force_tolerance
-        and np.abs(cfy) < force_tolerance
     )
+    if not physical_success:
+        print(f"Moment residual not converged. Full residual: {cm_best}")
     opt_success = bool(opt.success)
 
     payload = (
@@ -474,12 +450,15 @@ def solve_quasi_steady_state(
     result = {
         "opt_x": opt.x,
         "cm": np.array([cmx, cmy, cmz], dtype=float),
+        "cfx": float(cfx),
+        "cfy": float(cfy),
         "side_slip_deg": beta_center_chord_deg,
         "side_slip_course_deg": beta_deg,
         "aero_roll_deg": aero_roll_deg,
         "aoa_deg": aoa_center_chord_deg,
         "aoa_course_deg": aoa_deg,
         "success": opt_success,
+        "success_physical": physical_success,
         "gravity_force": gravity_force,
         "inertial_force": inertial_force,
         "cl": res.get("cl", np.nan),
@@ -500,6 +479,7 @@ def solve_quasi_steady_state(
         "F_distribution": res.get("F_distribution"),
         "panel_cp_locations": res.get("panel_cp_locations"),
         "alpha_at_ac": res.get("alpha_at_ac"),
+        "gamma_distribution": res.get("gamma_distribution"),
     }
 
     if return_timing_breakdown:
@@ -533,7 +513,6 @@ def compute_quasi_steady_trim_jacobian(
     transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
-    force_residual_scale: float = 1.0,
     eps: float = 1e-4,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute residual and numerical Jacobian at a given quasi-steady state x."""
@@ -646,15 +625,13 @@ def compute_quasi_steady_trim_jacobian(
             0.5 * solver.rho * umag**2 * projected_area
         )
 
-        return np.array(
-            [cmx, cmy, cmz, cfx / force_residual_scale, cfy / force_residual_scale]
-        )
+        return np.array([cmx, cmy, cmz, cfx, cfy])
 
     x = np.asarray(x_state, dtype=float)
     residual = moment_residual(x)
     jac = np.zeros((residual.size, x.size))
     for i in range(x.size):
-        step = eps * max(1, abs(x[i]))
+        step = eps * max(1.0, abs(x[i]))
         xp = x.copy()
         xm = x.copy()
         xp[i] += step
@@ -666,207 +643,6 @@ def compute_quasi_steady_trim_jacobian(
     jac[:, 2] *= rad_factor
 
     return residual, jac
-
-
-def linearize_fast_dynamics_from_trim_jacobian(
-    jacobian: np.ndarray,
-    x_state: np.ndarray,
-    *,
-    mass: float = 15.0,
-    Ixx: float = 100.0,
-    Iyy: float = 19.43,
-    Izz: float = 100,
-    rho: float = 1.225,
-    reference_area: float = 1.0,
-    reference_chord: float = 1.0,
-    force_residual_scale: float = 1.0,
-    radial_distance: float | None = None,
-) -> dict[str, Any]:
-    """Build fast-dynamics linearization blocks and timescales from trim Jacobian.
-
-    Notes:
-    - The quasi-steady residual Jacobian is ordered as [cmx, cmy, cmz, cfx/scale, cfy/scale]
-      wrt [v_tau, roll, pitch, yaw, course_rate_body].
-    - Longitudinal block uses states [v_tau, pitch_rad] as a proxy for [v_tau, alpha].
-    - Lateral block uses states [yaw_rad, course_rate_body, roll_rad] as a proxy for
-      [beta_s, chi_dot_b, phi_a].
-    """
-
-    jacobian = np.asarray(jacobian, dtype=float)
-    x_state = np.asarray(x_state, dtype=float)
-    if jacobian.shape != (5, 5):
-        raise ValueError("jacobian must be shape (5,5).")
-    if x_state.shape != (5,):
-        raise ValueError("x_state must be shape (5,).")
-    if mass <= 0.0 or Ixx <= 0.0 or Iyy <= 0.0 or Izz <= 0.0:
-        raise ValueError("mass and inertias must be strictly positive.")
-    if reference_area <= 0.0 or reference_chord <= 0.0:
-        raise ValueError(
-            "reference_area and reference_chord must be strictly positive."
-        )
-
-    v_tau = float(x_state[0])
-    q_ref = 0.5 * rho * v_tau**2
-    force_factor = q_ref * reference_area
-    moment_factor = force_factor * reference_chord
-
-    rad_factor = 180.0 / np.pi
-
-    # Jacobian rows are [cmx, cmy, cmz, cfx/scale, cfy/scale].
-    dcmx_dx = jacobian[0, :]
-    dcmy_dx = jacobian[1, :]
-    dcmz_dx = jacobian[2, :]
-    dcfx_dx = jacobian[3, :] * force_residual_scale
-    dcfy_dx = jacobian[4, :] * force_residual_scale
-
-    # Convert yaw column from per-degree to per-radian; roll/pitch are already per-radian
-    # because compute_quasi_steady_trim_jacobian scales columns 1 and 2.
-    dcmx_dx_rad = dcmx_dx.copy()
-    dcmy_dx_rad = dcmy_dx.copy()
-    dcmz_dx_rad = dcmz_dx.copy()
-    dcfx_dx_rad = dcfx_dx.copy()
-    dcfy_dx_rad = dcfy_dx.copy()
-    dcmx_dx_rad[3] *= rad_factor
-    dcmy_dx_rad[3] *= rad_factor
-    dcmz_dx_rad[3] *= rad_factor
-    dcfx_dx_rad[3] *= rad_factor
-    dcfy_dx_rad[3] *= rad_factor
-
-    dFchi_dx = force_factor * dcfx_dx_rad
-    dFeta_dx = force_factor * dcfy_dx_rad
-    dMx_dx = moment_factor * dcmx_dx_rad
-    dMy_dx = moment_factor * dcmy_dx_rad
-    dMz_dx = moment_factor * dcmz_dx_rad
-
-    # Longitudinal: [v_tau, alpha_proxy=pitch_rad]
-    idx_long = [0, 2]
-    A_long = np.array(
-        [
-            [-dFchi_dx[idx_long[0]] / mass, dFchi_dx[idx_long[1]] / mass],
-            [-dMy_dx[idx_long[0]] / Iyy, dMy_dx[idx_long[1]] / Iyy],
-        ],
-        dtype=float,
-    )
-
-    # Lateral-directional proxy block in [beta_proxy=yaw_rad, chi_dot_b, phi_a=roll_rad].
-    idx_lat = [3, 4, 1]
-    A_lat = np.array(
-        [
-            [
-                dFeta_dx[idx_lat[0]] / mass,
-                dFeta_dx[idx_lat[1]] / mass,
-                dFeta_dx[idx_lat[2]] / mass,
-            ],
-            [
-                dMz_dx[idx_lat[0]] / Izz,
-                dMz_dx[idx_lat[1]] / Izz,
-                dMz_dx[idx_lat[2]] / Izz,
-            ],
-            [
-                dMx_dx[idx_lat[0]] / Ixx,
-                dMx_dx[idx_lat[1]] / Ixx,
-                dMx_dx[idx_lat[2]] / Ixx,
-            ],
-        ],
-        dtype=float,
-    )
-
-    eig_long, vec_long = np.linalg.eig(A_long)
-    eig_lat, vec_lat = np.linalg.eig(A_lat)
-
-    def _timescales(eigvals: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        real_parts = np.real(eigvals)
-        T_fast = np.full(real_parts.shape, np.inf, dtype=float)
-        nonzero = np.abs(real_parts) > 1e-12
-        T_fast[nonzero] = 1.0 / np.abs(real_parts[nonzero])
-
-        if radial_distance is None:
-            epsilon = np.full(real_parts.shape, np.nan, dtype=float)
-        else:
-            T_slow = float(radial_distance) / max(abs(v_tau), 1e-8)
-            epsilon = T_fast / T_slow
-        return T_fast, epsilon
-
-    T_long, eps_long = _timescales(eig_long)
-    T_lat, eps_lat = _timescales(eig_lat)
-
-    return {
-        "A_long": A_long,
-        "A_lateral": A_lat,
-        "eig_long": eig_long,
-        "eig_lateral": eig_lat,
-        "vec_long": vec_long,
-        "vec_lateral": vec_lat,
-        "stable_long": bool(np.all(np.real(eig_long) < 0.0)),
-        "stable_lateral": bool(np.all(np.real(eig_lat) < 0.0)),
-        "Tfast_long": T_long,
-        "Tfast_lateral": T_lat,
-        "epsilon_long": eps_long,
-        "epsilon_lateral": eps_lat,
-        "q_ref": q_ref,
-    }
-
-
-def compute_quasi_steady_fast_timescales(
-    body_aero: BodyAerodynamics,
-    center_of_gravity: np.ndarray,
-    reference_point: np.ndarray,
-    system_model: Any,
-    x_state: np.ndarray,
-    *,
-    solver: Solver | None = None,
-    transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
-    include_gravity: bool = False,
-    axes: AxisDefinition = DEFAULT_AXES,
-    force_residual_scale: float = 1.0,
-    eps: float = 1e-4,
-    mass: float = 15.0,
-    Ixx: float = 100.0,
-    Iyy: float = 19.43,
-    Izz: float = 100.0,
-    radial_distance: float | None = None,
-) -> dict[str, Any]:
-    """Compute longitudinal/lateral fast-timescale metrics around a trim state."""
-
-    residual, jacobian = compute_quasi_steady_trim_jacobian(
-        body_aero=body_aero,
-        center_of_gravity=center_of_gravity,
-        reference_point=reference_point,
-        system_model=system_model,
-        x_state=x_state,
-        solver=solver,
-        transformation_C_from_VSM=transformation_C_from_VSM,
-        include_gravity=include_gravity,
-        axes=axes,
-        force_residual_scale=force_residual_scale,
-        eps=eps,
-    )
-
-    reference_area = float(body_aero.wings[0].compute_projected_area())
-    reference_chord = float(max(panel.chord for panel in body_aero.panels))
-
-    if radial_distance is None and hasattr(system_model, "distance_radial"):
-        try:
-            radial_distance = float(system_model.distance_radial)
-        except (TypeError, ValueError):
-            radial_distance = None
-
-    linearized = linearize_fast_dynamics_from_trim_jacobian(
-        jacobian=jacobian,
-        x_state=x_state,
-        mass=mass,
-        Ixx=Ixx,
-        Iyy=Iyy,
-        Izz=Izz,
-        rho=solver.rho if solver is not None else 1.225,
-        reference_area=reference_area,
-        reference_chord=reference_chord,
-        force_residual_scale=force_residual_scale,
-        radial_distance=radial_distance,
-    )
-    linearized["residual"] = residual
-    linearized["jacobian"] = jacobian
-    return linearized
 
 
 def _as_sequence(value: Sequence[float] | float) -> list[float]:
@@ -895,11 +671,9 @@ def run_quasi_steady_sweep(
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
     moment_tolerance: float = 1e-3,
-    force_residual_scale: float = 1.0,
     window_fraction: float = 0.15,
     max_nfev: int = 400,
     f_scale: float = 0.15,
-    use_gamma_warm_start: bool = False,
     return_timing_breakdown: bool = False,
 ) -> list[dict[str, Any]]:
     """Run a principal/secondary parameter sweep using solve_quasi_steady_state.
@@ -960,7 +734,6 @@ def run_quasi_steady_sweep(
                 window_fraction=window_fraction,
                 max_nfev=max_nfev,
                 f_scale=f_scale,
-                use_gamma_warm_start=use_gamma_warm_start,
                 return_timing_breakdown=return_timing_breakdown,
             )
 
@@ -971,12 +744,12 @@ def run_quasi_steady_sweep(
                     "principal_value": principal_value,
                     "secondary_value": secondary_value,
                     "case_values": case_values,
-                    "result": result[0],
+                    "result": result,
                 }
             )
 
-            if result[0].get("success", False):
-                current_guess = np.asarray(result[0]["opt_x"], dtype=float)
+            if result.get("success", False):
+                current_guess = np.asarray(result["opt_x"], dtype=float)
 
     return rows
 
@@ -1072,3 +845,196 @@ def plot_quasi_steady_sweep_dataframe(
 
     if show:
         plt.show()
+
+
+def linearize_fast_dynamics_from_trim_jacobian(
+    jacobian: np.ndarray,
+    x_state: np.ndarray,
+    *,
+    mass: float = 15.0,
+    Ixx: float = 100.0,
+    Iyy: float = 19.43,
+    Izz: float = 100.0,
+    rho: float = 1.225,
+    reference_area: float = 1.0,
+    reference_chord: float = 1.0,
+    radial_distance: float | None = None,
+) -> dict[str, Any]:
+    """Build fast-dynamics linearization blocks and timescales from trim Jacobian.
+
+    Notes:
+    - The quasi-steady residual Jacobian is ordered as [cmx, cmy, cmz, cfx/scale, cfy/scale]
+      wrt [v_tau, roll, pitch, yaw, course_rate_body].
+    - Longitudinal block uses states [v_tau, pitch_rad] as a proxy for [v_tau, alpha].
+    - Lateral block uses states [yaw_rad, course_rate_body, roll_rad] as a proxy for
+      [beta_s, chi_dot_b, phi_a].
+    """
+    jacobian = np.asarray(jacobian, dtype=float)
+    x_state = np.asarray(x_state, dtype=float)
+
+    if jacobian.shape != (5, 5):
+        raise ValueError("jacobian must be shape (5,5).")
+    if x_state.shape != (5,):
+        raise ValueError("x_state must be shape (5,).")
+    if mass <= 0.0 or Ixx <= 0.0 or Iyy <= 0.0 or Izz <= 0.0:
+        raise ValueError("mass and inertias must be strictly positive.")
+    if reference_area <= 0.0 or reference_chord <= 0.0:
+        raise ValueError(
+            "reference_area and reference_chord must be strictly positive."
+        )
+
+    v_tau = float(x_state[0])
+    q_ref = 0.5 * rho * v_tau**2
+    force_factor = q_ref * reference_area
+    moment_factor = force_factor * reference_chord
+
+    rad_factor = 180.0 / np.pi
+
+    dcmx_dx = jacobian[0, :]
+    dcmy_dx = jacobian[1, :]
+    dcmz_dx = jacobian[2, :]
+    dcfx_dx = jacobian[3, :]
+    dcfy_dx = jacobian[4, :]
+
+    dcmx_dx_rad = dcmx_dx.copy()
+    dcmy_dx_rad = dcmy_dx.copy()
+    dcmz_dx_rad = dcmz_dx.copy()
+    dcfx_dx_rad = dcfx_dx.copy()
+    dcfy_dx_rad = dcfy_dx.copy()
+    dcmx_dx_rad[3] *= rad_factor
+    dcmy_dx_rad[3] *= rad_factor
+    dcmz_dx_rad[3] *= rad_factor
+    dcfx_dx_rad[3] *= rad_factor
+    dcfy_dx_rad[3] *= rad_factor
+
+    dFchi_dx = force_factor * dcfx_dx_rad
+    dFeta_dx = force_factor * dcfy_dx_rad
+    dMx_dx = moment_factor * dcmx_dx_rad
+    dMy_dx = moment_factor * dcmy_dx_rad
+    dMz_dx = moment_factor * dcmz_dx_rad
+
+    idx_long = [0, 2]
+    A_long = np.array(
+        [
+            [-dFchi_dx[idx_long[0]] / mass, dFchi_dx[idx_long[1]] / mass],
+            [-dMy_dx[idx_long[0]] / Iyy, dMy_dx[idx_long[1]] / Iyy],
+        ],
+        dtype=float,
+    )
+
+    idx_lat = [3, 4, 1]
+    A_lat = np.array(
+        [
+            [
+                dFeta_dx[idx_lat[0]] / mass,
+                dFeta_dx[idx_lat[1]] / mass,
+                dFeta_dx[idx_lat[2]] / mass,
+            ],
+            [
+                dMz_dx[idx_lat[0]] / Izz,
+                dMz_dx[idx_lat[1]] / Izz,
+                dMz_dx[idx_lat[2]] / Izz,
+            ],
+            [
+                dMx_dx[idx_lat[0]] / Ixx,
+                dMx_dx[idx_lat[1]] / Ixx,
+                dMx_dx[idx_lat[2]] / Ixx,
+            ],
+        ],
+        dtype=float,
+    )
+
+    eig_long, vec_long = np.linalg.eig(A_long)
+    eig_lat, vec_lat = np.linalg.eig(A_lat)
+
+    def _timescales(eigvals: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        real_parts = np.real(eigvals)
+        T_fast = np.full(real_parts.shape, np.inf, dtype=float)
+        nonzero = np.abs(real_parts) > 1e-12
+        T_fast[nonzero] = 1.0 / np.abs(real_parts[nonzero])
+
+        if radial_distance is None:
+            epsilon = np.full(real_parts.shape, np.nan, dtype=float)
+        else:
+            T_slow = float(radial_distance) / max(abs(v_tau), 1e-8)
+            epsilon = T_fast / T_slow
+        return T_fast, epsilon
+
+    T_long, eps_long = _timescales(eig_long)
+    T_lat, eps_lat = _timescales(eig_lat)
+
+    return {
+        "A_long": A_long,
+        "A_lateral": A_lat,
+        "eig_long": eig_long,
+        "eig_lateral": eig_lat,
+        "vec_long": vec_long,
+        "vec_lateral": vec_lat,
+        "vec_lat": vec_lat,
+        "Tfast_long": T_long,
+        "Tfast_lateral": T_lat,
+        "eps_fast_long": eps_long,
+        "eps_fast_lateral": eps_lat,
+        "epsilon_long": eps_long,
+        "epsilon_lateral": eps_lat,
+        "stable_long": bool(np.all(np.real(eig_long) < 0.0)),
+        "stable_lateral": bool(np.all(np.real(eig_lat) < 0.0)),
+    }
+
+
+def compute_quasi_steady_fast_timescales(
+    body_aero: BodyAerodynamics,
+    center_of_gravity: np.ndarray,
+    reference_point: np.ndarray,
+    system_model: Any,
+    x_state: np.ndarray,
+    *,
+    solver: Solver | None = None,
+    transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
+    include_gravity: bool = False,
+    axes: AxisDefinition = DEFAULT_AXES,
+    eps: float = 1e-4,
+    mass: float = 15.0,
+    Ixx: float = 100.0,
+    Iyy: float = 19.43,
+    Izz: float = 100.0,
+    radial_distance: float | None = None,
+) -> dict[str, Any]:
+    """Compute longitudinal/lateral fast-timescale metrics around a trim state."""
+    residual, jacobian = compute_quasi_steady_trim_jacobian(
+        body_aero=body_aero,
+        center_of_gravity=center_of_gravity,
+        reference_point=reference_point,
+        system_model=system_model,
+        x_state=x_state,
+        solver=solver,
+        transformation_C_from_VSM=transformation_C_from_VSM,
+        include_gravity=include_gravity,
+        axes=axes,
+        eps=eps,
+    )
+
+    reference_area = float(body_aero.wings[0].compute_projected_area())
+    reference_chord = float(max(panel.chord for panel in body_aero.panels))
+
+    if radial_distance is None and hasattr(system_model, "distance_radial"):
+        try:
+            radial_distance = float(system_model.distance_radial)
+        except (TypeError, ValueError):
+            radial_distance = None
+
+    linearized = linearize_fast_dynamics_from_trim_jacobian(
+        jacobian=jacobian,
+        x_state=x_state,
+        mass=mass,
+        Ixx=Ixx,
+        Iyy=Iyy,
+        Izz=Izz,
+        rho=solver.rho if solver is not None else 1.225,
+        reference_area=reference_area,
+        reference_chord=reference_chord,
+        radial_distance=radial_distance,
+    )
+    linearized["residual"] = residual
+    linearized["jacobian"] = jacobian
+    return linearized
