@@ -169,9 +169,6 @@ def solve_quasi_steady_state(
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
     moment_tolerance: float = 1e-2,
-    window_fraction: float = 0.15,
-    max_nfev: int = 400,
-    f_scale: float = 0.15,
     return_timing_breakdown: bool = False,
 ) -> tuple[dict, BodyAerodynamics]:
     """
@@ -376,21 +373,14 @@ def solve_quasi_steady_state(
         return residual
 
     span_global = bounds_upper - bounds_lower
-    local_lower = np.maximum(bounds_lower, x_guess - window_fraction * span_global)
-    local_upper = np.minimum(bounds_upper, x_guess + window_fraction * span_global)
+    local_lower = bounds_lower
+    local_upper = bounds_upper
     x_start = np.clip(x_guess, local_lower, local_upper)
 
     opt = least_squares(
         lambda x: moment_residual(x),
         x_start,
         bounds=(local_lower, local_upper),
-        xtol=1e-6,
-        ftol=1e-6,
-        gtol=1e-6,
-        max_nfev=max_nfev,
-        loss="soft_l1",
-        f_scale=f_scale,
-        verbose=0,
     )
 
     cm_best = moment_residual(opt.x)
@@ -673,8 +663,7 @@ def run_quasi_steady_sweep(
     transformation_C_from_VSM: np.ndarray = DEFAULT_TRANSFORMATION_C_FROM_VSM,
     include_gravity: bool = False,
     axes: AxisDefinition = DEFAULT_AXES,
-    moment_tolerance: float = 1e-3,
-    window_fraction: float = 0.15,
+    moment_tolerance: float = 1e-4,
     max_nfev: int = 400,
     f_scale: float = 0.15,
     return_timing_breakdown: bool = False,
@@ -733,9 +722,6 @@ def run_quasi_steady_sweep(
                 include_gravity=include_gravity,
                 axes=axes,
                 moment_tolerance=moment_tolerance,
-                window_fraction=window_fraction,
-                max_nfev=max_nfev,
-                f_scale=f_scale,
                 return_timing_breakdown=return_timing_breakdown,
             )
 
