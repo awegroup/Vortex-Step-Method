@@ -51,7 +51,6 @@ dependencies = [
   "numba",
   "screeninfo",
   "odfpy",
-  "AWETrim @ git+https://github.com/ocayon/AWETrim.git@main",
 ]
 [project.optional-dependencies]
 dev = [
