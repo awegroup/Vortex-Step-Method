@@ -35,7 +35,7 @@ class Solver:
         aerodynamic_model_type: str = "VSM",
         max_iterations: int = 5000,
         allowed_error: float = 1e-6,
-        relaxation_factor: float = 0.05,
+        relaxation_factor: float = 0.01,
         core_radius_fraction: float = 0.05,  # Following Damiani et al. (2019) https://docs.nrel.gov/docs/fy19osti/72777.pdf
         gamma_loop_type: str = "base",
         gamma_initial_distribution_type: str = "zero",
