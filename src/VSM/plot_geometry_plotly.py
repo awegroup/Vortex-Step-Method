@@ -411,7 +411,7 @@ def add_bridle_system(fig: go.Figure, wing_aero: object, is_first: bool = True) 
     elif hasattr(wing_aero, "_bridle_line_system") and wing_aero._bridle_line_system:
         # Handle basic bridle line system (backward compatibility)
         for i, bridle_line in enumerate(wing_aero._bridle_line_system):
-            p1, p2, diameter = bridle_line
+            p1, p2, _, _, diameter, _ = bridle_line
 
             # Calculate thickness based on diameter (simple scaling)
             thickness = max(2, min(12, diameter * 1000))  # Assume diameter in meters
