@@ -279,5 +279,61 @@ def test_refine_mesh_by_splitting_provided_sections():
         np.testing.assert_allclose(section.polar_data, polar_data, rtol=1e-5, atol=1e-8)
 
 
+def test_compute_flat_area_rectangular_wing():
+    """Test flat area calculation for a simple rectangular wing."""
+    polar_data = make_inviscid_polar_data()
+
+    # Create a rectangular wing in the XY plane
+    # Chord length = 1, Span = 10
+    wing = Wing(n_panels=1)
+    wing.add_section([0, 5, 0], [1, 5, 0], polar_data)
+    wing.add_section([0, -5, 0], [1, -5, 0], polar_data)
+
+    flat_area = wing.compute_flat_area()
+
+    # For a rectangular wing: area = chord * span = 1 * 10 = 10
+    expected_area = 1.0 * 10.0
+    np.testing.assert_allclose(flat_area, expected_area, rtol=1e-5)
+
+
+def test_compute_flat_area_twisted_wing_larger_than_projected():
+    """Test that flat area is larger than projected area for a twisted wing."""
+    polar_data = make_inviscid_polar_data()
+
+    # Create a twisted wing (not planar)
+    # Root section at y=5, z=0
+    # Tip section at y=-5, z=0.5 (twisted up)
+    wing = Wing(n_panels=2)
+    wing.add_section([0, 5, 0], [1, 5, 0], polar_data)
+    wing.add_section([0, 0, 0.25], [1, 0, 0.25], polar_data)
+    wing.add_section([0, -5, 0.5], [1, -5, 0.5], polar_data)
+
+    flat_area = wing.compute_flat_area()
+    projected_area_xy = wing.compute_projected_area(z_plane_vector=np.array([0, 0, 1]))
+
+    # For a twisted wing, the flat area should be larger than the projected area
+    # because the panels are not flat in the projection plane
+    assert flat_area > projected_area_xy, (
+        f"Flat area ({flat_area}) should be larger than projected area ({projected_area_xy}) "
+        "for a twisted wing"
+    )
+
+
+def test_compute_flat_area_planar_wing_equals_projected():
+    """Test that flat area approximately equals projected area for a planar wing."""
+    polar_data = make_inviscid_polar_data()
+
+    # Create a planar wing (all in XY plane)
+    wing = Wing(n_panels=1)
+    wing.add_section([0, 5, 0], [1, 5, 0], polar_data)
+    wing.add_section([0, -5, 0], [1, -5, 0], polar_data)
+
+    flat_area = wing.compute_flat_area()
+    projected_area = wing.compute_projected_area(z_plane_vector=np.array([0, 0, 1]))
+
+    # For a planar wing in the XY plane, flat area should equal projected area
+    np.testing.assert_allclose(flat_area, projected_area, rtol=1e-5)
+
+
 if __name__ == "__main__":
     pytest.main()

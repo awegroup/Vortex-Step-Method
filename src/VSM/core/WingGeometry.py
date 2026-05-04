@@ -555,6 +555,32 @@ class Wing:
             S += 0.5 * np.linalg.norm(np.cross(C - A, D - A))
         return S
 
+    def compute_flat_area(self) -> float:
+        """Calculate the total flat (undeformed) wing area in 3D space.
+
+        Computes the area of the wing panels by treating each section pair
+        as a quadrilateral in 3D space. This is the actual area of the wing
+        geometry without any projection.
+
+        Returns:
+            float: Total wing area in 3D space.
+        """
+        sections = self.sections
+        S = 0.0
+
+        for i in range(len(sections) - 1):
+            A = sections[i].LE_point
+            B = sections[i].TE_point
+            C = sections[i + 1].TE_point
+            D = sections[i + 1].LE_point
+
+            # Split the quadrilateral ABCD into two triangles: (A,B,C) and (A,C,D)
+            # Area of triangle = 0.5 * |cross product of two edges|
+            S += 0.5 * np.linalg.norm(np.cross(B - A, C - A))
+            S += 0.5 * np.linalg.norm(np.cross(C - A, D - A))
+
+        return S
+
 
 @dataclass
 class Section:
