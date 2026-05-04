@@ -295,12 +295,12 @@ class BodyAerodynamics:
                 )
 
             # ---- Bridle elements (nested dict) ----
-            be_hdr = struc_geometry["bridle_elements"]["headers"][
+            be_hdr = struc_geometry["bridle_lines"]["headers"][
                 1:
             ]  # [l0, d, material, linktype]
             bridle_lines_dict = {
                 row[0]: dict(zip(be_hdr, row[1:]))
-                for row in struc_geometry["bridle_elements"]["data"]
+                for row in struc_geometry["bridle_lines"]["data"]
             }
 
             # ---- Build bridle line segments ----
