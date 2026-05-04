@@ -1655,7 +1655,7 @@ class BodyAerodynamics:
         # TODO: test this function
         p1 = line[0]
         p2 = line[1]
-        d = line[4]
+        d = line[2]
 
         if p1[2] > p2[2]:
             p1, p2 = p2, p1
