@@ -58,6 +58,10 @@ dev = [
   "pytest-cov",
   "black",
   ]
+# gamma_loop_type="casadi_newton": exact-Jacobian Newton circulation solve.
+casadi = [
+  "casadi>=3.6",
+  ]
 
 # List of relevant URLs for your project. These are displayed on the left sidebar of your PyPI page.
 # This can include links to the homepage, source code, changelog, funding, etc.

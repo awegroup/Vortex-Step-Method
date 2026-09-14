@@ -1,3 +1,4 @@
+import hashlib
 import numpy as np
 import logging
 from scipy.linalg import solve_banded
@@ -33,6 +34,18 @@ class Solver:
             viscosity (TORQUE 2026) for post-stall stabilization in gamma_loop.
         artificial_viscosity_factor (float): Coefficient k in the viscosity scaling
             (default 0.035, the conservative envelope from the paper).
+        newton_max_iterations (int): Iteration budget of one ``casadi_newton``
+            attempt (Newton + pseudo-transient phases together).
+        newton_pseudo_time_step (float): Pseudo time step the ``casadi_newton``
+            loop restarts from, and never drops below on accepted steps, once
+            its Newton line search stalls (0.03; base's explicit step is
+            ``relaxation_factor``).
+        newton_fallback_to_base (bool): Run the base relaxed-Picard loop when a
+            ``casadi_newton`` attempt fails (default True).
+        last_fallback (bool): Diagnostic -- did the last ``casadi_newton`` solve
+            fall back to base?
+        last_newton_evaluations (int): Diagnostic -- residual evaluations used
+            by the last ``casadi_newton`` solve.
     """
 
     def __init__(
@@ -64,6 +77,10 @@ class Solver:
         anderson_fallback_to_base: bool = False,
         stagnation_patience: int = 0,
         stagnation_rtol: float = 0.05,
+        newton_max_iterations: int = 200,
+        newton_fallback_to_base: bool = True,
+        newton_pseudo_time_step: float = 0.03,
+        polar_interpolation: str = "linear",
     ):
         """Initialize solver with configuration parameters.
 
@@ -153,6 +170,43 @@ class Solver:
         self.stagnation_rtol = float(stagnation_rtol)
         #: Diagnostic: did the last circulation solve stop on stagnation?
         self.last_stagnated = False
+        # === CasADi Newton / pseudo-transient loop (gamma_loop_type="casadi_newton") ===
+        # Solves the circulation residual R(gamma) = 0 with an EXACT Jacobian
+        # from CasADi automatic differentiation instead of iterating the
+        # fixed-point map. Quadratic convergence in attached flow: O(3-6)
+        # iterations where the relaxed-Picard loop needs O(1000). When the
+        # Newton line search stalls (the piecewise-linear polars make the
+        # residual kinked around the stall knee, and |R|^2 then has minima that
+        # are not roots) the loop switches to pseudo-transient continuation:
+        # implicit Euler on the SAME flow the base loop time-steps explicitly,
+        # with the pseudo time step grown by switched evolution relaxation back
+        # to pure Newton as the residual falls. ``newton_pseudo_time_step`` is
+        # the step it restarts from (base's explicit step is
+        # ``relaxation_factor``; the implicit scheme is A-stable so ~100x that
+        # is safe). ``newton_max_iterations`` bounds one attempt; a failed
+        # attempt falls back to the base relaxed-Picard loop when
+        # ``newton_fallback_to_base`` is set -- cheap to keep ON, since a Newton
+        # failure is detected within a fraction of one base solve. Requires the
+        # optional ``casadi`` dependency.
+        self.newton_max_iterations = int(newton_max_iterations)
+        self.newton_fallback_to_base = bool(newton_fallback_to_base)
+        self.newton_pseudo_time_step = float(newton_pseudo_time_step)
+        # Polar lookup used by the CasADi panel function (casadi_newton and the
+        # AWETrim CasADi trim): "linear" reproduces np.interp (the numpy loops'
+        # tables, byte-identical fixed points); "bspline" is a C2 cubic spline
+        # through the same nodes -- smooth Jacobian, no corner chattering, but
+        # a slightly different Cl between nodes, so a different fixed point.
+        if polar_interpolation not in ("linear", "bspline"):
+            raise ValueError("polar_interpolation must be 'linear' or 'bspline'.")
+        self.polar_interpolation = polar_interpolation
+        # A pseudo-transient step whose residual grows by more than 1/this is
+        # rejected and the step quartered (0.5 = residual may at most double).
+        self._newton_reject_ratio = 0.5
+        self._casadi_newton_cache: dict = {}
+        #: Diagnostic: did the last casadi_newton solve fall back to base?
+        self.last_fallback = False
+        #: Diagnostic: residual evaluations used by the last casadi_newton solve.
+        self.last_newton_evaluations = 0
 
         ## Initializing some empty properties
         self.panels = None
@@ -274,6 +328,25 @@ class Solver:
             converged, gamma_new, alpha_array, Umag_array = self.gamma_loop_non_linear(
                 gamma_initial
             )
+
+        elif self.gamma_loop_type == "casadi_newton":
+            converged, gamma_new, alpha_array, Umag_array = (
+                self.gamma_loop_casadi_newton(gamma_initial)
+            )
+            self.last_fallback = False
+            if not converged and self.newton_fallback_to_base:
+                logging.info(
+                    " ---> casadi_newton did not converge; falling back to the "
+                    "base relaxed-Picard loop"
+                )
+                self.last_fallback = True
+                converged, gamma_new, alpha_array, Umag_array = self.gamma_loop(
+                    gamma_initial
+                )
+                if not converged:
+                    converged, gamma_new, alpha_array, Umag_array = self.gamma_loop(
+                        gamma_initial, extra_relaxation_factor=0.5
+                    )
 
         elif self.gamma_loop_type == "anderson":
             converged, gamma_new, alpha_array, Umag_array = self.gamma_loop_anderson(
@@ -880,6 +953,496 @@ class Solver:
                 "(deep post-stall limit cycle); caller falls back to base loop."
             )
         return converged, x, alpha_array, Umag_array
+
+    # ------------------------------------------------------------------
+    # CasADi damped-Newton circulation solve
+    # ------------------------------------------------------------------
+    def _polar_tables(self) -> tuple[list, list, list, list]:
+        """Per-panel ``(alpha, cl, cd, cm)`` columns of ``panel_polar_data``."""
+        tables = [np.asarray(panel.panel_polar_data, dtype=float) for panel in self.panels]
+        return (
+            [t[:, 0] for t in tables],
+            [t[:, 1] for t in tables],
+            [t[:, 2] for t in tables],
+            [t[:, 3] for t in tables],
+        )
+
+    def _casadi_newton_key(self, alpha_tables, cl_tables, cd_tables, cm_tables) -> tuple:
+        """Cache key: the symbolic residual depends only on the panel count,
+        the polar tables and the regularization settings. Geometry, inflow and
+        AIC matrices enter as numeric parameters, so one compiled function
+        serves every inflow and every deformed shape that keeps its polars."""
+        digest = hashlib.blake2b(digest_size=16)
+        for tables in zip(alpha_tables, cl_tables, cd_tables, cm_tables):
+            for table in tables:
+                digest.update(np.ascontiguousarray(table).tobytes())
+        return (
+            self.n_panels,
+            bool(self.is_with_artificial_viscosity),
+            float(self.artificial_viscosity_factor),
+            self.polar_interpolation,
+            digest.hexdigest(),
+        )
+
+    def _build_casadi_newton_function(self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None):
+        """Build the CasADi function of the PER-PANEL section physics that
+        :meth:`gamma_loop_casadi_newton` assembles its residual and exact
+        Jacobian from.
+
+        The circulation residual whose root the Newton loop finds is
+
+            R(gamma) = (I - diag(mu(alpha)) L) gamma - G_raw(gamma),
+
+        exactly the fixed point the ``base`` and ``anderson`` loops iterate
+        towards (``gamma = (I - diag(mu) L)^-1 G_raw(gamma)``, see
+        :meth:`_regularize_gamma_target`), including the Li/Gaunaa viscosity
+        ``mu_i = max(0, -k S Cl'_i / dz_i^2)`` gated on any panel being past
+        its stall onset (``mu = 0`` without artificial viscosity). Everything
+        that is not the dense induction ``v_ind = AIC gamma`` is local to a
+        panel: ``G_raw_i``, ``mu_i`` and ``alpha_i`` depend on ``gamma`` only
+        through the panel's own relative velocity ``v_rel_i``. So the symbolic
+        function takes ``v_rel`` (and ``L gamma``) as INPUTS and returns
+
+            h_i = G_raw_i + mu_i (L gamma)_i,   c_i = dh_i / dv_rel_i  (3 values)
+
+        plus ``mu``, ``alpha`` and ``|v_rel x z|``; the Newton loop then forms
+        ``R = gamma - h`` and, by the chain rule through ``v_rel = va + AIC
+        gamma`` (with ``dh_i/d(L gamma)_i = mu_i``),
+
+            J = I - diag(mu) L - sum_k diag(c_k) AIC_k
+
+        in NumPy. This keeps the CasADi graph O(n) -- independent of the
+        n x n induction matrices -- so it costs ~0.1 ms per evaluation and
+        builds in tens of milliseconds, while the dense algebra runs in BLAS.
+
+        The 2-D polars are ``ca.interpolant`` tables. Queries are clamped to
+        the table range first, so the lookup reproduces ``np.interp`` (constant
+        beyond both ends) and the lift slope is the same central difference of
+        the same piecewise-linear table that :meth:`_lift_slope_from_ctx`
+        evaluates. When every panel shares one alpha grid (the normal outcome
+        of batch polar generation) the lookup is a single 2-D interpolant over
+        (alpha, panel index) evaluated exactly at the integer panel nodes;
+        otherwise one 1-D interpolant per panel. ``polar_interpolation =
+        "bspline"`` swaps the piecewise-linear table for a cubic spline
+        through the same nodes (degree 1 along the panel-index axis, so panel
+        rows never mix).
+
+        Outputs, in order: ``h``, ``dh/dv_rel`` (n x 3, from the corner-
+        averaged polar), ``mu``, ``alpha``, ``umag``, ``gate``, then for
+        callers that build FORCES from the same lookups: ``h_avg`` (h with the
+        corner-averaged Cl -- differentiate this for a kink-tolerant
+        Jacobian), ``cl``, ``cd``, ``cm`` at ``alpha`` and their corner-
+        averaged counterparts ``cl_avg``, ``cd_avg``, ``cm_avg``. With
+        "bspline" polars the averaged outputs equal the exact ones.
+        """
+        import casadi as ca
+
+        n = self.n_panels
+        for i, alpha_table in enumerate(alpha_tables):
+            if alpha_table.size < 2 or np.any(np.diff(alpha_table) <= 0.0):
+                raise ValueError(
+                    "casadi_newton needs a strictly increasing polar alpha grid "
+                    f"(panel {i} violates this)."
+                )
+
+        v_rel = ca.MX.sym("v_rel", n, 3)
+        va = ca.MX.sym("va", n, 3)
+        x_airf = ca.MX.sym("x_airf", n, 3)
+        y_airf = ca.MX.sym("y_airf", n, 3)
+        z_airf = ca.MX.sym("z_airf", n, 3)
+        chord = ca.MX.sym("chord", n)
+        width = ca.MX.sym("width", n)
+        stall_angles = ca.MX.sym("stall_angles", n)
+        l_gamma = ca.MX.sym("l_gamma", n)  # (L gamma), a parameter here
+
+        shared_grid = all(
+            table.shape == alpha_tables[0].shape
+            and np.array_equal(table, alpha_tables[0])
+            for table in alpha_tables[1:]
+        )
+        if cd_tables is None:
+            cd_tables = [np.zeros_like(t) for t in alpha_tables]
+        if cm_tables is None:
+            cm_tables = [np.zeros_like(t) for t in alpha_tables]
+        kind = self.polar_interpolation
+        smooth = kind == "bspline"
+
+        def make_lookup(name, value_tables):
+            """Clamped lookup ``alpha_vec (n) -> values (n)`` of one polar column."""
+            if shared_grid:
+                grid = alpha_tables[0]
+                matrix = np.vstack(value_tables)  # (n, m)
+                # Flattened with the alpha axis varying fastest (CasADi convention).
+                opts = {"degree": [3, 1]} if smooth else {}
+                table = ca.interpolant(
+                    f"{name}_2d",
+                    kind,
+                    [grid, np.arange(n, dtype=float)],
+                    matrix.ravel(order="C"),
+                    opts,
+                )
+                index_row = ca.DM(np.arange(n, dtype=float)).T
+                lo, hi = float(grid[0]), float(grid[-1])
+
+                def lookup(alpha_vec):
+                    query = ca.fmin(ca.fmax(alpha_vec, lo), hi)
+                    return table(ca.vertcat(query.T, index_row)).T
+
+                return lookup
+            interpolants = [
+                ca.interpolant(f"{name}_{i}", kind, [alpha_table], value_table)
+                for i, (alpha_table, value_table) in enumerate(
+                    zip(alpha_tables, value_tables)
+                )
+            ]
+            limits = [(float(t[0]), float(t[-1])) for t in alpha_tables]
+
+            def lookup(alpha_vec):
+                return ca.vertcat(
+                    *[
+                        interpolants[i](ca.fmin(ca.fmax(alpha_vec[i], lo), hi))
+                        for i, (lo, hi) in enumerate(limits)
+                    ]
+                )
+
+            return lookup
+
+        cl_of = make_lookup("cl", cl_tables)
+        cd_of = make_lookup("cd", cd_tables)
+        cm_of = make_lookup("cm", cm_tables)
+
+        def cross_rows(a, b):
+            return ca.horzcat(
+                a[:, 1] * b[:, 2] - a[:, 2] * b[:, 1],
+                a[:, 2] * b[:, 0] - a[:, 0] * b[:, 2],
+                a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0],
+            )
+
+        def row_norm(a):
+            return ca.sqrt(ca.sum2(a * a))
+
+        # Same algebra as compute_aerodynamic_quantities, in symbols.
+        v_normal = ca.sum2(x_airf * v_rel)
+        v_tangential = ca.sum2(y_airf * v_rel)
+        alpha = ca.atan2(v_normal, v_tangential)
+        umag = row_norm(cross_rows(v_rel, z_airf))
+        umagw = row_norm(cross_rows(va, z_airf))
+        cl = cl_of(alpha)
+        gamma_raw = 0.5 * (umag**2 / umagw) * cl * chord
+
+        if self.is_with_artificial_viscosity:
+            delta = np.deg2rad(0.5)
+            lift_slope = (cl_of(alpha + delta) - cl_of(alpha - delta)) / (2.0 * delta)
+            planform_area = ca.sum1(width * chord)
+            # The gate is the ONE discontinuity of the residual (everything
+            # else is continuous, piecewise linear); it is returned so the
+            # step control can recognise a step that crosses it.
+            gate = ca.if_else(ca.mmax(alpha - stall_angles) > 0.0, 1.0, 0.0)
+            mu = gate * ca.fmax(
+                0.0,
+                -self.artificial_viscosity_factor
+                * planform_area
+                * lift_slope
+                / width**2,
+            )
+        else:
+            gate = ca.MX(0.0)
+            mu = ca.MX.zeros(n, 1)
+        h = gamma_raw + mu * l_gamma
+
+        # Jacobian surrogate. The polars are piecewise linear, so dCl/dalpha
+        # jumps at every table node -- by ~2 pi + |post-stall slope| at the
+        # Cl-max corner -- and a root can sit ON that corner (the attached
+        # branch near its end pins the peak panel there). A Newton step taken
+        # with either one-sided slope then overshoots to the other side and
+        # chatters forever. For the JACOBIAN ONLY, replace Cl by the two-point
+        # average 0.5 (Cl(alpha + d) + Cl(alpha - d)): its slope is the mean of
+        # the one-sided slopes at a corner -- the midpoint of the generalized
+        # Jacobian, the element a sliding root needs -- and the exact slope
+        # wherever the window straddles no node. The residual keeps the exact
+        # table, so the roots are unchanged. d = the same 0.5 deg the
+        # viscosity's lift-slope difference uses.
+        delta_jac = np.deg2rad(0.5)
+
+        def averaged(lookup):
+            if smooth:  # a C2 spline has no corners: the exact slope is right
+                return lookup(alpha)
+            return 0.5 * (lookup(alpha + delta_jac) + lookup(alpha - delta_jac))
+
+        cl_averaged = averaged(cl_of)
+        h_for_jacobian = 0.5 * (umag**2 / umagw) * cl_averaged * chord + mu * l_gamma
+
+        # dh_i/dv_rel_i: h_i depends on row i of v_rel only, so three forward
+        # sweeps seeded with the unit columns give the full (n x 3) derivative.
+        seeds = [ca.DM(np.eye(3)[k][None, :].repeat(n, axis=0)) for k in range(3)]
+        dh_dvrel = ca.horzcat(*[ca.jtimes(h_for_jacobian, v_rel, seed) for seed in seeds])
+
+        return ca.Function(
+            "vsm_panel_residual",
+            [v_rel, va, x_airf, y_airf, z_airf, chord, width, stall_angles, l_gamma],
+            [
+                h,
+                dh_dvrel,
+                mu,
+                alpha,
+                umag,
+                gate,
+                h_for_jacobian,
+                cl,
+                cd_of(alpha),
+                cm_of(alpha),
+                cl_averaged,
+                averaged(cd_of),
+                averaged(cm_of),
+            ],
+            ["v_rel", "va", "x_airf", "y_airf", "z_airf", "chord", "width", "stall_angles", "l_gamma"],
+            ["h", "dh_dvrel", "mu", "alpha", "umag", "gate", "h_avg", "cl", "cd", "cm", "cl_avg", "cd_avg", "cm_avg"],
+        )
+
+    def _casadi_newton_function(self):
+        alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
+        key = self._casadi_newton_key(alpha_tables, cl_tables, cd_tables, cm_tables)
+        fn = self._casadi_newton_cache.get(key)
+        if fn is None:
+            fn = self._build_casadi_newton_function(
+                alpha_tables, cl_tables, cd_tables, cm_tables
+            )
+            # Keep the cache bounded: a sweep over deformed shapes creates a
+            # new polar set per shape.
+            if len(self._casadi_newton_cache) >= 32:
+                self._casadi_newton_cache.pop(next(iter(self._casadi_newton_cache)))
+            self._casadi_newton_cache[key] = fn
+        return fn
+
+    def gamma_loop_casadi_newton(self, gamma_initial: np.ndarray) -> tuple:
+        """Newton solve of the circulation residual with an exact CasADi
+        Jacobian, globalised by pseudo-transient continuation
+        (``gamma_loop_type="casadi_newton"``).
+
+        Root-finds ``R(gamma) = (I - diag(mu) L) gamma - G_raw(gamma) = 0``
+        (see :meth:`_build_casadi_newton_function`), the same fixed point as
+        ``base``/``anderson``. Each iteration is one CasADi evaluation of the
+        per-panel physics, three ``n x n`` products and one dense solve.
+
+        Two phases, switched automatically:
+
+        * **Newton** (pseudo time step ``dt = inf``): full Newton direction
+          with Armijo backtracking on ``|R|^2``. Quadratic convergence, 3-6
+          iterations in attached flow.
+        * **Pseudo-transient continuation** (Kelley & Keyes 1998, SIAM J.
+          Numer. Anal. 35, 508), entered when the line search cannot reduce
+          ``|R|`` -- around the stall knee the piecewise-linear polars make
+          ``R`` kinked and ``|R|^2`` has local minima that are not roots, where
+          any merit-based method stops. Implicit Euler on the flow
+          ``d gamma / dt = G_reg(gamma) - gamma`` (the continuous limit of the
+          base loop's relaxed Picard step, so the two share attractors and, from
+          the same seed, tend to the same branch): ``((I - diag(mu) L)/dt + J)
+          d = -R``. The step is A-stable, so ``dt`` starts ~100x the base loop's
+          explicit ``relaxation_factor`` and is then adapted by switched
+          evolution relaxation, ``dt <- dt |R_k| / |R_k+1|``, growing back to
+          pure Newton as the residual falls; a step that doubles ``|R|`` or
+          goes non-finite is rejected and ``dt`` quartered.
+
+        Stopping rule: ``max|R| / max|gamma| < allowed_error``. NOTE this is
+        the UN-relaxed residual ``|G(gamma) - gamma|``; the base and Anderson
+        loops test ``relaxation_factor * |G - gamma|``, i.e. their converged
+        residual is ``1/relaxation_factor`` (100x at the default 0.01)
+        LOOSER than this one at the same ``allowed_error``. Newton reaches a
+        tight residual for free, so keep ``allowed_error`` tight (1e-8) when
+        an outer finite-difference loop differentiates through this solve --
+        like Anderson, the superlinear termination makes the converged gamma
+        a slightly non-smooth function of the inflow at loose tolerance.
+
+        Branch selection is unchanged: past stall the residual has more than
+        one root and the loop lands on the one its seed flows to, so seed
+        deliberately (``gamma_distribution``) as with the other loops.
+
+        Returns ``(converged, gamma, alpha_array, Umag_array)`` like
+        :meth:`gamma_loop`; ``converged`` False leaves the caller's base-loop
+        fallback to decide.
+        """
+        try:
+            fn = self._casadi_newton_function()
+        except ImportError as exc:  # pragma: no cover - depends on optional dep
+            raise ImportError(
+                "gamma_loop_type='casadi_newton' requires the optional 'casadi' "
+                "package (pip install casadi)."
+            ) from exc
+
+        n = self.n_panels
+        eye = np.eye(n)
+        if self.is_with_artificial_viscosity:
+            stall_angles = self._panel_stall_angles()
+            laplacian = self._build_spanwise_laplacian()
+        else:
+            stall_angles = np.full(n, np.inf)
+            laplacian = np.zeros((n, n))
+        params = (
+            self.va_array,
+            self.x_airf_array,
+            self.y_airf_array,
+            self.z_airf_array,
+            self.chord_array,
+            self.width_array,
+            stall_angles,
+        )
+        aic = (self.AIC_x, self.AIC_y, self.AIC_z)
+
+        def evaluate(x):
+            # R = gamma - h(v_rel(gamma), L gamma);  J by the chain rule through
+            # v_rel = va + AIC gamma (see _build_casadi_newton_function).
+            v_rel = self.va_array + np.column_stack([a @ x for a in aic])
+            l_gamma = laplacian @ x
+            h, dh_dvrel, mu, alpha, umag, gate = fn(v_rel, *params, l_gamma)[:6]
+            h = np.asarray(h, dtype=float).ravel()
+            dh_dvrel = np.asarray(dh_dvrel, dtype=float)
+            mu = np.asarray(mu, dtype=float).ravel()
+            precond = eye - mu[:, None] * laplacian  # (I - diag(mu) L)
+            jac = precond.copy()
+            for k in range(3):
+                jac -= dh_dvrel[:, k][:, None] * aic[k]
+            return {
+                "x": x,
+                "residual": x - h,
+                "jac": jac,
+                "precond": precond,
+                "alpha": np.asarray(alpha, dtype=float).ravel(),
+                "umag": np.asarray(umag, dtype=float).ravel(),
+                "gate": bool(float(gate) > 0.5),
+            }
+
+        def normalized_error(state):
+            reference = np.amax(np.abs(state["x"]))
+            reference = reference if reference != 0 else 1e-4
+            return float(np.amax(np.abs(state["residual"])) / reference)
+
+        def norm(state):
+            return float(np.linalg.norm(state["residual"]))
+
+        def finite(state):
+            return bool(np.all(np.isfinite(state["residual"])))
+
+        current = evaluate(np.array(gamma_initial, dtype=float))
+        evaluations = 1
+        iteration = 0
+        converged = False
+        self.last_stagnated = False
+        if not finite(current):
+            logging.warning("casadi_newton: non-finite residual at the seed.")
+            self.last_iterations = 0
+            self.last_newton_evaluations = evaluations
+            return False, current["x"], current["alpha"], current["umag"]
+
+        dt = np.inf  # pseudo time step; inf = pure Newton
+        dt_restart = float(self.newton_pseudo_time_step)
+        dt_min = 1e-4 * dt_restart
+        dt_newton = 1e6 * dt_restart  # beyond this the step IS Newton
+        failure = None
+
+        while iteration < self.newton_max_iterations:
+            if normalized_error(current) < self.allowed_error:
+                converged = True
+                break
+
+            # ---- direction -------------------------------------------------
+            system = current["jac"] if np.isinf(dt) else current["jac"] + current["precond"] / dt
+            try:
+                direction = np.linalg.solve(system, -current["residual"])
+            except np.linalg.LinAlgError:
+                direction = None
+            if direction is None or not np.all(np.isfinite(direction)):
+                if np.isinf(dt):
+                    dt = dt_restart  # singular Newton system: go transient
+                    continue
+                dt *= 0.25
+                if dt < dt_min:
+                    failure = "singular pseudo-transient system"
+                    break
+                continue
+
+            if np.isinf(dt):
+                # ---- Newton phase: Armijo backtracking on 0.5|R|^2 ---------
+                merit = 0.5 * norm(current) ** 2
+                slope = float(direction @ (current["jac"].T @ current["residual"]))
+                step = 1.0
+                accepted = None
+                while step >= 2.0**-8:
+                    trial = evaluate(current["x"] + step * direction)
+                    evaluations += 1
+                    if finite(trial) and 0.5 * norm(trial) ** 2 <= merit + 1e-4 * step * slope:
+                        accepted = trial
+                        break
+                    step *= 0.5
+                if accepted is None or slope >= 0.0:
+                    # Kink minimum of |R|^2 (or not a descent direction):
+                    # switch to pseudo-transient continuation from here.
+                    dt = dt_restart
+                    logging.debug(
+                        "casadi_newton: Newton line search stalled at iteration "
+                        "%s (|R|/|gamma| = %.2e); switching to pseudo-transient "
+                        "continuation with dt = %.3g",
+                        iteration,
+                        normalized_error(current),
+                        dt,
+                    )
+                    continue
+                current = accepted
+            else:
+                # ---- pseudo-transient phase: implicit Euler + SER ----------
+                trial = evaluate(current["x"] + direction)
+                evaluations += 1
+                ratio = norm(current) / norm(trial) if finite(trial) and norm(trial) > 0 else 0.0
+                crossed_gate = finite(trial) and trial["gate"] != current["gate"]
+                if not finite(trial) or (
+                    ratio < self._newton_reject_ratio
+                    and not (crossed_gate and dt <= dt_restart)
+                ):
+                    # Residual grew too much: reject and shrink. EXCEPT across
+                    # the viscosity gate, the residual's one discontinuity:
+                    # norms on the two sides are not comparable, and the flow
+                    # can legitimately SLIDE along the gate surface (base does,
+                    # with its tiny explicit steps). A crossing step at the
+                    # floor is accepted so the march chatters across the gate
+                    # and moves on instead of shrinking dt to nothing.
+                    dt *= 0.25
+                    if dt < dt_min:
+                        failure = "pseudo time step collapsed"
+                        break
+                    continue
+                current = trial
+                # Switched evolution relaxation, floored at the restart step:
+                # |R| legitimately GROWS for a while along this flow when
+                # panels cross the polar's Cl-max corner (it is not a gradient
+                # flow), and un-floored SER would shrink dt below the base
+                # loop's explicit step and crawl. The rejection rule above is
+                # the safety net; accepted steps never fall below the floor.
+                dt = dt_restart if crossed_gate else max(dt_restart, dt * min(ratio, 10.0))
+                if dt > dt_newton:
+                    dt = np.inf
+
+            iteration += 1
+            logging.debug(
+                "casadi_newton iteration %s: |R|/|gamma| = %.3e, dt %.3g, max alpha %.2f deg",
+                iteration,
+                normalized_error(current),
+                dt,
+                np.rad2deg(np.max(current["alpha"])),
+            )
+        else:
+            converged = normalized_error(current) < self.allowed_error
+            if not converged:
+                failure = f"iteration budget ({self.newton_max_iterations}) exhausted"
+
+        self.last_iterations = iteration
+        self.last_newton_evaluations = evaluations
+        if not converged:
+            logging.info(
+                "casadi_newton did not converge: %s at iteration %s (|R|/|gamma| = %.3e).",
+                failure or "line search stalled",
+                iteration,
+                normalized_error(current),
+            )
+        return converged, current["x"], current["alpha"], current["umag"]
 
     def gamma_loop_non_linear(self, gamma_initial: np.ndarray) -> tuple:
         """Nonlinear solver using robust SciPy optimization methods.

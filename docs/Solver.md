@@ -47,6 +47,19 @@ Solver(
 ### Solution Methods
 - **`gamma_loop_type`** (str): Iterative algorithm type
   - `"base"`: Standard fixed-point iteration with relaxation
+  - `"anderson"`: Anderson-accelerated relaxed fixed point (same fixed point,
+    ~10-25x fewer iterations in attached flow; can limit-cycle post-stall)
+  - `"casadi_newton"`: Newton on the circulation residual with an exact
+    CasADi Jacobian, globalised by pseudo-transient continuation. Same fixed
+    point as `base`; 3-10 iterations in attached flow (~100x fewer than
+    `base`), 5-10x faster wall clock per solve, converges post-stall where
+    `base`/`anderson` stall. Needs the optional `casadi` dependency
+    (`pip install Vortex-Step-Method[casadi]`). Knobs: `newton_max_iterations`
+    (200), `newton_pseudo_time_step` (0.03, the floor/restart pseudo step),
+    `newton_fallback_to_base` (True). NOTE its stopping rule is the UN-relaxed
+    residual `max|G(gamma) - gamma| / max|gamma| < allowed_error`, which is
+    `1/relaxation_factor` tighter than the base/anderson rule at the same
+    `allowed_error`.
   - `"non_linear"`: Robust nonlinear solvers (Broyden methods)
   - `"simonet_stall"`: Stall modeling with Simonet approach
   - `"non_linear_simonet_stall"`: Combined nonlinear + stall modeling
@@ -292,6 +305,13 @@ gamma_dist = results['gamma_distribution']
 
 ### Advanced Configuration
 ```python
+# Fast, robust circulation solve (exact-Jacobian Newton; needs casadi)
+solver = Solver(
+    gamma_loop_type="casadi_newton",
+    allowed_error=1e-8,
+    is_with_artificial_viscosity=True,
+)
+
 # High-accuracy nonlinear solver
 solver = Solver(
     aerodynamic_model_type="VSM",
@@ -327,7 +347,7 @@ results = [solver.solve(body_aero) for solver in solvers]
 
 ### Common Convergence Issues
 1. **Oscillating solutions**: Reduce relaxation_factor
-2. **Slow convergence**: Try nonlinear solver
+2. **Slow convergence**: Use `gamma_loop_type="casadi_newton"` (or `"anderson"`)
 3. **Divergence**: Check flow conditions and geometry
 
 ### Performance Issues  
