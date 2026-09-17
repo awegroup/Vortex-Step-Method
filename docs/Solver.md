@@ -61,8 +61,6 @@ Solver(
     `1/relaxation_factor` tighter than the base/anderson rule at the same
     `allowed_error`.
   - `"non_linear"`: Robust nonlinear solvers (Broyden methods)
-  - `"simonet_stall"`: Stall modeling with Simonet approach
-  - `"non_linear_simonet_stall"`: Combined nonlinear + stall modeling
 
 ## Primary Method: solve()
 
@@ -220,17 +218,6 @@ cl_array = [panel.compute_cl(alpha) for panel, alpha in zip(panels, alpha_array)
 
 ### Stall Modeling
 
-#### Smooth Circulation
-- **`is_smooth_circulation`**: Apply smoothing to circulation distribution
-- **`smoothness_factor`**: Smoothing strength parameter
-
-#### Artificial Damping  
-- **`is_artificial_damping`**: Enable artificial damping for stall
-- **`artificial_damping`**: Damping coefficients {"k2": 0.1, "k4": 0.0}
-
-#### Simonet Artificial Viscosity
-- **`is_with_simonet_artificial_viscosity`**: Simonet stall model
-- **`simonet_artificial_viscosity_fva`**: Model parameter
 
 ### Viscous Drag Correction
 
@@ -321,13 +308,10 @@ solver = Solver(
     reference_point=[0.5, 0.0, 0.0]
 )
 
-# Stall modeling
+# Post-stall regularization (Li et al. 2026) and quarter-chord force directions
 stall_solver = Solver(
-    gamma_loop_type="simonet_stall",
-    is_smooth_circulation=True,
-    smoothness_factor=0.1,
-    is_artificial_damping=True,
-    artificial_damping={"k2": 0.15, "k4": 0.05}
+    is_with_artificial_viscosity=True,
+    is_aoa_corrected=True,
 )
 ```
 

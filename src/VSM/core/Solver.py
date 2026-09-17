@@ -24,12 +24,6 @@ class Solver:
         reference_point (np.ndarray): Reference point for moment calculations.
         mu (float): Dynamic viscosity of fluid.
         rho (float): Fluid density.
-        is_smooth_circulation (bool): Apply circulation smoothing.
-        smoothness_factor (float): Smoothing strength parameter.
-        is_artificial_damping (bool): Enable artificial damping for stall.
-        artificial_damping (dict): Artificial damping parameters.
-        is_with_simonet_artificial_viscosity (bool): Enable Simonet artificial viscosity.
-        _simonet_artificial_viscosity_fva (float): Simonet model parameter.
         is_with_artificial_viscosity (bool): Enable Li/Gaunaa spanwise artificial
             viscosity (TORQUE 2026) for post-stall stabilization in gamma_loop.
         artificial_viscosity_factor (float): Coefficient k in the viscosity scaling
@@ -62,12 +56,6 @@ class Solver:
         reference_point: np.ndarray | list | tuple | None = None,
         mu: float = 1.81e-5,
         rho: float = 1.225,
-        is_smooth_circulation: bool = False,
-        smoothness_factor: float = 0.08,
-        is_artificial_damping: bool = False,
-        artificial_damping: dict = {"k2": 0.1, "k4": 0.0},
-        is_with_simonet_artificial_viscosity: bool = False,
-        simonet_artificial_viscosity_fva: float = None,
         is_aoa_corrected: bool = False,
         is_with_artificial_viscosity: bool = False,
         artificial_viscosity_factor: float = 0.035,
@@ -98,12 +86,6 @@ class Solver:
                 Must be shape (3,). Defaults to [0, 0, 0].
             mu (float): Dynamic viscosity.
             rho (float): Fluid density.
-            is_smooth_circulation (bool): Apply circulation smoothing.
-            smoothness_factor (float): Smoothing factor.
-            is_artificial_damping (bool): Enable artificial damping.
-            artificial_damping (dict): Damping parameters.
-            is_with_simonet_artificial_viscosity (bool): Enable Simonet model.
-            simonet_artificial_viscosity_fva (float): Simonet parameter.
         """
         self.aerodynamic_model_type = aerodynamic_model_type
         self.max_iterations = int(max_iterations)
@@ -120,18 +102,9 @@ class Solver:
         self.mu = mu
         self.rho = rho
         # ===============================
-        #       STALL MODELS
+        #       STALL MODEL
         # ===============================
-        # === STALL: smooth_circulation ===
-        self.is_smooth_circulation = is_smooth_circulation
-        self.smoothness_factor = smoothness_factor
-        # === STALL: artificial damping ===
-        self.is_artificial_damping = is_artificial_damping
-        self.artificial_damping = artificial_damping
-        # === STALL: simonet_aritificial_viscosity ===
-        self.is_with_simonet_artificial_viscosity = is_with_simonet_artificial_viscosity
-        self._simonet_artificial_viscosity_fva = simonet_artificial_viscosity_fva
-        # === STALL: Li/Gaunaa spanwise artificial viscosity (TORQUE 2026) ===
+        # === Li/Gaunaa spanwise artificial viscosity (TORQUE 2026) ===
         # Parameter-free post-stall regularization; see gamma_loop.
         self.is_with_artificial_viscosity = is_with_artificial_viscosity
         self.artificial_viscosity_factor = artificial_viscosity_factor
@@ -372,37 +345,10 @@ class Solver:
                     )
 
         else:
-            # Instiate the stall_solvers class
-            import VSM.StallSolvers as StallSolvers
-
-            stall_solvers = StallSolvers.StallSolvers(self)
-
-            if self.gamma_loop_type == "simonet_stall":
-                converged, gamma_new, alpha_array, Umag_array = (
-                    stall_solvers.gamma_loop_simonet_stall(gamma_initial)
-                )
-                # run again with half the relaxation factor if not converged
-                if not converged:
-                    logging.info(
-                        f" ---> Running again with half the relaxation_factor = {self.relaxation_factor / 2}"
-                    )
-                    converged, gamma_new, alpha_array, Umag_array = (
-                        stall_solvers.gamma_loop_simonet_stall(
-                            gamma_initial, extra_relaxation_factor=0.5
-                        )
-                    )
-            elif self.gamma_loop_type == "non_linear_simonet_stall":
-                converged, gamma_new, alpha_array, Umag_array = (
-                    stall_solvers.gamma_loop_non_linear_simonet_stall(gamma_initial)
-                )
-            elif self.gamma_loop_type == "non_linear_simonet_stall_newton_raphson":
-                converged, gamma_new, alpha_array, Umag_array = (
-                    stall_solvers.gamma_loop_non_linear_simonet_stall_newton_raphson(
-                        gamma_initial
-                    )
-                )
-            else:
-                raise ValueError(f"Invalid gamma_loop_type")
+            raise ValueError(
+                f"Invalid gamma_loop_type {self.gamma_loop_type!r}; expected "
+                "'base', 'non_linear', 'casadi_newton' or 'anderson'."
+            )
         # Calculating results (incl. updating angle of attack for VSM)
         results = body_aero.compute_results(
             gamma_new,
