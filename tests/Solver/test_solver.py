@@ -733,8 +733,12 @@ def test_relaxation_factor_limit_matches_li2026_bound(body_aero):
         - np.interp(polar[:, 0] - d, polar[:, 0], polar[:, 1])
     ) / (2 * d)
     omega_max = 2.0 / (1.0 + 0.25 * n / aspect_ratio * slope.max())
-    np.testing.assert_allclose(solver.compute_relaxation_factor_limit(), omega_max, rtol=1e-12)
-    np.testing.assert_allclose(solver.relaxation_factor_used, 0.8 * omega_max, rtol=1e-12)
+    # VSM (3/4-chord control point): half the lifting-line bound; LLT: the bound.
+    np.testing.assert_allclose(solver.compute_relaxation_factor_limit(), 0.5 * omega_max, rtol=1e-12)
+    np.testing.assert_allclose(solver.relaxation_factor_used, 0.8 * 0.5 * omega_max, rtol=1e-12)
+    llt = Solver(aerodynamic_model_type="LLT")
+    llt.solve(body_aero)
+    np.testing.assert_allclose(llt.compute_relaxation_factor_limit(), omega_max, rtol=1e-12)
     assert 0.0 < solver.relaxation_factor_used <= 1.0
     # an explicit value is used verbatim
     explicit = Solver(relaxation_factor=0.02)

@@ -492,6 +492,13 @@ class Solver:
         the viscosity implicitly, for which order-one relaxation stays stable,
         so the attached-flow limit is used throughout.
 
+        The paper analyses a lifting line evaluated on the quarter chord (the
+        LLT model here, for which the bound is exact: measured omega_max /
+        bound = 1.00 on rectangular wings). The VSM control point at 3/4 chord
+        sees roughly twice the trailing-vortex induction, and the measured
+        ratio is 0.51-0.66, tending to 0.5 with spanwise refinement, so the
+        bound is halved for the VSM model.
+
         Returns:
             float: omega_max, clipped to [1e-3, 1.0].
         """
@@ -508,6 +515,8 @@ class Solver:
             if width > 0.0:
                 ratio = max(ratio, chord / width * max_slope)
         omega_max = 2.0 / (1.0 + 0.25 * ratio)
+        if self.aerodynamic_model_type == "VSM":
+            omega_max *= 0.5
         return float(np.clip(omega_max, 1e-3, 1.0))
 
     def _local_lift_slope(

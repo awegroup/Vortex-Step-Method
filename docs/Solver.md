@@ -40,8 +40,11 @@ Solver(
   Pirrung & Lønbæk (TORQUE 2026, Eq. 11), `omega_max = 2 / (1 + 1/4 max_i
   (c_i/dz_i) Cl'_i)`, evaluated per solve on the actual panels and polars
   (`Solver.compute_relaxation_factor_limit()`); the value used is stored in
-  `solver.relaxation_factor_used`. On the V3 kite this is ~0.06-0.1 and
-  converges in 3-4x fewer iterations than the old fixed 0.01.
+  `solver.relaxation_factor_used`. The bound is exact for LLT (quarter-chord
+  evaluation) and is halved for VSM, whose 3/4-chord control point sees about
+  twice the trailing-vortex induction (measured ratio 0.5-0.66). On the V3
+  kite with 50 panels this gives 0.026 (VSM) and converges in about half the
+  iterations of the old fixed 0.01; explicit values are used verbatim.
 
 ### Initial Conditions
 - **`gamma_initial_distribution_type`** (str): Initial circulation distribution

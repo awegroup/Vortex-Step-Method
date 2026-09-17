@@ -102,6 +102,7 @@ def test_casadi_newton_matches_base_attached(body_aero, with_viscosity):
     converged residual: at allowed_error 1e-8 base stops at a relaxed error
     of 1e-8, i.e. a true residual of 1e-6 relative to peak circulation."""
     base = Solver(
+        relaxation_factor=0.01,  # the ~1000-iteration reference of the docstring
         gamma_loop_type="base", allowed_error=1e-8, is_with_artificial_viscosity=with_viscosity
     )
     body_aero.va_initialize(Umag=10.0, angle_of_attack=5.0)
@@ -138,7 +139,9 @@ def test_casadi_newton_residual_is_tighter_than_base():
     out = {}
     for kind in ("base", "casadi_newton"):
         body.va_initialize(Umag=10.0, angle_of_attack=6.0)
-        solver = Solver(gamma_loop_type=kind, allowed_error=tol)
+        # explicit 0.01 so base's relaxed stopping rule is the 100x looser one
+        # this test asserts against (the default is the adaptive factor)
+        solver = Solver(gamma_loop_type=kind, allowed_error=tol, relaxation_factor=0.01)
         res = solver.solve(body)
         gamma = np.asarray(res["gamma_distribution"], dtype=float)
         residual = _numpy_residual(solver, gamma)
@@ -228,7 +231,11 @@ def test_casadi_newton_converges_where_relaxed_picard_cannot():
     either; the regularized loop converges there in a handful of steps.)"""
     body = _rectangular_body(10, _stalled_polar_data())
     body.va_initialize(Umag=10.0, angle_of_attack=18.0)
-    base = Solver(gamma_loop_type="base", allowed_error=1e-8, max_iterations=2000)
+    # explicit 0.01: with the adaptive default the relaxed loop happens to reach
+    # this post-stall root too, which is not the situation the test is about
+    base = Solver(
+        gamma_loop_type="base", allowed_error=1e-8, max_iterations=2000, relaxation_factor=0.01
+    )
     assert not base.solve(body)["gamma_converged"]
 
     body.va_initialize(Umag=10.0, angle_of_attack=18.0)
