@@ -747,3 +747,39 @@ def test_relaxation_factor_limit_matches_li2026_bound(body_aero):
     np.testing.assert_allclose(
         explicit.solve(body_aero)["gamma_distribution"], res["gamma_distribution"], rtol=1e-4
     )
+
+
+def _inviscid_wing(n_panels, sections):
+    alpha = np.radians(np.linspace(-25, 25, 101))
+    polar = np.column_stack((alpha, 2 * np.pi * alpha, 0 * alpha, 0 * alpha))
+    wing = Wing(n_panels=n_panels, spanwise_panel_distribution="uniform")
+    for le, te in sections:
+        wing.add_section(np.array(le, float), np.array(te, float), polar)
+    return BodyAerodynamics([wing])
+
+
+def test_trefftz_plane_drag_matches_on_blade_induced_drag_straight_wing():
+    """Inviscid straight wing: with quarter-chord force directions and the
+    attached-trailed force the on-blade induced drag equals the Trefftz-plane
+    drag (the far-wake reference that does not depend on where the forces are
+    evaluated on the blade), and both are close to the elliptic-loading
+    estimate L^2 / (q pi b^2)."""
+    n = 60
+    ys = np.linspace(-4.0, 4.0, n + 1)
+    body = _inviscid_wing(n, [([0, y, 0], [1, y, 0]) for y in ys])
+    body.va_initialize(20.0, 5.0, 0.0)
+    res = Solver(is_aoa_corrected=True, allowed_error=1e-8).solve(body)
+    trefftz = res["drag_induced_trefftz"]
+    np.testing.assert_allclose(res["drag"], trefftz, rtol=1e-3)
+    q = 0.5 * 1.225 * 20.0**2
+    np.testing.assert_allclose(trefftz, res["lift"] ** 2 / (q * np.pi * 8.0**2), rtol=2e-2)
+    # without the quarter-chord directions (LL-3/4) the on-blade drag is not the induced drag
+    res_34 = Solver(is_aoa_corrected=False, allowed_error=1e-8).solve(body)
+    assert abs(res_34["drag"] - trefftz) / trefftz > 0.1
+
+
+def test_trefftz_plane_drag_is_none_without_uniform_inflow():
+    body = _inviscid_wing(8, [([0, y, 0], [1, y, 0]) for y in np.linspace(-2, 2, 9)])
+    body.va_initialize(20.0, 5.0, 0.0, body_rates=np.array([0.0, 0.0, 0.1]))
+    res = Solver().solve(body)
+    assert res["drag_induced_trefftz"] is None

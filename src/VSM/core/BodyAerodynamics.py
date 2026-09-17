@@ -1099,6 +1099,54 @@ class BodyAerodynamics:
 
         return panel_cp_locations
 
+    def compute_trefftz_plane_induced_drag(self, gamma, rho):
+        """Induced drag from the Trefftz plane, for a steady translating wing in
+        a uniform inflow (Katz & Plotkin, Sec. 8.2). The wake filaments are
+        projected onto the plane perpendicular to the freestream, where each is
+        a 2D vortex of strength equal to the jump in bound circulation it
+        trails, and the drag is the Kutta-Joukowski force of half the far-wake
+        velocity on the wake trace carrying the bound circulation:
+
+            D = 1/2 rho sum_i Gamma_i ((V_T,i x l_i) . e_inf),
+
+        with l_i the trace segment of panel i between its two wake origins
+        (projected) and V_T,i the 2D velocity of all wake vortices at its
+        midpoint. This does not depend on where the forces are evaluated on
+        the blade, so it is the reference the on-blade induced drag
+        (quarter-chord directions plus the attached-trailed force) is checked
+        against. Returns None when the inflow is not one uniform vector
+        (per-panel distribution or body rates), where the argument does not
+        apply.
+        """
+        va = np.asarray(self._va, dtype=float)
+        if va.shape != (3,) or np.any(self._body_rates != 0.0):
+            return None
+        va_norm = np.linalg.norm(va)
+        if va_norm <= 0.0:
+            return None
+        e_inf = va / va_norm
+        panels = self.panels
+        gamma = np.asarray(gamma, dtype=float).ravel()
+        n = len(panels)
+        # wake origins, one per section boundary, with the circulation jump each
+        # trails (bound -> TE -> downstream sense, as the semi-infinite filaments)
+        origins = np.vstack(
+            [[p.TE_point_1 for p in panels], panels[-1].TE_point_2[None, :]]
+        ).astype(float)
+        d_gamma = np.concatenate(([gamma[0]], gamma[1:] - gamma[:-1], [-gamma[-1]]))
+        q = origins - np.outer(origins @ e_inf, e_inf)  # projected onto the plane
+        drag = 0.0
+        for i in range(n):
+            mid = 0.5 * (q[i] + q[i + 1])
+            d = mid - q
+            r2 = np.sum(d * d, axis=1)
+            v_t = np.sum(
+                (d_gamma / (2.0 * np.pi * r2))[:, None] * np.cross(e_inf, d), axis=0
+            )
+            # trace segment in the sense of the bound vortex (section i+1 -> i)
+            drag += gamma[i] * np.dot(np.cross(v_t, q[i] - q[i + 1]), e_inf)
+        return 0.5 * rho * drag
+
     def compute_attached_trailed_vortex_forces(
         self, gamma, rho, core_radius_fraction, va_array
     ):
@@ -1662,6 +1710,9 @@ class BodyAerodynamics:
         results_dict.update([("Mz", mz_global_3D_sum)])
         results_dict.update([("lift", lift_wing_3D_sum)])
         results_dict.update([("drag", drag_wing_3D_sum)])
+        results_dict.update(
+            [("drag_induced_trefftz", self.compute_trefftz_plane_induced_drag(gamma_new, rho))]
+        )
         results_dict.update([("side", side_wing_3D_sum)])
         results_dict.update([("cl", lift_wing_3D_sum / (q_ref * projected_area))])
         results_dict.update([("cd", drag_wing_3D_sum / (q_ref * projected_area))])

@@ -249,6 +249,14 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
   ones. Reported per section boundary in `F_attached_trailed_distribution` and
   folded into `F_distribution` and the totals.
 
+Every solve of a wing in one uniform inflow also reports
+`results["drag_induced_trefftz"]`, the Trefftz-plane induced drag
+(`BodyAerodynamics.compute_trefftz_plane_induced_drag`): the far-wake value
+that does not depend on where the forces are evaluated on the blade. With
+quarter-chord directions and the attached-trailed force the on-blade drag of
+an inviscid straight wing matches it to four digits; with 3/4-chord
+directions it does not. It is `None` for per-panel inflow or body rates.
+
 Effect on the TUDELFT V3 kite polars (CAD geometry, CFD+NeuralFoil polars,
 50 panels) against RANS and wind-tunnel data: the dashed line is the solver
 before these changes, the blue line the consistent implementation with 3/4-
