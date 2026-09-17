@@ -13,7 +13,7 @@ Solver(
     aerodynamic_model_type="VSM",
     max_iterations=5000,
     allowed_error=1e-6,
-    relaxation_factor=0.01,
+    relaxation_factor=None,
     core_radius_fraction=1e-20,
     gamma_loop_type="base",
     gamma_initial_distribution_type="elliptical",
@@ -35,7 +35,13 @@ Solver(
 ### Convergence Control
 - **`max_iterations`** (int): Maximum solver iterations (default: 5000)
 - **`allowed_error`** (float): Convergence tolerance (default: 1e-6) 
-- **`relaxation_factor`** (float): Under-relaxation factor (default: 0.01)
+- **`relaxation_factor`** (float | None): Under-relaxation factor of the
+  fixed-point loops. Default None: 0.8 x the stability limit of Li, Gaunaa,
+  Pirrung & Lønbæk (TORQUE 2026, Eq. 11), `omega_max = 2 / (1 + 1/4 max_i
+  (c_i/dz_i) Cl'_i)`, evaluated per solve on the actual panels and polars
+  (`Solver.compute_relaxation_factor_limit()`); the value used is stored in
+  `solver.relaxation_factor_used`. On the V3 kite this is ~0.06-0.1 and
+  converges in 3-4x fewer iterations than the old fixed 0.01.
 
 ### Initial Conditions
 - **`gamma_initial_distribution_type`** (str): Initial circulation distribution

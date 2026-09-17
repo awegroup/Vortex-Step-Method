@@ -711,3 +711,35 @@ def test_artificial_viscosity_end_to_end_attached_identical_and_post_stall_smoot
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_relaxation_factor_limit_matches_li2026_bound(body_aero):
+    """Default relaxation: 0.8 x the fixed-point stability limit of Li,
+    Gaunaa, Pirrung & Lonbaek (TORQUE 2026, Eq. 11). On a uniform rectangular
+    wing c/dz = N/AR, so the per-panel form used by the solver reduces to the
+    paper's omega_max = 2 / (1 + N/(4 AR) max Cl')."""
+    body_aero.va_initialize(10.0, 5.0, 0.0)
+    solver = Solver()
+    res = solver.solve(body_aero)
+    assert res["gamma_converged"]
+    n = len(body_aero.panels)
+    span = 4.0
+    chord = 1.0
+    aspect_ratio = span / chord
+    d = np.deg2rad(0.5)
+    polar = np.asarray(body_aero.panels[0].panel_polar_data, dtype=float)
+    slope = (
+        np.interp(polar[:, 0] + d, polar[:, 0], polar[:, 1])
+        - np.interp(polar[:, 0] - d, polar[:, 0], polar[:, 1])
+    ) / (2 * d)
+    omega_max = 2.0 / (1.0 + 0.25 * n / aspect_ratio * slope.max())
+    np.testing.assert_allclose(solver.compute_relaxation_factor_limit(), omega_max, rtol=1e-12)
+    np.testing.assert_allclose(solver.relaxation_factor_used, 0.8 * omega_max, rtol=1e-12)
+    assert 0.0 < solver.relaxation_factor_used <= 1.0
+    # an explicit value is used verbatim
+    explicit = Solver(relaxation_factor=0.02)
+    explicit.solve(body_aero)
+    assert explicit.relaxation_factor_used == 0.02
+    np.testing.assert_allclose(
+        explicit.solve(body_aero)["gamma_distribution"], res["gamma_distribution"], rtol=1e-4
+    )

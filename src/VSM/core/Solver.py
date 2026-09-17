@@ -15,7 +15,11 @@ class Solver:
         aerodynamic_model_type (str): Aerodynamic model type ('VSM' or 'LLT').
         max_iterations (int): Maximum number of iterations for convergence.
         allowed_error (float): Convergence tolerance for normalized error.
-        relaxation_factor (float): Under-relaxation factor for stability.
+        relaxation_factor (float | None): Under-relaxation factor of the
+            fixed-point loops. None (default) picks it per solve from the
+            stability limit of Li, Gaunaa, Pirrung & Lønbæk (TORQUE 2026,
+            Eq. 11), see :meth:`compute_relaxation_factor_limit`; the value
+            used is stored in ``relaxation_factor_used``.
         core_radius_fraction (float): Vortex core radius fraction.
         gamma_loop_type (str): Iterative algorithm type.
         gamma_initial_distribution_type (str): Initial circulation distribution method.
@@ -55,7 +59,7 @@ class Solver:
         aerodynamic_model_type: str = "VSM",
         max_iterations: int = 5000,
         allowed_error: float = 1e-6,
-        relaxation_factor: float = 0.01,
+        relaxation_factor: float | None = None,
         core_radius_fraction: float = 0.05,  # Following Damiani et al. (2019) https://docs.nrel.gov/docs/fy19osti/72777.pdf
         gamma_loop_type: str = "base",
         gamma_initial_distribution_type: str = "zero",
@@ -85,7 +89,8 @@ class Solver:
             aerodynamic_model_type (str): Type of aerodynamic model ('VSM' or 'LLT').
             max_iterations (int): Maximum solver iterations.
             allowed_error (float): Convergence tolerance.
-            relaxation_factor (float): Under-relaxation factor.
+            relaxation_factor (float | None): Under-relaxation factor; None
+                selects 0.8 x the pre-stall stability limit per solve.
             core_radius_fraction (float): Vortex core radius fraction.
             gamma_loop_type (str): Iterative algorithm type.
             gamma_initial_distribution_type (str): Initial circulation distribution.
@@ -103,6 +108,7 @@ class Solver:
         self.max_iterations = int(max_iterations)
         self.allowed_error = allowed_error
         self.relaxation_factor = relaxation_factor
+        self.relaxation_factor_used = None  # resolved at the start of solve()
         self.core_radius_fraction = core_radius_fraction
         self.gamma_loop_type = gamma_loop_type
         self.gamma_initial_distribution_type = gamma_initial_distribution_type
@@ -279,6 +285,13 @@ class Solver:
             va_unit_array,
         )
 
+        # Relaxation factor of the fixed-point loops: user value, or the
+        # stability limit of Li et al. (2026) evaluated on this discretization.
+        if self.relaxation_factor is None:
+            self.relaxation_factor_used = 0.8 * self.compute_relaxation_factor_limit()
+        else:
+            self.relaxation_factor_used = float(self.relaxation_factor)
+
         if gamma_distribution is not None:
             gamma_initial = np.asarray(gamma_distribution, dtype=float)
             if gamma_initial.shape != (self.n_panels,):
@@ -306,7 +319,7 @@ class Solver:
             # run again with half the relaxation factor if not converged
             if not converged:
                 logging.info(
-                    f" ---> Running again with half the relaxation_factor = {self.relaxation_factor / 2}"
+                    f" ---> Running again with half the relaxation_factor = {self.relaxation_factor_used / 2}"
                 )
                 converged, gamma_new, alpha_array, Umag_array = self.gamma_loop(
                     gamma_initial, extra_relaxation_factor=0.5
@@ -461,6 +474,42 @@ class Solver:
         laplacian[n - 1, n - 2] = 4.0 / 3.0
         return laplacian
 
+    def compute_relaxation_factor_limit(self) -> float:
+        """Largest relaxation factor for which the fixed-point iteration
+        converges in attached flow, from the eigenvalue bound of Li, Gaunaa,
+        Pirrung & Lønbæk (TORQUE 2026), Eqs. 10-11:
+
+            lambda_max(J) <= 1 + (1/4) max_i (c_i / dz_i) Cl'_i,
+            omega_max = 2 / lambda_max(J).
+
+        Eq. 11 writes ``c/dz = N/AR`` for a uniformly spaced rectangular wing;
+        the per-panel ratio is used here so narrow tip panels of a cosine or
+        kite discretization tighten the limit as they should. ``Cl'_i`` is the
+        steepest positive lift slope of panel i's polar (0.5 deg central
+        differences, as in the artificial-viscosity coefficient), so the bound
+        holds at any attached angle of attack. The paper's post-stall limit
+        (Eq. 18) applies to the explicit viscosity scheme; this solver applies
+        the viscosity implicitly, for which order-one relaxation stays stable,
+        so the attached-flow limit is used throughout.
+
+        Returns:
+            float: omega_max, clipped to [1e-3, 1.0].
+        """
+        delta = np.deg2rad(0.5)
+        ratio = 0.0
+        for chord, width, panel in zip(self.chord_array, self.width_array, self.panels):
+            polar = np.asarray(panel.panel_polar_data, dtype=float)
+            alpha_grid, cl = polar[:, 0], polar[:, 1]
+            slope = (
+                np.interp(alpha_grid + delta, alpha_grid, cl)
+                - np.interp(alpha_grid - delta, alpha_grid, cl)
+            ) / (2.0 * delta)
+            max_slope = max(0.0, float(np.max(slope)))
+            if width > 0.0:
+                ratio = max(ratio, chord / width * max_slope)
+        omega_max = 2.0 / (1.0 + 0.25 * ratio)
+        return float(np.clip(omega_max, 1e-3, 1.0))
+
     def _local_lift_slope(
         self, alpha_array: np.ndarray, delta: float = np.deg2rad(0.5)
     ) -> np.ndarray:
@@ -551,7 +600,7 @@ class Solver:
         viscosity_ctx = self._build_viscosity_ctx()
         use_viscosity = viscosity_ctx is not None
 
-        relaxation = self.relaxation_factor * extra_relaxation_factor
+        relaxation = self.relaxation_factor_used * extra_relaxation_factor
         self.last_stagnated = False
         for i in range(self.max_iterations):
             gamma = gamma_new
@@ -834,7 +883,7 @@ class Solver:
         """
         m = max(1, int(self.anderson_depth))
         beta = float(self.anderson_beta)
-        w = self.relaxation_factor
+        w = self.relaxation_factor_used
         # Relative Tikhonov regularization of the depth-m least-squares problem:
         # damps the extrapolation when the residual-difference columns are
         # near-linearly-dependent, biasing toward the safe relaxed-Picard step
