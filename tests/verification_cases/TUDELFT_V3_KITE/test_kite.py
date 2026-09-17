@@ -108,9 +108,13 @@ def test_v3():
         is_plotting=False,
     )
 
-    assert np.allclose(CL_LLT, CL_LLT_new, atol=1e-2)
-    assert np.allclose(CD_LLT, CD_LLT_new, atol=1e-2)
-    assert np.allclose(CL_VSM, CL_VSM_new, atol=1e-2)
+    # The thesis code (old) uses Gamma = 0.5 Umag^2/Umagw c Cl, the raw section
+    # chord and no attached-trailed vortex force; the new solver follows
+    # Gaunaa, Li & Pirrung (TORQUE 2026), which moves CL by ~0.015 on the V3.
+    # (measured: CL +0.014, CD +0.012 at 8 deg, half of the CD from the AT force)
+    assert np.allclose(CL_LLT, CL_LLT_new, atol=2e-2)
+    assert np.allclose(CD_LLT, CD_LLT_new, atol=1.5e-2)
+    assert np.allclose(CL_VSM, CL_VSM_new, atol=2e-2)
     # assert np.allclose(CD_VSM, CD_VSM_new, atol=1e-3)
 
     # --- POLYNOMIAL CASE ---
@@ -137,9 +141,10 @@ def test_v3():
         case_params,
         is_plotting=False,
     )
-    assert np.allclose(CL_LLT, CL_LLT_new, atol=1e-2)
-    assert np.allclose(CD_LLT, CD_LLT_new, atol=1e-2)
-    assert np.allclose(CL_VSM, CL_VSM_new, atol=1e-2)
+    # same formulation change as above: ~0.016 in CL
+    assert np.allclose(CL_LLT, CL_LLT_new, atol=2e-2)
+    assert np.allclose(CD_LLT, CD_LLT_new, atol=1.5e-2)
+    assert np.allclose(CL_VSM, CL_VSM_new, atol=2e-2)
     # assert np.allclose(CD_VSM, CD_VSM_new, atol=1e-3)
 
     # comparing solution

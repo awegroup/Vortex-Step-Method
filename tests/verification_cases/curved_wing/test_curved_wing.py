@@ -103,9 +103,11 @@ def test_curved():
         case_params,
         is_plotting=False,
     )
-    # checking LTT old close to LLT new
-    assert np.allclose(CL_LLT, CL_LLT_new, atol=2e-2)
-    assert np.allclose(CD_LLT, CD_LLT_new, atol=2e-3)
+    # checking LTT old close to LLT new (the new solver uses the span-
+    # perpendicular chord/frame, Gamma = 0.5 |V_inner| c Cl and the attached-
+    # trailed vortex force of Gaunaa, Li & Pirrung 2026: ~0.02 in CL here)
+    assert np.allclose(CL_LLT, CL_LLT_new, atol=3e-2)
+    assert np.allclose(CD_LLT, CD_LLT_new, atol=5e-3)
 
     # checking VSMs to be close to one another
     assert np.allclose(CL_VSM, CL_VSM_new, atol=4e-2)

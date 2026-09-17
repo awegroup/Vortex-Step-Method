@@ -224,10 +224,43 @@ cl_array = [panel.compute_cl(alpha) for panel, alpha in zip(panels, alpha_array)
 
 ### Stall Modeling
 
+**`is_with_artificial_viscosity`** (default False) with **`artificial_viscosity_factor`**
+(0.035): the spanwise artificial viscosity of Li, Gaunaa, Pirrung & Lønbæk
+(TORQUE 2026), applied implicitly to the fixed-point target once any panel is
+past its positive or negative stall onset. Parameter free; the coefficient
+`mu_i = max(0, -k S Cl'_i / dz_i^2)` is the paper's Eq. 16 written for a
+non-uniform grid (the paper derives it for uniform rectangular wings).
+
+### Consistent lifting-line coupling (Gaunaa, Li & Pirrung, TORQUE 2026)
+
+- Panel frames are orthonormal and built on the bound-vortex axis; the chord
+  and the airfoil plane are taken perpendicular to the local span (CP1).
+- Force magnitudes use the 3/4-chord angle of attack (TAT2); with
+  **`is_aoa_corrected=True`** the lift and drag directions come from the flow
+  at the quarter chord (TAT3, the paper's LL-Gaunaa). The default False keeps
+  the 3/4-chord directions (the paper's LL-3/4, which underestimates induced
+  drag).
+- **`is_with_attached_trailed_vortex_force`** (default True): Kutta-Joukowski
+  force on the chordwise vortex legs between the bound vortex and the trailing
+  edge (Sec. 3 of the paper). Zero net effect on unswept wings, needed for swept
+  ones. Reported per section boundary in `F_attached_trailed_distribution` and
+  folded into `F_distribution` and the totals.
+
+Effect on the TUDELFT V3 kite polars (CAD geometry, CFD+NeuralFoil polars,
+50 panels) against RANS and wind-tunnel data: the dashed line is the solver
+before these changes, the blue line the consistent implementation with 3/4-
+chord directions, the red line with quarter-chord directions
+(`is_aoa_corrected=True`), dotted without the attached-trailed force.
+
+![V3 polars before and after the consistency fixes](consistency_fixes_V3_polars.png)
 
 ### Viscous Drag Correction
 
-**`is_with_viscous_drag_correction`**: Enable 3D viscous effects following Gaunaa et al. (2024)
+**`is_with_viscous_drag_correction`** (default False): the spanwise-flow
+correction of the friction force from Gaunaa, Sørensen & Li (2024), Eqs. 10 and
+11: a drag increment along the local inner flow and a spanwise friction force,
+both driven by the angle between the full relative velocity at the control
+point and the span-normal plane.
 
 ### Output Options
 
