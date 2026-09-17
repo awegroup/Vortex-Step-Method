@@ -671,20 +671,26 @@ class BodyAerodynamics:
             bound_1 = section["p1"] * (1 - ac) + section["p4"] * ac
             bound_2 = section["p2"] * (1 - ac) + section["p3"] * ac
 
-            ### Calculate the local reference frame, below are all unit_vectors
-            # NORMAL x_airf defined upwards from the chord-line, perpendicular to the panel
-            # used to be: p2 - p1
-            x_airf = jit_cross(VSMpoint - LLpoint, section["p1"] - section["p2"])
-            x_airf = x_airf / jit_norm(x_airf)
-
-            # TANGENTIAL y_airf defined parallel to the chord-line, from LE-to-TE
-            y_airf = VSMpoint - LLpoint
-            y_airf = y_airf / jit_norm(y_airf)
-
-            # SPAN z_airf along the LE, in plane (towards left tip, along span) from the airfoil perspective
-            # used to be bound_2 - bound_1
+            ### Calculate the local reference frame, below are all unit_vectors.
+            # The frame is orthonormal and built on the bound-vortex (quarter
+            # chord) axis, so the inner 2D section is the one perpendicular to
+            # the local span (Crossflow Principle, CP1 in Gaunaa, Li & Pirrung,
+            # TORQUE 2026). On swept panels the raw LE-to-TE chord direction
+            # is not perpendicular to the bound vortex; its spanwise component
+            # is removed here.
+            # SPAN z_airf along the bound vortex (towards left tip, along span)
             z_airf = bound_1 - bound_2
             z_airf = z_airf / jit_norm(z_airf)
+
+            # TANGENTIAL y_airf: chord-line direction LE-to-TE, projected
+            # perpendicular to the span
+            y_airf = VSMpoint - LLpoint
+            y_airf = y_airf - jit_dot(y_airf, z_airf) * z_airf
+            y_airf = y_airf / jit_norm(y_airf)
+
+            # NORMAL x_airf upwards from the chord-line, perpendicular to both
+            x_airf = jit_cross(y_airf, z_airf)
+            x_airf = x_airf / jit_norm(x_airf)
 
             # Appending
             aerodynamic_center_list.append(LLpoint)

@@ -59,12 +59,17 @@ class Panel:
         self._LE_point_1 = section_1.LE_point
         self._TE_point_2 = section_2.TE_point
         self._LE_point_2 = section_2.LE_point
-        self._chord = np.average(
-            [
-                jit_norm(self._TE_point_1 - self._LE_point_1),
-                jit_norm(self._TE_point_2 - self._LE_point_2),
-            ]
-        )
+        # Chord of the inner 2D section, measured perpendicular to the
+        # spanwise quarter-chord (bound vortex) line: the LE-to-TE vector of
+        # each section with its component along z_airf removed (Crossflow
+        # Principle, CP1 in Gaunaa, Li & Pirrung, TORQUE 2026). On unswept
+        # panels this is the plain LE-to-TE distance.
+        chords = []
+        for le, te in ((self._LE_point_1, self._TE_point_1), (self._LE_point_2, self._TE_point_2)):
+            c_vec = te - le
+            c_vec = c_vec - jit_dot(c_vec, z_airf) * z_airf
+            chords.append(jit_norm(c_vec))
+        self._chord = float(np.average(chords))
         self._va = None
         self._corner_points = np.array(
             [self._LE_point_1, self._TE_point_1, self._TE_point_2, self._LE_point_2]
