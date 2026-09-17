@@ -265,6 +265,19 @@ chord directions, the red line with quarter-chord directions
 
 ![V3 polars before and after the consistency fixes](consistency_fixes_V3_polars.png)
 
+More figures (frame, Trefftz check, attached-trailed force, relaxation,
+wake direction) with their descriptions are in [figures/README.md](figures/README.md).
+
+### Frozen wake direction
+
+Each ring's two semi-infinite wake filaments follow that panel's own apparent
+velocity (freestream plus the body-rate term, or the distributed inflow). In a
+uniform inflow this is the classical single straight wake along the freestream,
+so translating-flight results are unchanged; under yaw or roll rates the wake
+is now locally aligned instead of following one mean direction taken before
+the rotational term. The wake direction is a second-order effect for a
+translating wing (a per-panel local-flow wake changes the V3 lift by under 1%).
+
 ### Viscous Drag Correction
 
 **`is_with_viscous_drag_correction`** (default False): the spanwise-flow
