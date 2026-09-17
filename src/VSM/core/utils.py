@@ -242,6 +242,30 @@ def assemble_AIC_matrices(
     return AIC
 
 
+@jit(nopython=True, cache=True)
+def assemble_bound_vortex_AIC(eval_points, bound_point_1, bound_point_2, core_radius_fraction):
+    """Unit-circulation induced velocity of every panel's BOUND vortex alone at
+    every evaluation point, (3, N, N), with the panel's own bound vortex left
+    out (a straight segment induces nothing on its own line, and the quarter
+    chord point sits on it). Used to add the curved/swept bound-vortex
+    influence to a trailed-vortex-only AIC evaluated on the quarter chord.
+    """
+    n = eval_points.shape[0]
+    AIC = np.zeros((3, n, n))
+    for icp in range(n):
+        ep = eval_points[icp]
+        for jring in range(n):
+            if icp == jring:
+                continue
+            vel = _vel_bound_vortex(
+                bound_point_2[jring], bound_point_1[jring], ep, 1.0, core_radius_fraction
+            )
+            AIC[0, icp, jring] = vel[0]
+            AIC[1, icp, jring] = vel[1]
+            AIC[2, icp, jring] = vel[2]
+    return AIC
+
+
 def intersect_line_with_plane(x_cp, F_unit, plane_point, plane_normal):
     numerator = np.dot(plane_normal, (plane_point - x_cp))
     denominator = np.dot(plane_normal, F_unit)

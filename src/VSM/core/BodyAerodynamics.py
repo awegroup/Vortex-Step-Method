@@ -11,6 +11,7 @@ from VSM.core.utils import (
     intersect_line_with_plane,
     point_in_quad,
     assemble_AIC_matrices,
+    assemble_bound_vortex_AIC,
 )
 from . import jit_cross, jit_norm, jit_dot
 
@@ -1235,8 +1236,9 @@ class BodyAerodynamics:
             dir_lift_induced_va = jit_cross(dir_induced_va_airfoil, z_airf_span)
             dir_lift_induced_va = dir_lift_induced_va / jit_norm(dir_lift_induced_va)
             # drag is parallel/tangential to induced apparent wind speed
-            dir_drag_induced_va = jit_cross(spanwise_direction, dir_lift_induced_va)
-            dir_drag_induced_va = dir_drag_induced_va / jit_norm(dir_drag_induced_va)
+            # (TAT3: the local inner flow direction, which lies in the panel's
+            # span-perpendicular plane; the global span axis is NOT used here)
+            dir_drag_induced_va = dir_induced_va_airfoil
 
             ### Calculating the MAGNITUDE of the lift and drag
             # The VSM and LTT methods do NOT differ here, both use the uncorrected angle of attack
@@ -1810,12 +1812,33 @@ class BodyAerodynamics:
         Returns:
             None
         """
-        # The correction is done by calculating the alpha at the aerodynamic center,
-        # where as before the control_point was used in the VSM method
+        # The direction-defining flow is the undisturbed relative flow at the
+        # quarter chord (TAT3 in Gaunaa, Li & Pirrung, TORQUE 2026): freestream
+        # plus every trailed vortex plus the bound vortices of the OTHER
+        # panels (the curved/swept bound-vortex influence of Li et al. 2020).
+        # The LLT AIC drops all bound vortices, which is exact only for a
+        # straight lifting line; the other panels' bound segments are added
+        # back here. The panel's own straight bound segment induces nothing on
+        # its own quarter-chord point.
         aerodynamic_model_type = "LLT"
         AIC_x, AIC_y, AIC_z = self.compute_AIC_matrices(
             aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
         )
+        eval_points = np.ascontiguousarray(
+            [panel.aerodynamic_center for panel in self.panels], dtype=float
+        )
+        bound_point_1 = np.ascontiguousarray(
+            [panel.bound_point_1 for panel in self.panels], dtype=float
+        )
+        bound_point_2 = np.ascontiguousarray(
+            [panel.bound_point_2 for panel in self.panels], dtype=float
+        )
+        AIC_bound = assemble_bound_vortex_AIC(
+            eval_points, bound_point_1, bound_point_2, float(core_radius_fraction)
+        )
+        AIC_x = AIC_x + AIC_bound[0]
+        AIC_y = AIC_y + AIC_bound[1]
+        AIC_z = AIC_z + AIC_bound[2]
         induced_velocity_all = np.array(
             [
                 np.matmul(AIC_x, gamma),

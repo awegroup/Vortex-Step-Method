@@ -175,7 +175,8 @@ def test_compute_results():
     # Assert that the results are close
     np.testing.assert_allclose(cl_computed, CL_ref, rtol=1e-3)
     np.testing.assert_allclose(cd_computed, CD_ref, rtol=1e-3)
-    np.testing.assert_allclose(cs_computed, CS_ref, rtol=1e-3)
+    # symmetric wing at zero sideslip: the side force is zero up to round-off
+    np.testing.assert_allclose(cs_computed, CS_ref, rtol=1e-3, atol=1e-12)
     np.testing.assert_allclose(L_computed, Ltot_ref, rtol=1e-3)
     np.testing.assert_allclose(D_computed, Dtot_ref, rtol=1e-3)
 
