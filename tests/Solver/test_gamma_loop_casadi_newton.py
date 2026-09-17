@@ -47,7 +47,10 @@ def _numpy_residual(
             ]
         )
     gamma_raw = 0.5 * umag * cl * solver.chord_array
-    if ctx is None or not np.any(alpha > ctx["stall_angles"]):
+    if ctx is None or not (
+        np.any(alpha > ctx["stall_angles"])
+        or np.any(alpha < ctx["stall_angles_neg"])
+    ):
         return gamma - gamma_raw
     slope = solver._lift_slope_from_ctx(alpha, ctx)
     mu = np.maximum(
@@ -69,17 +72,18 @@ def _assembled_residual_and_jacobian(solver: Solver, gamma: np.ndarray):
     av = solver.is_with_artificial_viscosity
     laplacian = solver._build_spanwise_laplacian() if av else np.zeros((n, n))
     stall = solver._panel_stall_angles() if av else np.full(n, np.inf)
+    stall_neg = solver._panel_negative_stall_angles() if av else np.full(n, -np.inf)
     aic = (solver.AIC_x, solver.AIC_y, solver.AIC_z)
     v_rel = solver.va_array + np.column_stack([a @ gamma for a in aic])
     h, dh, mu = fn(
         v_rel,
-        solver.va_array,
         solver.x_airf_array,
         solver.y_airf_array,
         solver.z_airf_array,
         solver.chord_array,
         solver.width_array,
         stall,
+        stall_neg,
         laplacian @ gamma,
     )[:3]
     h = np.asarray(h, dtype=float).ravel()
@@ -324,9 +328,9 @@ def test_casadi_panel_function_polar_outputs_match_tables():
         aic = (solver.AIC_x, solver.AIC_y, solver.AIC_z)
         v_rel = solver.va_array + np.column_stack([a @ gamma for a in aic])
         out = fn(
-            v_rel, solver.va_array, solver.x_airf_array, solver.y_airf_array,
+            v_rel, solver.x_airf_array, solver.y_airf_array,
             solver.z_airf_array, solver.chord_array, solver.width_array,
-            np.full(n, np.inf), np.zeros(n),
+            np.full(n, np.inf), np.full(n, -np.inf), np.zeros(n),
         )
         alpha = np.asarray(out[3]).ravel()
         cl, cd, cm = (np.asarray(o).ravel() for o in out[7:10])

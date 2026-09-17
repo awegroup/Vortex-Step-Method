@@ -485,8 +485,24 @@ class Solver:
                     break
         return angles
 
-    # should add smooth circulation back
-    # could add dynamic relaxation back, although it didnt work
+    def _panel_negative_stall_angles(self) -> np.ndarray:
+        """Per-panel negative-stall onset AoA [rad]: the local Cl minimum in
+        the negative-Cl region closest to alpha = 0 (``-inf`` if none). Below
+        it the lift slope is negative again, so Eq. 16 of Li et al. (2026)
+        applies there too; this is the mirror gate of
+        :meth:`_panel_stall_angles`.
+        """
+        angles = np.full(self.n_panels, -np.inf)
+        for i, panel in enumerate(self.panels):
+            polar = np.asarray(panel.panel_polar_data, dtype=float)
+            alpha, cl = polar[:, 0], polar[:, 1]
+            neg = np.where(cl < 0)[0]
+            for k in neg[1:-1][::-1]:  # interior Cl trough nearest alpha = 0
+                if cl[k] < cl[k - 1] and cl[k] < cl[k + 1]:
+                    angles[i] = float(alpha[k])
+                    break
+        return angles
+
     def gamma_loop(
         self, gamma_initial: np.ndarray, extra_relaxation_factor: float = 1.0
     ) -> tuple:
@@ -640,6 +656,7 @@ class Solver:
         )
         return {
             "stall_angles": self._panel_stall_angles(),
+            "stall_angles_neg": self._panel_negative_stall_angles(),
             "planform_area": float(np.sum(self.width_array * self.chord_array)),
             "L_diag": np.diag(laplacian).copy(),
             "L_super": np.diag(laplacian, 1).copy(),
@@ -713,8 +730,9 @@ class Solver:
         that keeps attached-flow iterations as cheap as the unregularized loop.
         The system is tridiagonal, so the solve is banded, not dense.
         """
-        if viscosity_ctx is None or not np.any(
-            alpha_array > viscosity_ctx["stall_angles"]
+        if viscosity_ctx is None or not (
+            np.any(alpha_array > viscosity_ctx["stall_angles"])
+            or np.any(alpha_array < viscosity_ctx["stall_angles_neg"])
         ):
             return gamma_target
         lift_slope = self._lift_slope_from_ctx(alpha_array, viscosity_ctx)
@@ -993,13 +1011,13 @@ class Solver:
                 )
 
         v_rel = ca.MX.sym("v_rel", n, 3)
-        va = ca.MX.sym("va", n, 3)
         x_airf = ca.MX.sym("x_airf", n, 3)
         y_airf = ca.MX.sym("y_airf", n, 3)
         z_airf = ca.MX.sym("z_airf", n, 3)
         chord = ca.MX.sym("chord", n)
         width = ca.MX.sym("width", n)
         stall_angles = ca.MX.sym("stall_angles", n)
+        stall_angles_neg = ca.MX.sym("stall_angles_neg", n)
         l_gamma = ca.MX.sym("l_gamma", n)  # (L gamma), a parameter here
 
         shared_grid = all(
@@ -1083,7 +1101,14 @@ class Solver:
             # The gate is the ONE discontinuity of the residual (everything
             # else is continuous, piecewise linear); it is returned so the
             # step control can recognise a step that crosses it.
-            gate = ca.if_else(ca.mmax(alpha - stall_angles) > 0.0, 1.0, 0.0)
+            gate = ca.if_else(
+                ca.logic_or(
+                    ca.mmax(alpha - stall_angles) > 0.0,
+                    ca.mmax(stall_angles_neg - alpha) > 0.0,
+                ),
+                1.0,
+                0.0,
+            )
             mu = gate * ca.fmax(
                 0.0,
                 -self.artificial_viscosity_factor
@@ -1125,7 +1150,7 @@ class Solver:
 
         return ca.Function(
             "vsm_panel_residual",
-            [v_rel, va, x_airf, y_airf, z_airf, chord, width, stall_angles, l_gamma],
+            [v_rel, x_airf, y_airf, z_airf, chord, width, stall_angles, stall_angles_neg, l_gamma],
             [
                 h,
                 dh_dvrel,
@@ -1141,7 +1166,7 @@ class Solver:
                 averaged(cd_of),
                 averaged(cm_of),
             ],
-            ["v_rel", "va", "x_airf", "y_airf", "z_airf", "chord", "width", "stall_angles", "l_gamma"],
+            ["v_rel", "x_airf", "y_airf", "z_airf", "chord", "width", "stall_angles", "stall_angles_neg", "l_gamma"],
             ["h", "dh_dvrel", "mu", "alpha", "umag", "gate", "h_avg", "cl", "cd", "cm", "cl_avg", "cd_avg", "cm_avg"],
         )
 
@@ -1219,18 +1244,20 @@ class Solver:
         eye = np.eye(n)
         if self.is_with_artificial_viscosity:
             stall_angles = self._panel_stall_angles()
+            stall_angles_neg = self._panel_negative_stall_angles()
             laplacian = self._build_spanwise_laplacian()
         else:
             stall_angles = np.full(n, np.inf)
+            stall_angles_neg = np.full(n, -np.inf)
             laplacian = np.zeros((n, n))
         params = (
-            self.va_array,
             self.x_airf_array,
             self.y_airf_array,
             self.z_airf_array,
             self.chord_array,
             self.width_array,
             stall_angles,
+            stall_angles_neg,
         )
         aic = (self.AIC_x, self.AIC_y, self.AIC_z)
 
