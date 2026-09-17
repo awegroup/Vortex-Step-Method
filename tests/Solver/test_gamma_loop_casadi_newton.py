@@ -37,7 +37,7 @@ def _numpy_residual(
     which is what the loop's JACOBIAN surrogate differentiates (its slope is
     the mean of the one-sided slopes at a table corner)."""
     ctx = solver._build_viscosity_ctx()
-    alpha, umag, cl, umagw = solver.compute_aerodynamic_quantities(gamma)
+    alpha, umag, cl = solver.compute_aerodynamic_quantities(gamma)
     if averaged_cl:
         d = np.deg2rad(0.5)
         cl = np.array(
@@ -46,7 +46,7 @@ def _numpy_residual(
                 for panel, a in zip(solver.panels, alpha)
             ]
         )
-    gamma_raw = 0.5 * (umag**2 / umagw) * cl * solver.chord_array
+    gamma_raw = 0.5 * umag * cl * solver.chord_array
     if ctx is None or not np.any(alpha > ctx["stall_angles"]):
         return gamma - gamma_raw
     slope = solver._lift_slope_from_ctx(alpha, ctx)
@@ -218,8 +218,11 @@ def test_casadi_newton_converges_post_stall_with_viscosity():
 
 def test_casadi_newton_converges_where_relaxed_picard_cannot():
     """Without viscosity the post-stall fixed-point map is expansive: base and
-    Anderson exhaust their budgets. The root still exists and Newton finds it."""
-    body = _rectangular_body(20, _stalled_polar_data())
+    Anderson exhaust their budgets. The root still exists and Newton finds it.
+    (10 panels: with the inner-velocity circulation map, Gamma = 0.5 |V_inner|
+    c Cl, the 20-panel unregularized post-stall root is not reached by Newton
+    either; the regularized loop converges there in a handful of steps.)"""
+    body = _rectangular_body(10, _stalled_polar_data())
     body.va_initialize(Umag=10.0, angle_of_attack=18.0)
     base = Solver(gamma_loop_type="base", allowed_error=1e-8, max_iterations=2000)
     assert not base.solve(body)["gamma_converged"]

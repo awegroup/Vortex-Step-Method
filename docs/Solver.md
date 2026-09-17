@@ -138,10 +138,11 @@ Standard fixed-point iteration with under-relaxation.
 ```python
 for iteration in range(max_iterations):
     # 1. Compute aerodynamic quantities from current gamma
-    alpha_array, Umag_array, cl_array, Umagw_array = compute_aerodynamic_quantities(gamma)
+    alpha_array, Umag_array, cl_array = compute_aerodynamic_quantities(gamma)
     
-    # 2. Update circulation using Kutta-Joukowski theorem
-    gamma_new = 0.5 * ((Umag_array²) / Umagw_array) * cl_array * chord_array
+    # 2. Update circulation using Kutta-Joukowski with the inner velocity
+    #    (Gaunaa, Li & Pirrung, TORQUE 2026, Eq. 4): Gamma = 0.5 |V_inner| c Cl
+    gamma_new = 0.5 * Umag_array * cl_array * chord_array
     
     # 3. Apply under-relaxation
     gamma_new = (1 - relaxation_factor) * gamma + relaxation_factor * gamma_new
@@ -166,8 +167,8 @@ Robust nonlinear solver using SciPy optimization methods.
 Solves F(γ) = γ - γ_new(γ) = 0 where γ_new(γ) is computed from:
 ```python
 def compute_gamma_residual(gamma):
-    _, Umag_array, cl_array, Umagw_array = compute_aerodynamic_quantities(gamma)
-    gamma_new = 0.5 * ((Umag_array²) / Umagw_array) * cl_array * chord_array
+    _, Umag_array, cl_array = compute_aerodynamic_quantities(gamma)
+    gamma_new = 0.5 * Umag_array * cl_array * chord_array
     return gamma - gamma_new  # Residual
 ```
 
@@ -210,9 +211,8 @@ cl_array = [panel.compute_cl(alpha) for panel, alpha in zip(panels, alpha_array)
 
 **Returns:**
 - `alpha_array`: Effective angles of attack
-- `Umag_array`: Effective velocity magnitudes  
+- `Umag_array`: Span-perpendicular inner velocity magnitudes `|v_eff x z_airf|`
 - `cl_array`: Lift coefficients
-- `Umagw_array`: Reference velocity magnitudes
 
 ## Advanced Features
 

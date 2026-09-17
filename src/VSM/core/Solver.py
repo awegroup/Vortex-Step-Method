@@ -381,12 +381,31 @@ class Solver:
             gamma (np.ndarray): Circulation distribution (n x 1).
 
         Returns:
-            tuple: (alpha_array, Umag_array, cl_array, Umagw_array)
+            tuple: (alpha_array, Umag_array, cl_array)
                 - alpha_array (np.ndarray): Effective angles of attack.
-                - Umag_array (np.ndarray): Effective velocity magnitudes.
+                - Umag_array (np.ndarray): Span-perpendicular relative speed
+                  |v_eff x z_airf| (the inner 2D speed, Crossflow Principle).
                 - cl_array (np.ndarray): Lift coefficients.
-                - Umagw_array (np.ndarray): Reference velocity magnitudes.
         """
+        relative_velocity_array = self.compute_relative_velocity(gamma)
+        relative_velocity_crossz_array = jit_cross(
+            relative_velocity_array, self.z_airf_array
+        )  # v_eff x z
+        v_normal_array = np.sum(self.x_airf_array * relative_velocity_array, axis=1)
+        v_tangential_array = np.sum(self.y_airf_array * relative_velocity_array, axis=1)
+        alpha_array = np.arctan2(v_normal_array, v_tangential_array)  # alpha_eff
+        Umag_array = np.linalg.norm(
+            relative_velocity_crossz_array, axis=1
+        )  # |v_eff x z|
+        cl_array = np.array(
+            [panel.compute_cl(alpha) for panel, alpha in zip(self.panels, alpha_array)]
+        )  # cl(alpha_eff)
+        return alpha_array, Umag_array, cl_array
+
+    def compute_relative_velocity(self, gamma: np.ndarray) -> np.ndarray:
+        """Full 3D relative velocity at every control point, ``va + AIC gamma``
+        (the section's own 2D bound-vortex induction already removed by the
+        VSM AIC). Shape (n_panels, 3)."""
         induced_velocity_all = np.array(
             [
                 np.matmul(self.AIC_x, gamma),
@@ -394,24 +413,7 @@ class Solver:
                 np.matmul(self.AIC_z, gamma),
             ]
         ).T  # v_ind
-        relative_velocity_array = (
-            self.va_array + induced_velocity_all
-        )  # v_eff = v_inf + v_ind
-        relative_velocity_crossz_array = jit_cross(
-            relative_velocity_array, self.z_airf_array
-        )  # v_eff x z
-        Uinfcrossz_array = jit_cross(self.va_array, self.z_airf_array)
-        v_normal_array = np.sum(self.x_airf_array * relative_velocity_array, axis=1)
-        v_tangential_array = np.sum(self.y_airf_array * relative_velocity_array, axis=1)
-        alpha_array = np.arctan2(v_normal_array, v_tangential_array)  # alpha_eff
-        Umag_array = np.linalg.norm(
-            relative_velocity_crossz_array, axis=1
-        )  # |v_eff x z|
-        Umagw_array = np.linalg.norm(Uinfcrossz_array, axis=1)
-        cl_array = np.array(
-            [panel.compute_cl(alpha) for panel, alpha in zip(self.panels, alpha_array)]
-        )  # cl(alpha_eff)
-        return alpha_array, Umag_array, cl_array, Umagw_array
+        return self.va_array + induced_velocity_all
 
     def _build_spanwise_laplacian(self) -> np.ndarray:
         """Discrete spanwise Laplacian ``L`` with second-order tip closures.
@@ -520,12 +522,13 @@ class Solver:
         self.last_stagnated = False
         for i in range(self.max_iterations):
             gamma = gamma_new
-            alpha_array, Umag_array, cl_array, Umagw_array = (
-                self.compute_aerodynamic_quantities(gamma)
+            alpha_array, Umag_array, cl_array = self.compute_aerodynamic_quantities(
+                gamma
             )
-            gamma_target = (
-                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
-            )
+            # Kutta-Joukowski with the inner (span-perpendicular, induced)
+            # velocity: Gamma = 0.5 |V_inner| c Cl (Gaunaa, Li & Pirrung
+            # 2026, Eq. 4).
+            gamma_target = 0.5 * Umag_array * cl_array * self.chord_array
             if use_viscosity:
                 gamma_target = self._regularize_gamma_target(
                     gamma_target, alpha_array, viscosity_ctx
@@ -746,12 +749,10 @@ class Solver:
         TORQUE 2026) is folded into the target so ``base`` and ``anderson`` share
         the same regularized fixed point.
         """
-        alpha_array, Umag_array, cl_array, Umagw_array = (
-            self.compute_aerodynamic_quantities(gamma)
+        alpha_array, Umag_array, cl_array = self.compute_aerodynamic_quantities(
+            gamma
         )
-        gamma_target = (
-            0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
-        )
+        gamma_target = 0.5 * Umag_array * cl_array * self.chord_array
         gamma_target = self._regularize_gamma_target(
             gamma_target, alpha_array, viscosity_ctx
         )
@@ -1072,9 +1073,8 @@ class Solver:
         v_tangential = ca.sum2(y_airf * v_rel)
         alpha = ca.atan2(v_normal, v_tangential)
         umag = row_norm(cross_rows(v_rel, z_airf))
-        umagw = row_norm(cross_rows(va, z_airf))
         cl = cl_of(alpha)
-        gamma_raw = 0.5 * (umag**2 / umagw) * cl * chord
+        gamma_raw = 0.5 * umag * cl * chord  # Gaunaa, Li & Pirrung 2026, Eq. 4
 
         if self.is_with_artificial_viscosity:
             delta = np.deg2rad(0.5)
@@ -1116,7 +1116,7 @@ class Solver:
             return 0.5 * (lookup(alpha + delta_jac) + lookup(alpha - delta_jac))
 
         cl_averaged = averaged(cl_of)
-        h_for_jacobian = 0.5 * (umag**2 / umagw) * cl_averaged * chord + mu * l_gamma
+        h_for_jacobian = 0.5 * umag * cl_averaged * chord + mu * l_gamma
 
         # dh_i/dv_rel_i: h_i depends on row i of v_rel only, so three forward
         # sweeps seeded with the unit columns give the full (n x 3) derivative.
@@ -1407,12 +1407,8 @@ class Solver:
         """
 
         def compute_gamma_residual(gamma):
-            _, Umag_array, cl_array, Umagw_array = self.compute_aerodynamic_quantities(
-                gamma
-            )
-            gamma_new = (
-                0.5 * ((Umag_array**2) / Umagw_array) * cl_array * self.chord_array
-            )
+            _, Umag_array, cl_array = self.compute_aerodynamic_quantities(gamma)
+            gamma_new = 0.5 * Umag_array * cl_array * self.chord_array
             # Residual: difference between the computed and current gamma.
             F_val = gamma - gamma_new
             return F_val
@@ -1464,7 +1460,7 @@ class Solver:
                 gamma_initial,
             )
         if success:
-            alpha_array, Umag_array, cl_array, Umagw_array = (
+            alpha_array, Umag_array, cl_array = (
                 self.compute_aerodynamic_quantities(gamma_new)
             )
             return True, gamma_new, alpha_array, Umag_array
