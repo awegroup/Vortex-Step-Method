@@ -775,14 +775,7 @@ class BodyAerodynamics:
             "control_point" if aerodynamic_model_type == "VSM" else "aerodynamic_center"
         )
         evaluation_point_on_bound = aerodynamic_model_type == "LLT"
-        panel_areas = np.array([panel.chord * panel.width for panel in self.panels])
-        wake_velocity = self._compute_reference_velocity_from_distribution(
-            self._va, self.n_panels, panel_areas
-        )
-        wake_speed = jit_norm(wake_velocity)
-        if wake_speed <= 0.0:
-            raise ValueError("Wake reference speed must be positive.")
-        wake_unit = wake_velocity / wake_speed
+        wake_units, wake_speeds = self._wake_directions(va_norm_array, va_unit_array)
 
         # Assembled in one numba-compiled double loop (utils.assemble_AIC_matrices)
         # over packed filament geometry; per-filament kernels are jit ports of
@@ -810,13 +803,41 @@ class BodyAerodynamics:
             bound_point_2,
             TE_point_1,
             TE_point_2,
-            np.ascontiguousarray(wake_unit, dtype=float),
-            float(wake_speed),
+            wake_units,
+            wake_speeds,
             float(core_radius_fraction),
             evaluation_point_on_bound,
             aerodynamic_model_type == "VSM",
         )
         return AIC[0], AIC[1], AIC[2]
+
+    def _wake_directions(self, va_norm_array, va_unit_array):
+        """Per-panel direction and speed of the frozen wake: each ring's
+        semi-infinite filaments follow that panel's own apparent velocity
+        (freestream plus the body-rate term, or the distributed inflow), so a
+        rotating body or a spanwise-varying inflow gets a locally aligned wake.
+        In a uniform inflow every panel gets the same direction, the classical
+        straight wake along the freestream.
+        """
+        wake_speeds = np.ascontiguousarray(va_norm_array, dtype=float).ravel()
+        wake_units = np.ascontiguousarray(va_unit_array, dtype=float)
+        # a single speed and direction (the classical shared frozen wake) is
+        # broadcast to every ring
+        wake_units = wake_units.reshape(-1, 3)
+        if wake_speeds.size != self.n_panels and np.allclose(wake_speeds, wake_speeds[0]):
+            wake_speeds = np.full(self.n_panels, float(wake_speeds[0]))
+        if wake_units.shape[0] != self.n_panels and np.allclose(wake_units, wake_units[0]):
+            wake_units = np.ascontiguousarray(np.tile(wake_units[0], (self.n_panels, 1)))
+        if wake_speeds.shape != (self.n_panels,) or wake_units.shape != (
+            self.n_panels,
+            3,
+        ):
+            raise ValueError(
+                "va_norm_array must be (n_panels,) and va_unit_array (n_panels, 3)."
+            )
+        if np.any(wake_speeds <= 0.0):
+            raise ValueError("Wake reference speed must be positive on every panel.")
+        return wake_units, wake_speeds
 
     def _compute_AIC_matrices_reference(
         self, aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
@@ -833,14 +854,7 @@ class BodyAerodynamics:
             "control_point" if aerodynamic_model_type == "VSM" else "aerodynamic_center"
         )
         evaluation_point_on_bound = aerodynamic_model_type == "LLT"
-        panel_areas = np.array([panel.chord * panel.width for panel in self.panels])
-        wake_velocity = self._compute_reference_velocity_from_distribution(
-            self._va, self.n_panels, panel_areas
-        )
-        wake_speed = jit_norm(wake_velocity)
-        if wake_speed <= 0.0:
-            raise ValueError("Wake reference speed must be positive.")
-        wake_unit = wake_velocity / wake_speed
+        wake_units, wake_speeds = self._wake_directions(va_norm_array, va_unit_array)
 
         AIC = np.empty((3, self.n_panels, self.n_panels))
 
@@ -851,8 +865,8 @@ class BodyAerodynamics:
                     panel_jring.compute_velocity_induced_single_ring_semiinfinite(
                         ep,
                         evaluation_point_on_bound,
-                        wake_speed,
-                        wake_unit,
+                        wake_speeds[jring],
+                        wake_units[jring],
                         gamma=1,
                         core_radius_fraction=core_radius_fraction,
                     )
@@ -1199,12 +1213,10 @@ class BodyAerodynamics:
         va_boundary[1:] += va_array
         va_boundary[1:n] *= 0.5
 
-        panel_areas = np.array([p.chord * p.width for p in panels])
-        wake_velocity = self._compute_reference_velocity_from_distribution(
-            self._va, n, panel_areas
+        va_speeds = np.linalg.norm(va_array, axis=1)
+        wake_units, wake_speeds = self._wake_directions(
+            va_speeds, va_array / va_speeds[:, None]
         )
-        wake_speed = jit_norm(wake_velocity)
-        wake_unit = wake_velocity / wake_speed
         v_ind = induced_velocity_at_points(
             points,
             bound_point_1,
@@ -1212,8 +1224,8 @@ class BodyAerodynamics:
             TE_point_1,
             TE_point_2,
             gamma,
-            np.ascontiguousarray(wake_unit, dtype=float),
-            float(wake_speed),
+            wake_units,
+            wake_speeds,
             float(core_radius_fraction),
         )
         v_rel = va_boundary + v_ind

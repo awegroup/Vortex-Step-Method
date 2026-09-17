@@ -186,8 +186,8 @@ def assemble_AIC_matrices(
     bound_point_2,
     TE_point_1,
     TE_point_2,
-    wake_unit,
-    wake_speed,
+    wake_units,
+    wake_speeds,
     core_radius_fraction,
     evaluation_point_on_bound,
     subtract_bound_2D,
@@ -200,7 +200,11 @@ def assemble_AIC_matrices(
     Panel.compute_velocity_induced_single_ring_semiinfinite: bound filament
     runs bound_point_2 -> bound_point_1; legs run bound_point_1 -> TE_point_1
     and TE_point_2 -> bound_point_2; semi-infinite filaments start at
-    TE_point_1 (direction +1) and TE_point_2 (direction -1) along wake_unit.
+    TE_point_1 (direction +1) and TE_point_2 (direction -1) along the ring's
+    own wake direction wake_units[j] (the panel's apparent velocity, so a
+    rotating body or a distributed inflow gets a locally aligned frozen wake;
+    a uniform inflow gives one direction for all). wake_speeds[j] sets the
+    viscous-core radius of that ring's trailing filaments.
     ``evaluation_point_on_bound`` (LLT) zeroes the bound contribution;
     ``subtract_bound_2D`` (VSM) subtracts the 2D bound correction on the
     diagonal.
@@ -220,6 +224,8 @@ def assemble_AIC_matrices(
                     1.0,
                     core_radius_fraction,
                 )
+            wake_unit = wake_units[jring]
+            wake_speed = wake_speeds[jring]
             velocity_induced = velocity_induced + _vel_trailing_vortex(
                 bound_point_1[jring], TE_point_1[jring], ep, 1.0, wake_speed
             )
@@ -285,14 +291,14 @@ def induced_velocity_at_points(
     TE_point_1,
     TE_point_2,
     gamma,
-    wake_unit,
-    wake_speed,
+    wake_units,
+    wake_speeds,
     core_radius_fraction,
 ):
     """Velocity induced by the complete horseshoe system of every panel
     (bound + two chordwise legs + two semi-infinite wake filaments, same layout
-    as assemble_AIC_matrices) at M arbitrary points, for the circulation
-    distribution ``gamma``. Returns an (M, 3) array. A point lying on a
+    and per-ring wake directions as assemble_AIC_matrices) at M arbitrary
+    points, for the circulation distribution ``gamma``. Returns an (M, 3) array. A point lying on a
     filament gets no contribution from that filament (the kernels return zero
     on the line), so this can be evaluated on the attached trailed vortex
     legs themselves.
@@ -305,6 +311,8 @@ def induced_velocity_at_points(
         vel = np.zeros(3)
         for j in range(n):
             g = gamma[j]
+            wake_unit = wake_units[j]
+            wake_speed = wake_speeds[j]
             vel = vel + _vel_bound_vortex(
                 bound_point_2[j], bound_point_1[j], ep, g, core_radius_fraction
             )
