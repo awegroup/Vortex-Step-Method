@@ -12,9 +12,9 @@ changes; the current code cannot reproduce them.
 TUDELFT V3 kite, CAD geometry, CFD+NeuralFoil polars, 50 panels, 2.82 m/s,
 against RANS (Poland 2025, Vire 2022) and wind-tunnel data (Poland 2025).
 Dashed black: the solver before the changes. Blue: after the changes with the
-old 3/4-chord force directions. Red: with quarter-chord directions
-(`is_aoa_corrected=True`, the paper's LL-Gaunaa), dotted without the
-attached-trailed force. The quarter-chord variant sits on the RANS drag in the
+3/4-chord force directions (the old default). Red: with quarter-chord
+directions (`is_aoa_corrected=True`, the paper's LL-Gaunaa, now the default),
+dotted without the attached-trailed force. The quarter-chord variant sits on the RANS drag in the
 attached range and in sideslip; the 3/4-chord variants overshoot it. The
 wind tunnel carries bridle drag and a lower Reynolds number.
 

@@ -1271,7 +1271,11 @@ class BodyAerodynamics:
         drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
         moment = (cm_array * 0.5 * rho * Umag_array**2 * chord_array**2)[:, np.newaxis]
 
-        if is_aoa_corrected:
+        # Quarter-chord force directions (TAT3) apply to the VSM model, whose
+        # circulation loop evaluates at 3/4 chord. The LLT model already
+        # evaluates on the quarter chord without any bound-vortex influence
+        # (the paper's LL-1/4), so its loop angle is its direction angle.
+        if is_aoa_corrected and aerodynamic_model_type == "VSM":
             alpha_corrected = self.update_effective_angle_of_attack_if_VSM(
                 gamma_new,
                 core_radius_fraction,

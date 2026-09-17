@@ -19,6 +19,8 @@ Solver(
     gamma_initial_distribution_type="elliptical",
     is_only_f_and_gamma_output=False,
     is_with_viscous_drag_correction=False,
+    is_aoa_corrected=True,
+    is_with_attached_trailed_vortex_force=True,
     reference_point=[0, 0, 0],
     mu=1.81e-5,
     rho=1.225,
@@ -238,11 +240,13 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
 
 - Panel frames are orthonormal and built on the bound-vortex axis; the chord
   and the airfoil plane are taken perpendicular to the local span (CP1).
-- Force magnitudes use the 3/4-chord angle of attack (TAT2); with
-  **`is_aoa_corrected=True`** the lift and drag directions come from the flow
-  at the quarter chord (TAT3, the paper's LL-Gaunaa). The default False keeps
-  the 3/4-chord directions (the paper's LL-3/4, which underestimates induced
-  drag).
+- Force magnitudes use the 3/4-chord angle of attack (TAT2); the lift and
+  drag directions come from the flow at the quarter chord (TAT3, the paper's
+  LL-Gaunaa), **`is_aoa_corrected=True`**, now the default. False keeps the
+  3/4-chord directions (the paper's LL-3/4): those overestimate the induced
+  drag by 20-40% against the Trefftz plane (figure 03), but historically gave
+  a better match to the V3 wind-tunnel drag, for reasons not yet understood,
+  which is why it used to be the default.
 - **`is_with_attached_trailed_vortex_force`** (default True): Kutta-Joukowski
   force on the chordwise vortex legs between the bound vortex and the trailing
   edge (Sec. 3 of the paper). Zero net effect on unswept wings, needed for swept

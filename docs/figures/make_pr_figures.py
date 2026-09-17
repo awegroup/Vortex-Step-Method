@@ -87,8 +87,8 @@ def fig_polars():
         ("before (3/4c directions, old default)", np.array(before["alpha"]["aoa0"]), np.array(before["beta"]["aoa0"]), dict(color="k", ls="--")),
     ]
     for label, kw, st in (
-        ("after, 3/4c directions", dict(is_aoa_corrected=False), dict(color="tab:blue")),
-        ("after, 1/4c directions (LL-Gaunaa)", dict(is_aoa_corrected=True), dict(color="tab:red")),
+        ("after, 3/4c directions (old default)", dict(is_aoa_corrected=False), dict(color="tab:blue")),
+        ("after, 1/4c directions (LL-Gaunaa, new default)", dict(is_aoa_corrected=True), dict(color="tab:red")),
         ("after, 1/4c, no attached-trailed force", dict(is_aoa_corrected=True, is_with_attached_trailed_vortex_force=False), dict(color="tab:red", ls=":")),
     ):
         A, B = sweep(Solver(reference_point=REF_POINT, **kw))

@@ -27,8 +27,11 @@ class Solver:
         is_with_viscous_drag_correction (bool): Add the spanwise-flow viscous
             drag and spanwise friction force of Gaunaa, Sorensen & Li (2024).
         is_aoa_corrected (bool): Take the force directions from the flow at the
-            quarter chord (Gaunaa, Li & Pirrung 2026, TAT3). Default False keeps
-            the 3/4-chord directions (the LL-3/4 implementation of that paper).
+            quarter chord (Gaunaa, Li & Pirrung 2026, TAT3); default True. False
+            keeps the 3/4-chord directions (the LL-3/4 implementation of that
+            paper), which overestimate the induced drag by 20-40% against the
+            Trefftz plane yet happened to match wind-tunnel drag on the V3 kite
+            better, for reasons not understood.
         is_with_attached_trailed_vortex_force (bool): Add the Kutta-Joukowski
             force on the chordwise (attached trailed) vortex segments between the
             bound vortex and the trailing edge (Gaunaa, Li & Pirrung, TORQUE
@@ -68,7 +71,7 @@ class Solver:
         reference_point: np.ndarray | list | tuple | None = None,
         mu: float = 1.81e-5,
         rho: float = 1.225,
-        is_aoa_corrected: bool = False,
+        is_aoa_corrected: bool = True,
         is_with_attached_trailed_vortex_force: bool = True,
         is_with_artificial_viscosity: bool = False,
         artificial_viscosity_factor: float = 0.035,
@@ -96,7 +99,8 @@ class Solver:
             gamma_initial_distribution_type (str): Initial circulation distribution.
             is_only_f_and_gamma_output (bool): Return minimal output if True.
             is_with_viscous_drag_correction (bool): Enable viscous corrections.
-            is_aoa_corrected (bool): Quarter-chord force directions (TAT3).
+            is_aoa_corrected (bool): Quarter-chord force directions (TAT3),
+                default True.
             is_with_attached_trailed_vortex_force (bool): Include the force on
                 the chordwise attached trailed vortex segments.
             reference_point (array-like, optional): Reference point for moments.
