@@ -374,8 +374,7 @@ def fig_leg_variants():
     LE, TE, B, Lp = g3
     draw(ax, (LE[:8], TE[:8], B[:7], Lp[:7]), title="V3 left tip zoom: perpendicular legs fan inboard to the trailing edge"); ax.view_init(elev=20, azim=-35); ax.set_box_aspect((1.4, 1, 1.2))
     ax = fig.add_subplot(1, 3, 3)
-    draw(ax, systems(rect_wing(16, 8, 30.0)), proj=lambda X: X[:, :2], title="30 deg swept wing, streamwise ribs (top view):
-perpendicular legs cross neighbouring panels")
+    draw(ax, systems(rect_wing(16, 8, 30.0)), proj=lambda X: X[:, :2], title="30 deg swept wing, streamwise ribs (top view):\nperpendicular legs cross neighbouring panels")
     ax.set_aspect("equal"); ax.grid(alpha=0.3); ax.set_xlabel("x"); ax.set_ylabel("y"); ax.legend(fontsize=7, loc="lower right")
     fig.suptitle("Chordwise (attached-trailed) legs: along the input ribs (kept) versus perpendicular to the quarter-chord line (tried and rejected)")
     fig.tight_layout(); fig.savefig(OUT / "07_leg_variants_rejected.png", dpi=130); plt.close(fig)
