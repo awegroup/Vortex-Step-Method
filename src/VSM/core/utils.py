@@ -249,27 +249,133 @@ def assemble_AIC_matrices(
 
 
 @jit(nopython=True, cache=True)
-def assemble_bound_vortex_AIC(eval_points, bound_point_1, bound_point_2, core_radius_fraction):
-    """Unit-circulation induced velocity of every panel's BOUND vortex alone at
-    every evaluation point, (3, N, N), with the panel's own bound vortex left
-    out (a straight segment induces nothing on its own line, and the quarter
-    chord point sits on it). Used to add the curved/swept bound-vortex
-    influence to a trailed-vortex-only AIC evaluated on the quarter chord.
+def assemble_curved_bound_correction_AIC(
+    eval_points,
+    bound_point_1,
+    bound_point_2,
+    TE_point_1,
+    TE_point_2,
+    chord_dir,
+    chords,
+    va_norm,
+    ac_fraction,
+    core_radius_fraction,
+    strip_x,
+    strip_w,
+):
+    """Curvature, sweep and rib-skew correction to the quarter-chord (direction)
+    velocity, (3, N, N), to be ADDED to the trailed-vortex-only (LLT) AIC
+    evaluated on the quarter chord.
+
+    A lifting line evaluated on itself has a logarithmically singular
+    self-induction wherever it is curved (Li, Gaunaa, Pirrung, Ramos-Garcia &
+    Horcas 2020), so neither adding the other panels' bound segments at the
+    quarter chord (Phillips & Snyder) nor leaving them out converges with the
+    panel count on a curved or swept wing. Here, for every evaluation panel i,
+    the wing is UNROLLED onto the tangent line of panel i (nodes keep their
+    arc-length coordinate, legs perpendicular to the line in panel i's chord
+    direction), and the quarter-chord velocity is built as
+
+        V(1/4c) = LLT downwash of the unrolled wing
+                + [ actual vortex system - unrolled vortex system ],
+
+    where in the bracket the bound vorticity of every ring and the starting
+    points of its legs are spread along the chord with the thin-airfoil
+    distribution gamma(x) ~ sqrt((c - x)/x) (stations strip_x, weights strip_w;
+    strip nodes lie on each node's own leg line so the strip legs are collinear
+    with the actual legs). The first term is Prandtl's classical downwash, exact
+    for straight wings; the bracket is identically zero on a straight wing with
+    perpendicular legs and finite on curved ones, with the cut-off fixed at the
+    chord scale by the distribution itself (effective radius 0.15 c). This is the
+    discrete counterpart of the inner solution of curved lifting-line theory
+    (Guermond 1990) and shares its mechanism with the effective-lifting-line /
+    jointed-vortex method of Reid & Hunsaker (2020), without their two tuning
+    lengths. On-blade induced drag then matches the Trefftz plane within 1 % on
+    arc, swept and kite geometries independently of the panel count.
+
+    Since the LLT AIC already holds the actual legs and wake, the returned
+    matrix is (unrolled legs - actual legs) + (smeared actual - smeared
+    unrolled); the semi-infinite wake filaments cancel identically.
     """
     n = eval_points.shape[0]
-    AIC = np.zeros((3, n, n))
-    for icp in range(n):
-        ep = eval_points[icp]
-        for jring in range(n):
-            if icp == jring:
-                continue
-            vel = _vel_bound_vortex(
-                bound_point_2[jring], bound_point_1[jring], ep, 1.0, core_radius_fraction
+    n_strips = strip_x.shape[0]
+    A = np.zeros((3, n, n))
+    seg = bound_point_1 - bound_point_2
+    L = np.empty(n)
+    for j in range(n):
+        L[j] = np.linalg.norm(seg[j])
+    # Panel sequence direction relative to the filament direction bp2 -> bp1.
+    fwd = True
+    if n > 1:
+        fwd = np.linalg.norm(bound_point_1[0] - bound_point_2[1]) < np.linalg.norm(
+            bound_point_2[0] - bound_point_1[1]
+        )
+    sgn = 1.0 if fwd else -1.0
+    s_node = np.zeros(n + 1)
+    for j in range(n):
+        s_node[j + 1] = s_node[j] + L[j]
+    for i in range(n):
+        ep = eval_points[i]
+        t = seg[i] / L[i]
+        c_i = chord_dir[i]
+        s_P = 0.5 * (s_node[i] + s_node[i + 1])
+        U = va_norm[i]
+        for j in range(n):
+            ra = ep + sgn * (s_node[j] - s_P) * t
+            rb = ep + sgn * (s_node[j + 1] - s_P) * t
+            if fwd:
+                rb2 = ra
+                rb1 = rb
+            else:
+                rb2 = rb
+                rb1 = ra
+            leg = (1.0 - ac_fraction) * chords[j] * c_i
+            rte1 = rb1 + leg
+            rte2 = rb2 + leg
+            bp1 = bound_point_1[j]
+            bp2 = bound_point_2[j]
+            te1 = TE_point_1[j]
+            te2 = TE_point_2[j]
+            # unrolled legs (single filaments) minus actual legs (single filaments)
+            v = _vel_trailing_vortex(rb1, rte1, ep, 1.0, U) + _vel_trailing_vortex(
+                rte2, rb2, ep, 1.0, U
             )
-            AIC[0, icp, jring] = vel[0]
-            AIC[1, icp, jring] = vel[1]
-            AIC[2, icp, jring] = vel[2]
-    return AIC
+            v = v - _vel_trailing_vortex(bp1, te1, ep, 1.0, U) - _vel_trailing_vortex(
+                te2, bp2, ep, 1.0, U
+            )
+            # chordwise-spread actual system minus chordwise-spread unrolled system
+            for q in range(n_strips):
+                f = (strip_x[q] - ac_fraction) / (1.0 - ac_fraction)
+                w = strip_w[q]
+                n1 = bp1 + f * (te1 - bp1)
+                n2 = bp2 + f * (te2 - bp2)
+                u1 = rb1 + f * (rte1 - rb1)
+                u2 = rb2 + f * (rte2 - rb2)
+                v = v + w * (
+                    _vel_bound_vortex(n2, n1, ep, 1.0, core_radius_fraction)
+                    - _vel_bound_vortex(u2, u1, ep, 1.0, core_radius_fraction)
+                    + _vel_trailing_vortex(n1, te1, ep, 1.0, U)
+                    + _vel_trailing_vortex(te2, n2, ep, 1.0, U)
+                    - _vel_trailing_vortex(u1, rte1, ep, 1.0, U)
+                    - _vel_trailing_vortex(rte2, u2, ep, 1.0, U)
+                )
+            A[0, i, j] = v[0]
+            A[1, i, j] = v[1]
+            A[2, i, j] = v[2]
+    return A
+
+
+def thin_airfoil_strips(n_strips=24):
+    """Chordwise stations x/c and weights of the thin-airfoil bound vorticity
+    distribution gamma(x) ~ sqrt((c - x)/x), via x = c sin^2(phi) with phi at
+    the midpoints of n_strips equal intervals on (0, pi/2), so that
+    sqrt((c - x)/x) dx = 2 c cos^2(phi) dphi. The centroid of the weights is at
+    x/c = 1/4, so the far field of the spread vorticity equals that of the
+    single quarter-chord filament."""
+    phi = (np.arange(n_strips) + 0.5) * (np.pi / 2) / n_strips
+    x = np.sin(phi) ** 2
+    w = np.cos(phi) ** 2
+    return np.ascontiguousarray(x, dtype=float), np.ascontiguousarray(w / w.sum(), dtype=float)
 
 
 @jit(nopython=True, cache=True)

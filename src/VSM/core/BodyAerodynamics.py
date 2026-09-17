@@ -12,7 +12,8 @@ from VSM.core.utils import (
     point_in_quad,
     assemble_AIC_matrices,
     induced_velocity_at_points,
-    assemble_bound_vortex_AIC,
+    assemble_curved_bound_correction_AIC,
+    thin_airfoil_strips,
 )
 from . import jit_cross, jit_norm, jit_dot
 
@@ -1980,13 +1981,15 @@ class BodyAerodynamics:
             None
         """
         # The direction-defining flow is the undisturbed relative flow at the
-        # quarter chord (TAT3 in Gaunaa, Li & Pirrung, TORQUE 2026): freestream
-        # plus every trailed vortex plus the bound vortices of the OTHER
-        # panels (the curved/swept bound-vortex influence of Li et al. 2020).
-        # The LLT AIC drops all bound vortices, which is exact only for a
-        # straight lifting line; the other panels' bound segments are added
-        # back here. The panel's own straight bound segment induces nothing on
-        # its own quarter-chord point.
+        # quarter chord (TAT3 in Gaunaa, Li & Pirrung, TORQUE 2026). The LLT
+        # AIC holds the freestream-independent trailed system (legs + wake)
+        # evaluated on the quarter chord, which is Prandtl's exact downwash for
+        # a straight line but misses the influence of a curved or swept bound
+        # vortex. Evaluating the other panels' bound segments on the line itself
+        # is logarithmically singular (Li et al. 2020, "LL-P&S"), so the
+        # curvature/sweep/skew influence is added as the chord-regularised
+        # difference between the actual and the locally unrolled vortex
+        # systems; see assemble_curved_bound_correction_AIC.
         aerodynamic_model_type = "LLT"
         AIC_x, AIC_y, AIC_z = self.compute_AIC_matrices(
             aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
@@ -2000,12 +2003,31 @@ class BodyAerodynamics:
         bound_point_2 = np.ascontiguousarray(
             [panel.bound_point_2 for panel in self.panels], dtype=float
         )
-        AIC_bound = assemble_bound_vortex_AIC(
-            eval_points, bound_point_1, bound_point_2, float(core_radius_fraction)
+        TE_point_1 = np.ascontiguousarray(
+            [panel.TE_point_1 for panel in self.panels], dtype=float
         )
-        AIC_x = AIC_x + AIC_bound[0]
-        AIC_y = AIC_y + AIC_bound[1]
-        AIC_z = AIC_z + AIC_bound[2]
+        TE_point_2 = np.ascontiguousarray(
+            [panel.TE_point_2 for panel in self.panels], dtype=float
+        )
+        chords = np.ascontiguousarray([panel.chord for panel in self.panels], dtype=float)
+        strip_x, strip_w = thin_airfoil_strips()
+        AIC_corr = assemble_curved_bound_correction_AIC(
+            eval_points,
+            bound_point_1,
+            bound_point_2,
+            TE_point_1,
+            TE_point_2,
+            np.ascontiguousarray(y_airf_array, dtype=float),
+            chords,
+            np.ascontiguousarray(va_norm_array, dtype=float).ravel(),
+            float(self._aerodynamic_center_location),
+            float(core_radius_fraction),
+            strip_x,
+            strip_w,
+        )
+        AIC_x = AIC_x + AIC_corr[0]
+        AIC_y = AIC_y + AIC_corr[1]
+        AIC_z = AIC_z + AIC_corr[2]
         induced_velocity_all = np.array(
             [
                 np.matmul(AIC_x, gamma),

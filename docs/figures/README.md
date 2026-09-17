@@ -31,10 +31,12 @@ correction, old (a geometry-only number that never saw the flow) versus new
 ## 03 Trefftz-plane check
 Inviscid wings, on-blade induced drag divided by the Trefftz-plane induced
 drag on the same circulation (`results["drag_induced_trefftz"]`). Quarter-
-chord directions with the attached-trailed force reproduce the far-wake drag
-exactly on straight wings, within 2% on the elliptic wing, 6% low on the
-30 deg swept wing and 7-14% low on the V3. The 3/4-chord directions overshoot
-by 20-40%. Without the attached-trailed force the V3 is 11-28% low.
+chord directions with the attached-trailed force and the curved bound-vortex
+regularisation (figure 08) reproduce the far-wake drag exactly on straight
+wings, within 2% on the elliptic wing and the 30 deg swept wing, and within
+2% on the V3 at 5, 10 and 15 deg (before the regularisation the V3 was 7-14%
+low and drifting with the panel count). The 3/4-chord directions overshoot
+by 20-40%. Without the attached-trailed force the V3 is 5-13% low.
 
 ## 04 Attached-trailed vortex force on the V3
 Kutta-Joukowski force on the chordwise legs between the bound vortex and the
@@ -50,6 +52,31 @@ per-panel form), for VSM and LLT. Right: the measured stability limit (from
 the fixed-point Jacobian) over the paper's bound on rectangular wings: the
 bound is exact for LLT and about half for VSM, whose 3/4-chord control point
 sees twice the trailing-vortex induction; the solver halves it for VSM.
+
+## 08 Curved bound vortex at the quarter chord: problem and regularisation
+(a) On a spanwise-curved bound line the neighbouring segments induce a
+chordwise velocity at the panel's own quarter-chord point that grows as
+ln(span / panel width). (b) Arc wing, mid-span: that velocity from the
+polyline (grows by 0.05 m/s per doubling of the panel count) and from the
+chordwise-spread thin-airfoil sheet (finite, -0.186 m/s); the grey band is
+the value at which the on-blade induced drag equals the Trefftz plane.
+(c) Why it matters: the on-blade induced drag is rho Gamma (w cos a + u sin a),
+and w is only about 1 deg of induced angle, so u = 3% of U moves the drag by
+12%. (d) The thin-airfoil distribution used to spread the bound vorticity;
+effective cut-off 0.15 c. (e) The construction: classical downwash of the wing
+unrolled onto the local tangent line, plus the chord-regularised difference
+between the actual and the unrolled systems. (f) On-blade over Trefftz drag
+against panel count on the arc and the inviscid V3, before (dashed) and
+after (solid).
+
+## 09 V3 polars with the curved bound-vortex regularisation
+TUDELFT V3 kite, CAD geometry, 2D RANS Re 5e5 polars, 50 panels, 2.82 m/s.
+Grey dashed: the solver before this work (3/4-chord directions). Blue:
+quarter-chord directions with the other panels' bound segments evaluated on
+the line (log-singular). Red: with the regularisation. Lift is unchanged;
+drag rises by a fraction of the induced drag, most at high lift and in
+sideslip, onto the RANS values up to 10 deg. The wind-tunnel gap that remains
+is shared by RANS.
 
 ## 06 Wake direction under a yaw rate
 Top view of the wake origins with the old single wake direction (mean
