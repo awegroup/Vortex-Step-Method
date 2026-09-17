@@ -370,6 +370,7 @@ class Solver:
             self.is_with_viscous_drag_correction,
             self.reference_point,
             self.is_aoa_corrected,
+            relative_velocity_array=self.compute_relative_velocity(gamma_new),
         )
         results["gamma_converged"] = bool(converged)
         return results

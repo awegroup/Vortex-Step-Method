@@ -989,51 +989,46 @@ class BodyAerodynamics:
         )
         return None
 
-    def viscous_drag_correction(
-        self,
-        Umag,
-        chord,
-        dir_induced_va,
-        panel,  # your panel object
-        rho,
-        mu,
-        q_inf,
-    ):
-        """
-        Returns two 3D force vectors: (f_corr_drag, f_corr_span)
-        in the panel's true local drag- and spanwise- directions.
-        # this is following:
-        "A correction model for the effect of spanwise flow on the
-        viscous force contribution in BEM and Lifting Line methods"
-        Mac Gaunaa et al 2024 J. Phys.: Conf. Ser. 2767 022068
-        DOI: 10.1088/1742-6596/2767/2/022068
-        """
-        # 1) decompose into spanwise vs. normal components
-        v_par = Umag * np.dot(dir_induced_va, panel.z_airf)
-        v_perp = np.sqrt(max(0.0, Umag**2 - v_par**2))
+    @staticmethod
+    def viscous_drag_correction(v_rel, chord, dir_induced_va, z_airf, rho, mu):
+        """Spanwise-flow correction of the viscous (friction) force, per unit
+        span, following Gaunaa, Sorensen & Li 2024, J. Phys.: Conf. Ser. 2767
+        022068 (doi:10.1088/1742-6596/2767/2/022068), Eqs. 4, 10 and 11.
 
-        # 2) angle & Re
-        β = np.arctan2(v_par, v_perp)
+        Args:
+            v_rel: full 3D relative velocity at the section (freestream plus
+                induced), including its spanwise component.
+            chord: section chord (perpendicular to the span).
+            dir_induced_va: unit direction of the span-perpendicular inner
+                flow, i.e. the direction the profile drag acts along.
+            z_airf: unit spanwise axis of the panel.
+
+        Returns:
+            (f_corr_drag, f_corr_span): the drag increment along
+            ``dir_induced_va`` and the spanwise friction force along
+            ``z_airf`` (signed with the spanwise flow), both per unit span.
+        """
+        # beta: angle between the relative flow and the span-normal plane
+        v_par = np.dot(v_rel, z_airf)
+        v_perp = np.linalg.norm(v_rel - v_par * z_airf)
+        if v_perp <= 0.0:
+            return np.zeros(3), np.zeros(3)
+        beta = np.arctan2(v_par, v_perp)
+        cos_beta = np.cos(beta)
+
+        # reference Reynolds number and dynamic pressure on V_perp (Eq. 4)
         Re_ref = rho * v_perp * chord / mu
+        q_perp = 0.5 * rho * v_perp**2
+        f0 = 0.062 * Re_ref ** (-1.0 / 7.0)
 
-        # 3) nondim corrections (Eqns 10 & 11)
-        f0 = 0.062 * Re_ref ** (-1 / 7)
-        ΔCd = f0 * ((np.cos(β)) ** (-5 / 7) - 1.0)
-        C_para = f0 * np.tan(β) * (np.cos(β)) ** (-5 / 7)
+        # Eq. 10: increment of the profile drag coefficient
+        delta_cd = f0 * (cos_beta ** (-5.0 / 7.0) - 1.0)
+        # Eq. 11: spanwise friction force coefficient (sign of beta)
+        c_par = f0 * np.tan(beta) * cos_beta ** (-5.0 / 7.0)
 
-        # 4) dimensional magnitudes
-        extra_D = ΔCd * q_inf * chord
-        extra_S = C_para * q_inf * chord
-
-        # 5) build true‐direction vectors
-        #    — drag is _tangent_ to the panel, i.e. in the direction of the induced‐wind drag
-        dir_drag = np.cross(panel.z_airf, np.cross(panel.z_airf, dir_induced_va))
-        dir_drag = dir_drag / np.linalg.norm(dir_drag)
-
-        #    — spanwise is simply panel.z_airf
-        dir_span = panel.z_airf
-
-        return extra_D * dir_drag, extra_S * dir_span
+        f_corr_drag = delta_cd * q_perp * chord * dir_induced_va
+        f_corr_span = c_par * q_perp * chord * z_airf
+        return f_corr_drag, f_corr_span
 
     def compute_panel_center_of_pressures(
         self, results_dict, reference_point=[0, 0, 0]
@@ -1124,6 +1119,7 @@ class BodyAerodynamics:
         is_with_viscous_drag_correction,
         reference_point,
         is_aoa_corrected,
+        relative_velocity_array=None,
     ):
 
         cl_array, cd_array, cm_array = (
@@ -1287,38 +1283,29 @@ class BodyAerodynamics:
 
             ##################################
             if is_with_viscous_drag_correction:
+                # Full 3D relative velocity at the control point (the spanwise
+                # component is what the correction is about). Without it the
+                # correction degenerates to the freestream.
+                v_rel_i = (
+                    relative_velocity_array[i]
+                    if relative_velocity_array is not None
+                    else va_panel
+                )
                 f_corr_drag, f_corr_span = self.viscous_drag_correction(
-                    Umag=Umag_array[i],
+                    v_rel=v_rel_i,
                     chord=panel_chord,
-                    dir_induced_va=dir_induced_va_airfoil,  # needed to compute β
-                    panel=panel_i,  # needed for true span & drag dirs
+                    dir_induced_va=dir_induced_va_airfoil,
+                    z_airf=z_airf_span,
                     rho=rho,
                     mu=mu,
-                    q_inf=q_panel,
                 )
-                ftotal_induced_va += f_corr_drag + f_corr_span
+                f_corr = f_corr_drag + f_corr_span
+                ftotal_induced_va += f_corr
 
-                # Decompose corrections into the (D, L, S) basis
-                e_D = va_panel_unit
-                e_L = dir_lift_prescribed_va
-                e_S = dir_side
-
-                # project both correction vectors
-                dD = np.dot(f_corr_drag, e_D) + np.dot(f_corr_span, e_D)
-                dL = np.dot(f_corr_drag, e_L) + np.dot(f_corr_span, e_L)
-                dS = np.dot(f_corr_drag, e_S) + np.dot(f_corr_span, e_S)
-
-                # printing the delta's
-                print(f"\nPanel {i}")
-                print(
-                    f"Drag: {drag_prescribed_va:.3f}, Lift: {lift_prescribed_va:.3f}, Side: {side_prescribed_va:.3f}"
-                )
-                print(f"+Drag: {dD:.3f}, +Lift: {dL:.3f}, +Side: {dS:.3f}")
-
-                # add into your existing scalars
-                drag_prescribed_va += dD
-                lift_prescribed_va += dL
-                side_prescribed_va += dS
+                # Decompose the correction into the prescribed (D, L, S) basis
+                drag_prescribed_va += np.dot(f_corr, va_panel_unit)
+                lift_prescribed_va += np.dot(f_corr, dir_lift_prescribed_va)
+                side_prescribed_va += np.dot(f_corr, dir_side)
 
             # ----------------------------------
             ####################################
