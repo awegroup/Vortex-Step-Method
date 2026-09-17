@@ -266,6 +266,70 @@ def assemble_bound_vortex_AIC(eval_points, bound_point_1, bound_point_2, core_ra
     return AIC
 
 
+@jit(nopython=True, cache=True)
+def _on_segment_line(XV1, XV2, XVP):
+    """True if XVP lies on the line through XV1 and XV2 (to round-off)."""
+    r0 = XV2 - XV1
+    r1 = XVP - XV1
+    len0 = np.linalg.norm(r0)
+    if len0 == 0.0:
+        return True
+    return np.linalg.norm(np.cross(r1, r0)) <= 1e-10 * len0 * max(np.linalg.norm(r1), len0)
+
+
+@jit(nopython=True, cache=True)
+def induced_velocity_at_points(
+    points,
+    bound_point_1,
+    bound_point_2,
+    TE_point_1,
+    TE_point_2,
+    gamma,
+    wake_unit,
+    wake_speed,
+    core_radius_fraction,
+):
+    """Velocity induced by the complete horseshoe system of every panel
+    (bound + two chordwise legs + two semi-infinite wake filaments, same layout
+    as assemble_AIC_matrices) at M arbitrary points, for the circulation
+    distribution ``gamma``. Returns an (M, 3) array. A point lying on a
+    filament gets no contribution from that filament (the kernels return zero
+    on the line), so this can be evaluated on the attached trailed vortex
+    legs themselves.
+    """
+    m = points.shape[0]
+    n = bound_point_1.shape[0]
+    out = np.zeros((m, 3))
+    for ip in range(m):
+        ep = points[ip]
+        vel = np.zeros(3)
+        for j in range(n):
+            g = gamma[j]
+            vel = vel + _vel_bound_vortex(
+                bound_point_2[j], bound_point_1[j], ep, g, core_radius_fraction
+            )
+            # a straight filament induces nothing on its own line; skip the
+            # legs the point lies on (the kernel would divide by zero there)
+            if not _on_segment_line(bound_point_1[j], TE_point_1[j], ep):
+                vel = vel + _vel_trailing_vortex(
+                    bound_point_1[j], TE_point_1[j], ep, g, wake_speed
+                )
+            if not _on_segment_line(TE_point_2[j], bound_point_2[j], ep):
+                vel = vel + _vel_trailing_vortex(
+                    TE_point_2[j], bound_point_2[j], ep, g, wake_speed
+                )
+            vel = vel + _vel_semiinfinite(
+                TE_point_1[j], wake_unit, ep, g, wake_speed, 1.0
+            )
+            vel = vel + _vel_semiinfinite(
+                TE_point_2[j], wake_unit, ep, g, wake_speed, -1.0
+            )
+        out[ip, 0] = vel[0]
+        out[ip, 1] = vel[1]
+        out[ip, 2] = vel[2]
+    return out
+
+
 def intersect_line_with_plane(x_cp, F_unit, plane_point, plane_normal):
     numerator = np.dot(plane_normal, (plane_point - x_cp))
     denominator = np.dot(plane_normal, F_unit)

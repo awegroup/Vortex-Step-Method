@@ -20,7 +20,15 @@ class Solver:
         gamma_loop_type (str): Iterative algorithm type.
         gamma_initial_distribution_type (str): Initial circulation distribution method.
         is_only_f_and_gamma_output (bool): Return only forces and circulation if True.
-        is_with_viscous_drag_correction (bool): Enable viscous drag correction.
+        is_with_viscous_drag_correction (bool): Add the spanwise-flow viscous
+            drag and spanwise friction force of Gaunaa, Sorensen & Li (2024).
+        is_aoa_corrected (bool): Take the force directions from the flow at the
+            quarter chord (Gaunaa, Li & Pirrung 2026, TAT3). Default False keeps
+            the 3/4-chord directions (the LL-3/4 implementation of that paper).
+        is_with_attached_trailed_vortex_force (bool): Add the Kutta-Joukowski
+            force on the chordwise (attached trailed) vortex segments between the
+            bound vortex and the trailing edge (Gaunaa, Li & Pirrung, TORQUE
+            2026, Sec. 3). Default True; it matters for swept wings only.
         reference_point (np.ndarray): Reference point for moment calculations.
         mu (float): Dynamic viscosity of fluid.
         rho (float): Fluid density.
@@ -57,6 +65,7 @@ class Solver:
         mu: float = 1.81e-5,
         rho: float = 1.225,
         is_aoa_corrected: bool = False,
+        is_with_attached_trailed_vortex_force: bool = True,
         is_with_artificial_viscosity: bool = False,
         artificial_viscosity_factor: float = 0.035,
         anderson_depth: int = 5,
@@ -82,6 +91,9 @@ class Solver:
             gamma_initial_distribution_type (str): Initial circulation distribution.
             is_only_f_and_gamma_output (bool): Return minimal output if True.
             is_with_viscous_drag_correction (bool): Enable viscous corrections.
+            is_aoa_corrected (bool): Quarter-chord force directions (TAT3).
+            is_with_attached_trailed_vortex_force (bool): Include the force on
+                the chordwise attached trailed vortex segments.
             reference_point (array-like, optional): Reference point for moments.
                 Must be shape (3,). Defaults to [0, 0, 0].
             mu (float): Dynamic viscosity.
@@ -98,6 +110,9 @@ class Solver:
         self.is_with_viscous_drag_correction = is_with_viscous_drag_correction
         self.reference_point = self._check_and_force_shape(reference_point)
         self.is_aoa_corrected = is_aoa_corrected
+        self.is_with_attached_trailed_vortex_force = (
+            is_with_attached_trailed_vortex_force
+        )
         # === athmospheric properties ===
         self.mu = mu
         self.rho = rho
@@ -371,6 +386,7 @@ class Solver:
             self.reference_point,
             self.is_aoa_corrected,
             relative_velocity_array=self.compute_relative_velocity(gamma_new),
+            is_with_attached_trailed_vortex_force=self.is_with_attached_trailed_vortex_force,
         )
         results["gamma_converged"] = bool(converged)
         return results

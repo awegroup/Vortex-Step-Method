@@ -11,6 +11,7 @@ from VSM.core.utils import (
     intersect_line_with_plane,
     point_in_quad,
     assemble_AIC_matrices,
+    induced_velocity_at_points,
     assemble_bound_vortex_AIC,
 )
 from . import jit_cross, jit_norm, jit_dot
@@ -1098,6 +1099,79 @@ class BodyAerodynamics:
 
         return panel_cp_locations
 
+    def compute_attached_trailed_vortex_forces(
+        self, gamma, rho, core_radius_fraction, va_array
+    ):
+        """Kutta-Joukowski force on the attached trailed (AT) vortex segments,
+        the chordwise legs running from the bound vortex to the trailing edge
+        (Gaunaa, Li & Pirrung, TORQUE 2026, Sec. 3).
+
+        The two legs of neighbouring panels coincide on their shared section
+        boundary with opposite sense, so boundary ``j`` (``j = 0..n``) carries
+        the net circulation ``gamma_j - gamma_{j-1}`` in the bound-to-TE
+        direction (``gamma_{-1} = gamma_n = 0``). The force on boundary ``j``
+        is ``rho * Gamma_net_j * (V x l_j)`` with ``l_j`` the leg vector and
+        ``V`` the full 3D relative velocity at the section's 3/4-chord point
+        on that leg (the paper's choice: the point where the flow has no
+        component through the wing). For an unswept wing these forces are
+        spanwise and cancel; for swept wings they change lift and induced drag.
+
+        Returns:
+            (forces, points): ``(n+1, 3)`` force vectors and the points they act at.
+        """
+        panels = self.panels
+        n = len(panels)
+        gamma = np.asarray(gamma, dtype=float).ravel()
+        gamma_net = np.zeros(n + 1)
+        gamma_net[:n] += gamma  # leg bound_1 -> TE_1 of panel j sits on boundary j
+        gamma_net[1:] -= gamma  # leg TE_2 -> bound_2 of panel j sits on boundary j+1
+
+        bound_point_1 = np.ascontiguousarray(
+            [p.bound_point_1 for p in panels], dtype=float
+        )
+        bound_point_2 = np.ascontiguousarray(
+            [p.bound_point_2 for p in panels], dtype=float
+        )
+        TE_point_1 = np.ascontiguousarray([p.TE_point_1 for p in panels], dtype=float)
+        TE_point_2 = np.ascontiguousarray([p.TE_point_2 for p in panels], dtype=float)
+
+        bound = np.vstack([bound_point_1, bound_point_2[-1:]])
+        te = np.vstack([TE_point_1, TE_point_2[-1:]])
+        legs = te - bound
+        # 3/4-chord point of the section, on the leg (bound at ac, TE at 1)
+        ac = self._aerodynamic_center_location
+        cp = self._control_point_location
+        t = (cp - ac) / (1.0 - ac)
+        points = np.ascontiguousarray(bound + t * legs)
+
+        # inflow at a boundary: mean of the neighbouring panels' inflow
+        va_array = np.asarray(va_array, dtype=float)
+        va_boundary = np.zeros((n + 1, 3))
+        va_boundary[:n] += va_array
+        va_boundary[1:] += va_array
+        va_boundary[1:n] *= 0.5
+
+        panel_areas = np.array([p.chord * p.width for p in panels])
+        wake_velocity = self._compute_reference_velocity_from_distribution(
+            self._va, n, panel_areas
+        )
+        wake_speed = jit_norm(wake_velocity)
+        wake_unit = wake_velocity / wake_speed
+        v_ind = induced_velocity_at_points(
+            points,
+            bound_point_1,
+            bound_point_2,
+            TE_point_1,
+            TE_point_2,
+            gamma,
+            np.ascontiguousarray(wake_unit, dtype=float),
+            float(wake_speed),
+            float(core_radius_fraction),
+        )
+        v_rel = va_boundary + v_ind
+        forces = rho * gamma_net[:, None] * np.cross(v_rel, legs)
+        return forces, points
+
     def compute_results(
         self,
         gamma_new,
@@ -1120,6 +1194,7 @@ class BodyAerodynamics:
         reference_point,
         is_aoa_corrected,
         relative_velocity_array=None,
+        is_with_attached_trailed_vortex_force=False,
     ):
 
         cl_array, cd_array, cm_array = (
@@ -1432,6 +1507,43 @@ class BodyAerodynamics:
             mz_global_3D_list.append(M_ref_panel[2])
             m_global_3D_list.append(M_ref_panel)
 
+        ### Attached trailed (AT) vortex forces (Gaunaa, Li & Pirrung 2026, Sec. 3)
+        f_at_list = []
+        if is_with_attached_trailed_vortex_force:
+            f_at, p_at = self.compute_attached_trailed_vortex_forces(
+                gamma_new, rho, core_radius_fraction, va_array
+            )
+            n_p = len(panels)
+            for j in range(n_p + 1):
+                force_j = f_at[j]
+                moment_j = np.cross(p_at[j] - reference_point, force_j)
+                # split each boundary force over its two neighbouring panels
+                if j == 0:
+                    shares = [(0, 1.0)]
+                elif j == n_p:
+                    shares = [(n_p - 1, 1.0)]
+                else:
+                    shares = [(j - 1, 0.5), (j, 0.5)]
+                for i_p, w in shares:
+                    f_global_3D_list[i_p] = f_global_3D_list[i_p] + w * force_j
+                    fx_global_3D_list[i_p] += w * force_j[0]
+                    fy_global_3D_list[i_p] += w * force_j[1]
+                    fz_global_3D_list[i_p] += w * force_j[2]
+                    m_global_3D_list[i_p] = m_global_3D_list[i_p] + w * moment_j
+                    mx_global_3D_list[i_p] += w * moment_j[0]
+                    my_global_3D_list[i_p] += w * moment_j[1]
+                    mz_global_3D_list[i_p] += w * moment_j[2]
+                fx_global_3D_sum += force_j[0]
+                fy_global_3D_sum += force_j[1]
+                fz_global_3D_sum += force_j[2]
+                lift_wing_3D_sum += jit_dot(force_j, dir_lift_ref)
+                drag_wing_3D_sum += jit_dot(force_j, va_ref_unit)
+                side_wing_3D_sum += jit_dot(force_j, dir_side_ref)
+                mx_global_3D_sum += moment_j[0]
+                my_global_3D_sum += moment_j[1]
+                mz_global_3D_sum += moment_j[2]
+                f_at_list.append(force_j)
+
         if is_only_f_and_gamma_output:
             return {
                 "F_distribution": f_global_3D_list,
@@ -1568,6 +1680,7 @@ class BodyAerodynamics:
         results_dict.update([("cd_distribution", cd_prescribed_va_list)])
         results_dict.update([("cs_distribution", cs_prescribed_va_list)])
         results_dict.update([("F_distribution", f_global_3D_list)])
+        results_dict.update([("F_attached_trailed_distribution", f_at_list)])
         results_dict.update([("M_distribution", m_global_3D_list)])
         # Bridle-line loads exactly as charged above: one row per segment of
         # ``bridle_line_system``, each force paired with the midpoint it acts
