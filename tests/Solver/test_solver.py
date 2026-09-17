@@ -711,3 +711,75 @@ def test_artificial_viscosity_end_to_end_attached_identical_and_post_stall_smoot
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_relaxation_factor_limit_matches_li2026_bound(body_aero):
+    """Default relaxation: 0.8 x the fixed-point stability limit of Li,
+    Gaunaa, Pirrung & Lonbaek (TORQUE 2026, Eq. 11). On a uniform rectangular
+    wing c/dz = N/AR, so the per-panel form used by the solver reduces to the
+    paper's omega_max = 2 / (1 + N/(4 AR) max Cl')."""
+    body_aero.va_initialize(10.0, 5.0, 0.0)
+    solver = Solver()
+    res = solver.solve(body_aero)
+    assert res["gamma_converged"]
+    n = len(body_aero.panels)
+    span = 4.0
+    chord = 1.0
+    aspect_ratio = span / chord
+    d = np.deg2rad(0.5)
+    polar = np.asarray(body_aero.panels[0].panel_polar_data, dtype=float)
+    slope = (
+        np.interp(polar[:, 0] + d, polar[:, 0], polar[:, 1])
+        - np.interp(polar[:, 0] - d, polar[:, 0], polar[:, 1])
+    ) / (2 * d)
+    omega_max = 2.0 / (1.0 + 0.25 * n / aspect_ratio * slope.max())
+    # VSM (3/4-chord control point): half the lifting-line bound; LLT: the bound.
+    np.testing.assert_allclose(solver.compute_relaxation_factor_limit(), 0.5 * omega_max, rtol=1e-12)
+    np.testing.assert_allclose(solver.relaxation_factor_used, 0.8 * 0.5 * omega_max, rtol=1e-12)
+    llt = Solver(aerodynamic_model_type="LLT")
+    llt.solve(body_aero)
+    np.testing.assert_allclose(llt.compute_relaxation_factor_limit(), omega_max, rtol=1e-12)
+    assert 0.0 < solver.relaxation_factor_used <= 1.0
+    # an explicit value is used verbatim
+    explicit = Solver(relaxation_factor=0.02)
+    explicit.solve(body_aero)
+    assert explicit.relaxation_factor_used == 0.02
+    np.testing.assert_allclose(
+        explicit.solve(body_aero)["gamma_distribution"], res["gamma_distribution"], rtol=1e-4
+    )
+
+
+def _inviscid_wing(n_panels, sections):
+    alpha = np.radians(np.linspace(-25, 25, 101))
+    polar = np.column_stack((alpha, 2 * np.pi * alpha, 0 * alpha, 0 * alpha))
+    wing = Wing(n_panels=n_panels, spanwise_panel_distribution="uniform")
+    for le, te in sections:
+        wing.add_section(np.array(le, float), np.array(te, float), polar)
+    return BodyAerodynamics([wing])
+
+
+def test_trefftz_plane_drag_matches_on_blade_induced_drag_straight_wing():
+    """Inviscid straight wing: with quarter-chord force directions and the
+    attached-trailed force the on-blade induced drag equals the Trefftz-plane
+    drag (the far-wake reference that does not depend on where the forces are
+    evaluated on the blade), and both are close to the elliptic-loading
+    estimate L^2 / (q pi b^2)."""
+    n = 60
+    ys = np.linspace(-4.0, 4.0, n + 1)
+    body = _inviscid_wing(n, [([0, y, 0], [1, y, 0]) for y in ys])
+    body.va_initialize(20.0, 5.0, 0.0)
+    res = Solver(is_aoa_corrected=True, allowed_error=1e-8).solve(body)
+    trefftz = res["drag_induced_trefftz"]
+    np.testing.assert_allclose(res["drag"], trefftz, rtol=1e-3)
+    q = 0.5 * 1.225 * 20.0**2
+    np.testing.assert_allclose(trefftz, res["lift"] ** 2 / (q * np.pi * 8.0**2), rtol=2e-2)
+    # without the quarter-chord directions (LL-3/4) the on-blade drag is not the induced drag
+    res_34 = Solver(is_aoa_corrected=False, allowed_error=1e-8).solve(body)
+    assert abs(res_34["drag"] - trefftz) / trefftz > 0.1
+
+
+def test_trefftz_plane_drag_is_none_without_uniform_inflow():
+    body = _inviscid_wing(8, [([0, y, 0], [1, y, 0]) for y in np.linspace(-2, 2, 9)])
+    body.va_initialize(20.0, 5.0, 0.0, body_rates=np.array([0.0, 0.0, 0.1]))
+    res = Solver().solve(body)
+    assert res["drag_induced_trefftz"] is None

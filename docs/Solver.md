@@ -13,12 +13,14 @@ Solver(
     aerodynamic_model_type="VSM",
     max_iterations=5000,
     allowed_error=1e-6,
-    relaxation_factor=0.01,
+    relaxation_factor=None,
     core_radius_fraction=1e-20,
     gamma_loop_type="base",
     gamma_initial_distribution_type="elliptical",
     is_only_f_and_gamma_output=False,
     is_with_viscous_drag_correction=False,
+    is_aoa_corrected=True,
+    is_with_attached_trailed_vortex_force=True,
     reference_point=[0, 0, 0],
     mu=1.81e-5,
     rho=1.225,
@@ -35,7 +37,16 @@ Solver(
 ### Convergence Control
 - **`max_iterations`** (int): Maximum solver iterations (default: 5000)
 - **`allowed_error`** (float): Convergence tolerance (default: 1e-6) 
-- **`relaxation_factor`** (float): Under-relaxation factor (default: 0.01)
+- **`relaxation_factor`** (float | None): Under-relaxation factor of the
+  fixed-point loops. Default None: 0.8 x the stability limit of Li, Gaunaa,
+  Pirrung & Lønbæk (TORQUE 2026, Eq. 11), `omega_max = 2 / (1 + 1/4 max_i
+  (c_i/dz_i) Cl'_i)`, evaluated per solve on the actual panels and polars
+  (`Solver.compute_relaxation_factor_limit()`); the value used is stored in
+  `solver.relaxation_factor_used`. The bound is exact for LLT (quarter-chord
+  evaluation) and is halved for VSM, whose 3/4-chord control point sees about
+  twice the trailing-vortex induction (measured ratio 0.5-0.66). On the V3
+  kite with 50 panels this gives 0.026 (VSM) and converges in about half the
+  iterations of the old fixed 0.01; explicit values are used verbatim.
 
 ### Initial Conditions
 - **`gamma_initial_distribution_type`** (str): Initial circulation distribution
@@ -47,9 +58,20 @@ Solver(
 ### Solution Methods
 - **`gamma_loop_type`** (str): Iterative algorithm type
   - `"base"`: Standard fixed-point iteration with relaxation
+  - `"anderson"`: Anderson-accelerated relaxed fixed point (same fixed point,
+    ~10-25x fewer iterations in attached flow; can limit-cycle post-stall)
+  - `"casadi_newton"`: Newton on the circulation residual with an exact
+    CasADi Jacobian, globalised by pseudo-transient continuation. Same fixed
+    point as `base`; 3-10 iterations in attached flow (~100x fewer than
+    `base`), 5-10x faster wall clock per solve, converges post-stall where
+    `base`/`anderson` stall. Needs the optional `casadi` dependency
+    (`pip install Vortex-Step-Method[casadi]`). Knobs: `newton_max_iterations`
+    (200), `newton_pseudo_time_step` (0.03, the floor/restart pseudo step),
+    `newton_fallback_to_base` (True). NOTE its stopping rule is the UN-relaxed
+    residual `max|G(gamma) - gamma| / max|gamma| < allowed_error`, which is
+    `1/relaxation_factor` tighter than the base/anderson rule at the same
+    `allowed_error`.
   - `"non_linear"`: Robust nonlinear solvers (Broyden methods)
-  - `"simonet_stall"`: Stall modeling with Simonet approach
-  - `"non_linear_simonet_stall"`: Combined nonlinear + stall modeling
 
 ## Primary Method: solve()
 
@@ -127,10 +149,11 @@ Standard fixed-point iteration with under-relaxation.
 ```python
 for iteration in range(max_iterations):
     # 1. Compute aerodynamic quantities from current gamma
-    alpha_array, Umag_array, cl_array, Umagw_array = compute_aerodynamic_quantities(gamma)
+    alpha_array, Umag_array, cl_array = compute_aerodynamic_quantities(gamma)
     
-    # 2. Update circulation using Kutta-Joukowski theorem
-    gamma_new = 0.5 * ((Umag_array²) / Umagw_array) * cl_array * chord_array
+    # 2. Update circulation using Kutta-Joukowski with the inner velocity
+    #    (Gaunaa, Li & Pirrung, TORQUE 2026, Eq. 4): Gamma = 0.5 |V_inner| c Cl
+    gamma_new = 0.5 * Umag_array * cl_array * chord_array
     
     # 3. Apply under-relaxation
     gamma_new = (1 - relaxation_factor) * gamma + relaxation_factor * gamma_new
@@ -155,8 +178,8 @@ Robust nonlinear solver using SciPy optimization methods.
 Solves F(γ) = γ - γ_new(γ) = 0 where γ_new(γ) is computed from:
 ```python
 def compute_gamma_residual(gamma):
-    _, Umag_array, cl_array, Umagw_array = compute_aerodynamic_quantities(gamma)
-    gamma_new = 0.5 * ((Umag_array²) / Umagw_array) * cl_array * chord_array
+    _, Umag_array, cl_array = compute_aerodynamic_quantities(gamma)
+    gamma_new = 0.5 * Umag_array * cl_array * chord_array
     return gamma - gamma_new  # Residual
 ```
 
@@ -199,29 +222,73 @@ cl_array = [panel.compute_cl(alpha) for panel, alpha in zip(panels, alpha_array)
 
 **Returns:**
 - `alpha_array`: Effective angles of attack
-- `Umag_array`: Effective velocity magnitudes  
+- `Umag_array`: Span-perpendicular inner velocity magnitudes `|v_eff x z_airf|`
 - `cl_array`: Lift coefficients
-- `Umagw_array`: Reference velocity magnitudes
 
 ## Advanced Features
 
 ### Stall Modeling
 
-#### Smooth Circulation
-- **`is_smooth_circulation`**: Apply smoothing to circulation distribution
-- **`smoothness_factor`**: Smoothing strength parameter
+**`is_with_artificial_viscosity`** (default False) with **`artificial_viscosity_factor`**
+(0.035): the spanwise artificial viscosity of Li, Gaunaa, Pirrung & Lønbæk
+(TORQUE 2026), applied implicitly to the fixed-point target once any panel is
+past its positive or negative stall onset. Parameter free; the coefficient
+`mu_i = max(0, -k S Cl'_i / dz_i^2)` is the paper's Eq. 16 written for a
+non-uniform grid (the paper derives it for uniform rectangular wings).
 
-#### Artificial Damping  
-- **`is_artificial_damping`**: Enable artificial damping for stall
-- **`artificial_damping`**: Damping coefficients {"k2": 0.1, "k4": 0.0}
+### Consistent lifting-line coupling (Gaunaa, Li & Pirrung, TORQUE 2026)
 
-#### Simonet Artificial Viscosity
-- **`is_with_simonet_artificial_viscosity`**: Simonet stall model
-- **`simonet_artificial_viscosity_fva`**: Model parameter
+- Panel frames are orthonormal and built on the bound-vortex axis; the chord
+  and the airfoil plane are taken perpendicular to the local span (CP1).
+- Force magnitudes use the 3/4-chord angle of attack (TAT2); the lift and
+  drag directions come from the flow at the quarter chord (TAT3, the paper's
+  LL-Gaunaa), **`is_aoa_corrected=True`**, now the default. False keeps the
+  3/4-chord directions (the paper's LL-3/4): those overestimate the induced
+  drag by 20-40% against the Trefftz plane (figure 03), but historically gave
+  a better match to the V3 wind-tunnel drag, for reasons not yet understood,
+  which is why it used to be the default.
+- **`is_with_attached_trailed_vortex_force`** (default True): Kutta-Joukowski
+  force on the chordwise vortex legs between the bound vortex and the trailing
+  edge (Sec. 3 of the paper). Zero net effect on unswept wings, needed for swept
+  ones. Reported per section boundary in `F_attached_trailed_distribution` and
+  folded into `F_distribution` and the totals.
+
+Every solve of a wing in one uniform inflow also reports
+`results["drag_induced_trefftz"]`, the Trefftz-plane induced drag
+(`BodyAerodynamics.compute_trefftz_plane_induced_drag`): the far-wake value
+that does not depend on where the forces are evaluated on the blade. With
+quarter-chord directions and the attached-trailed force the on-blade drag of
+an inviscid straight wing matches it to four digits; with 3/4-chord
+directions it does not. It is `None` for per-panel inflow or body rates.
+
+Effect on the TUDELFT V3 kite polars (CAD geometry, CFD+NeuralFoil polars,
+50 panels) against RANS and wind-tunnel data: the dashed line is the solver
+before these changes, the blue line the consistent implementation with 3/4-
+chord directions, the red line with quarter-chord directions
+(`is_aoa_corrected=True`), dotted without the attached-trailed force.
+
+![V3 polars before and after the consistency fixes](consistency_fixes_V3_polars.png)
+
+More figures (frame, Trefftz check, attached-trailed force, relaxation,
+wake direction) with their descriptions are in [figures/README.md](figures/README.md).
+
+### Frozen wake direction
+
+Each ring's two semi-infinite wake filaments follow that panel's own apparent
+velocity (freestream plus the body-rate term, or the distributed inflow). In a
+uniform inflow this is the classical single straight wake along the freestream,
+so translating-flight results are unchanged; under yaw or roll rates the wake
+is now locally aligned instead of following one mean direction taken before
+the rotational term. The wake direction is a second-order effect for a
+translating wing (a per-panel local-flow wake changes the V3 lift by under 1%).
 
 ### Viscous Drag Correction
 
-**`is_with_viscous_drag_correction`**: Enable 3D viscous effects following Gaunaa et al. (2024)
+**`is_with_viscous_drag_correction`** (default False): the spanwise-flow
+correction of the friction force from Gaunaa, Sørensen & Li (2024), Eqs. 10 and
+11: a drag increment along the local inner flow and a spanwise friction force,
+both driven by the angle between the full relative velocity at the control
+point and the span-normal plane.
 
 ### Output Options
 
@@ -292,6 +359,13 @@ gamma_dist = results['gamma_distribution']
 
 ### Advanced Configuration
 ```python
+# Fast, robust circulation solve (exact-Jacobian Newton; needs casadi)
+solver = Solver(
+    gamma_loop_type="casadi_newton",
+    allowed_error=1e-8,
+    is_with_artificial_viscosity=True,
+)
+
 # High-accuracy nonlinear solver
 solver = Solver(
     aerodynamic_model_type="VSM",
@@ -301,13 +375,10 @@ solver = Solver(
     reference_point=[0.5, 0.0, 0.0]
 )
 
-# Stall modeling
+# Post-stall regularization (Li et al. 2026) and quarter-chord force directions
 stall_solver = Solver(
-    gamma_loop_type="simonet_stall",
-    is_smooth_circulation=True,
-    smoothness_factor=0.1,
-    is_artificial_damping=True,
-    artificial_damping={"k2": 0.15, "k4": 0.05}
+    is_with_artificial_viscosity=True,
+    is_aoa_corrected=True,
 )
 ```
 
@@ -327,7 +398,7 @@ results = [solver.solve(body_aero) for solver in solvers]
 
 ### Common Convergence Issues
 1. **Oscillating solutions**: Reduce relaxation_factor
-2. **Slow convergence**: Try nonlinear solver
+2. **Slow convergence**: Use `gamma_loop_type="casadi_newton"` (or `"anderson"`)
 3. **Divergence**: Check flow conditions and geometry
 
 ### Performance Issues  

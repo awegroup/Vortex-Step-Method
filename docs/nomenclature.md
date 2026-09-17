@@ -95,7 +95,7 @@
 
 ### Algorithm Types
 - **`aerodynamic_model_type`**: Analysis method ('VSM' for Vortex Step Method, 'LLT' for Lifting Line Theory)
-- **`gamma_loop_type`**: Iterative algorithm ('base', 'non_linear', 'simonet_stall')
+- **`gamma_loop_type`**: Iterative algorithm ('base', 'anderson', 'casadi_newton', 'non_linear')
 - **`gamma_initial_distribution_type`**: Initial circulation distribution ('elliptical', 'cosine', 'zero', 'previous')
 
 ### Stall Modeling

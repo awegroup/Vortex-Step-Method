@@ -186,8 +186,8 @@ def assemble_AIC_matrices(
     bound_point_2,
     TE_point_1,
     TE_point_2,
-    wake_unit,
-    wake_speed,
+    wake_units,
+    wake_speeds,
     core_radius_fraction,
     evaluation_point_on_bound,
     subtract_bound_2D,
@@ -200,7 +200,11 @@ def assemble_AIC_matrices(
     Panel.compute_velocity_induced_single_ring_semiinfinite: bound filament
     runs bound_point_2 -> bound_point_1; legs run bound_point_1 -> TE_point_1
     and TE_point_2 -> bound_point_2; semi-infinite filaments start at
-    TE_point_1 (direction +1) and TE_point_2 (direction -1) along wake_unit.
+    TE_point_1 (direction +1) and TE_point_2 (direction -1) along the ring's
+    own wake direction wake_units[j] (the panel's apparent velocity, so a
+    rotating body or a distributed inflow gets a locally aligned frozen wake;
+    a uniform inflow gives one direction for all). wake_speeds[j] sets the
+    viscous-core radius of that ring's trailing filaments.
     ``evaluation_point_on_bound`` (LLT) zeroes the bound contribution;
     ``subtract_bound_2D`` (VSM) subtracts the 2D bound correction on the
     diagonal.
@@ -220,6 +224,8 @@ def assemble_AIC_matrices(
                     1.0,
                     core_radius_fraction,
                 )
+            wake_unit = wake_units[jring]
+            wake_speed = wake_speeds[jring]
             velocity_induced = velocity_induced + _vel_trailing_vortex(
                 bound_point_1[jring], TE_point_1[jring], ep, 1.0, wake_speed
             )
@@ -240,6 +246,96 @@ def assemble_AIC_matrices(
             AIC[1, icp, jring] = velocity_induced[1]
             AIC[2, icp, jring] = velocity_induced[2]
     return AIC
+
+
+@jit(nopython=True, cache=True)
+def assemble_bound_vortex_AIC(eval_points, bound_point_1, bound_point_2, core_radius_fraction):
+    """Unit-circulation induced velocity of every panel's BOUND vortex alone at
+    every evaluation point, (3, N, N), with the panel's own bound vortex left
+    out (a straight segment induces nothing on its own line, and the quarter
+    chord point sits on it). Used to add the curved/swept bound-vortex
+    influence to a trailed-vortex-only AIC evaluated on the quarter chord.
+    """
+    n = eval_points.shape[0]
+    AIC = np.zeros((3, n, n))
+    for icp in range(n):
+        ep = eval_points[icp]
+        for jring in range(n):
+            if icp == jring:
+                continue
+            vel = _vel_bound_vortex(
+                bound_point_2[jring], bound_point_1[jring], ep, 1.0, core_radius_fraction
+            )
+            AIC[0, icp, jring] = vel[0]
+            AIC[1, icp, jring] = vel[1]
+            AIC[2, icp, jring] = vel[2]
+    return AIC
+
+
+@jit(nopython=True, cache=True)
+def _on_segment_line(XV1, XV2, XVP):
+    """True if XVP lies on the line through XV1 and XV2 (to round-off)."""
+    r0 = XV2 - XV1
+    r1 = XVP - XV1
+    len0 = np.linalg.norm(r0)
+    if len0 == 0.0:
+        return True
+    return np.linalg.norm(np.cross(r1, r0)) <= 1e-10 * len0 * max(np.linalg.norm(r1), len0)
+
+
+@jit(nopython=True, cache=True)
+def induced_velocity_at_points(
+    points,
+    bound_point_1,
+    bound_point_2,
+    TE_point_1,
+    TE_point_2,
+    gamma,
+    wake_units,
+    wake_speeds,
+    core_radius_fraction,
+):
+    """Velocity induced by the complete horseshoe system of every panel
+    (bound + two chordwise legs + two semi-infinite wake filaments, same layout
+    and per-ring wake directions as assemble_AIC_matrices) at M arbitrary
+    points, for the circulation distribution ``gamma``. Returns an (M, 3) array. A point lying on a
+    filament gets no contribution from that filament (the kernels return zero
+    on the line), so this can be evaluated on the attached trailed vortex
+    legs themselves.
+    """
+    m = points.shape[0]
+    n = bound_point_1.shape[0]
+    out = np.zeros((m, 3))
+    for ip in range(m):
+        ep = points[ip]
+        vel = np.zeros(3)
+        for j in range(n):
+            g = gamma[j]
+            wake_unit = wake_units[j]
+            wake_speed = wake_speeds[j]
+            vel = vel + _vel_bound_vortex(
+                bound_point_2[j], bound_point_1[j], ep, g, core_radius_fraction
+            )
+            # a straight filament induces nothing on its own line; skip the
+            # legs the point lies on (the kernel would divide by zero there)
+            if not _on_segment_line(bound_point_1[j], TE_point_1[j], ep):
+                vel = vel + _vel_trailing_vortex(
+                    bound_point_1[j], TE_point_1[j], ep, g, wake_speed
+                )
+            if not _on_segment_line(TE_point_2[j], bound_point_2[j], ep):
+                vel = vel + _vel_trailing_vortex(
+                    TE_point_2[j], bound_point_2[j], ep, g, wake_speed
+                )
+            vel = vel + _vel_semiinfinite(
+                TE_point_1[j], wake_unit, ep, g, wake_speed, 1.0
+            )
+            vel = vel + _vel_semiinfinite(
+                TE_point_2[j], wake_unit, ep, g, wake_speed, -1.0
+            )
+        out[ip, 0] = vel[0]
+        out[ip, 1] = vel[1]
+        out[ip, 2] = vel[2]
+    return out
 
 
 def intersect_line_with_plane(x_cp, F_unit, plane_point, plane_normal):

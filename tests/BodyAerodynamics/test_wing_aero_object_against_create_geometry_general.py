@@ -62,14 +62,25 @@ def creating_tests(wing_aero, coord, Uinf, model):
         assert np.allclose(
             evaluation_point, expected_controlpoints[i]["coordinates"], atol=1e-4
         )
-        assert np.allclose(panel.chord, expected_controlpoints[i]["chord"], atol=1e-4)
-        assert np.allclose(panel.x_airf, expected_controlpoints[i]["normal"], atol=1e-4)
-        assert np.allclose(
-            panel.y_airf, expected_controlpoints[i]["tangential"], atol=1e-4
+        # The thesis geometry takes the chord line and normal from the raw
+        # LE-to-TE direction; the panels now use the span-perpendicular
+        # section (Crossflow Principle): chord and tangential projected
+        # perpendicular to the bound vortex, normal = tangential x span.
+        # Identical on straight wings, different on the curved one.
+        z_exp = expected_controlpoints[i]["airf_coord"][:, 2]
+        t_raw = np.asarray(expected_controlpoints[i]["tangential"], dtype=float)
+        t_exp = t_raw - np.dot(t_raw, z_exp) * z_exp
+        t_exp = t_exp / np.linalg.norm(t_exp)
+        n_exp = np.cross(t_exp, z_exp)
+        chord_exp = expected_controlpoints[i]["chord"] * np.sqrt(
+            max(0.0, 1.0 - np.dot(t_raw, z_exp) ** 2)
         )
+        assert np.allclose(panel.chord, chord_exp, atol=1e-3)
+        assert np.allclose(panel.x_airf, n_exp, atol=1e-4)
+        assert np.allclose(panel.y_airf, t_exp, atol=1e-4)
         assert np.allclose(
             np.column_stack((panel.x_airf, panel.y_airf, panel.z_airf)),
-            expected_controlpoints[i]["airf_coord"],
+            np.column_stack((n_exp, t_exp, z_exp)),
             atol=1e-4,
         )
         if model == "VSM":
