@@ -96,3 +96,12 @@ inboard, and on a swept wing with streamwise ribs the legs cross neighbouring
 panels and their control points (NaN). Against RANS the V3 mean errors are
 0.020 in CL and 1.5% in CD with rib legs, 0.031 / 4.7% with fixed-length
 perpendicular legs and 0.057 / 9.4% with legs to the trailing edge.
+Repeated with the curved bound-vortex regularisation in place
+(`docs/validation/leg_direction_study.py`, results in the JSON next to it):
+against RANS the V3 mean errors are 0.020 / 3.0% with rib legs and
+0.031 / 3.8% with perpendicular legs (the 13 deg point carries most of the
+drag error in both); on-blade over Trefftz induced drag is 1.01 with ribs
+and 1.04 with perpendicular legs on the V3, 1.015 against 1.025 on the
+swept-anhedral elliptic wing, identical on the arc, and the perpendicular
+legs still fail on the kinked swept wing. The ribs stay; the report
+`docs/validation/curved_bound_vortex_report.pdf` has the table.
