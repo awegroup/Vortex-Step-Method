@@ -68,38 +68,49 @@ INVISCID = np.column_stack((_a, 2 * np.pi * _a, 0 * _a, 0 * _a))
 # --------------------------------------------------------------------------
 # Geometries
 # --------------------------------------------------------------------------
-def straight(n, half_span=4.0, skew=0.0):
+def straight(n, half_span=4.0, skew=0.0, **body_kwargs):
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for y in np.linspace(-half_span, half_span, n + 1):
         wing.add_section(np.array([0.0, y, 0.0]), np.array([1.0, y + skew, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], **body_kwargs)
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
 
-def swept(n, sweep_deg=30.0, half_span=4.0):
+def swept(n, sweep_deg=30.0, half_span=4.0, **body_kwargs):
     """Kinked 30 deg sweep, sections (ribs) along the freestream x axis."""
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for y in np.linspace(-half_span, half_span, n + 1):
         x = abs(y) * np.tan(np.radians(sweep_deg))
         wing.add_section(np.array([x, y, 0.0]), np.array([x + 1.0, y, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], **body_kwargs)
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
 
-def arc(n, radius=4.0, half_angle_deg=55.0):
+def yawed(n, sweep_deg=30.0, half_span=4.0, **body_kwargs):
+    """Uniform 30 deg sweep without a kink (a yawed straight wing), ribs along x."""
+    wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
+    for y in np.linspace(-half_span, half_span, n + 1):
+        x = y * np.tan(np.radians(sweep_deg))
+        wing.add_section(np.array([x, y, 0.0]), np.array([x + 1.0, y, 0.0]), INVISCID)
+    body = BodyAerodynamics([wing], **body_kwargs)
+    body.va_initialize(20.0, 5.0, 0.0)
+    return body
+
+
+def arc(n, radius=4.0, half_angle_deg=55.0, **body_kwargs):
     """Circular arc in the y-z plane (kite-like), chord 1 along x."""
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for th in np.radians(np.linspace(-half_angle_deg, half_angle_deg, n + 1)):
         le = np.array([0.0, radius * np.sin(th), radius * np.cos(th)])
         wing.add_section(le, le + np.array([1.0, 0.0, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], **body_kwargs)
     body.va_initialize(10.0, 8.0, 0.0)
     return body
 
 
-def elliptic_swept_anhedral(n, aspect_ratio=8.0, sweep=0.10, anhedral=0.25):
+def elliptic_swept_anhedral(n, aspect_ratio=8.0, sweep=0.10, anhedral=0.25, **body_kwargs):
     """Elliptic chord, root chord 1, tip offsets of 10 % (back) and 25 % (down)
     of the semispan, parabolic; the TORQUE 2026 combined case."""
     s = aspect_ratio * (np.pi / 4) / 2
@@ -110,7 +121,7 @@ def elliptic_swept_anhedral(n, aspect_ratio=8.0, sweep=0.10, anhedral=0.25):
         x = sweep * s * eta**2
         z = -anhedral * s * eta**2
         wing.add_section(np.array([x, y, z]), np.array([x + c, y, z]), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], **body_kwargs)
     body.va_initialize(10.0, 10.0, 0.0)
     return body
 
@@ -118,14 +129,14 @@ def elliptic_swept_anhedral(n, aspect_ratio=8.0, sweep=0.10, anhedral=0.25):
 _V3 = None
 
 
-def v3_inviscid(n, alpha=10.0):
+def v3_inviscid(n, alpha=10.0, **body_kwargs):
     global _V3
     if _V3 is None:
         _V3 = yaml.safe_load(open(DATA / "CAD_derived_geometry" / "aero_geometry_CAD_CFD_NF_combined.yaml"))
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for row in _V3["wing_sections"]["data"]:
         wing.add_section(np.array(row[1:4], float), np.array(row[4:7], float), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], **body_kwargs)
     body.va_initialize(2.82, alpha, 0.0)
     return body
 

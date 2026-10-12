@@ -39,7 +39,7 @@ The \texttt{develop} branch (commits \texttt{233a238}\ldots\texttt{62c53af}) imp
 \textbf{Two elements do not follow the published prescription.}
 \begin{enumerate}[nosep]
   \item \emph{The curved bound-vortex influence on the direction velocity.} Reference~\cite{gaunaa2026} states that LL-Gaunaa includes ``the influence of the curved bound vortex'' according to~\cite{li2020}. In~\cite{li2020} (Section~2.2) that influence is the induction of the 3D bound vortex minus that of an infinitely long 2D vortex of the section's own strength, evaluated at the \emph{three-quarter} chord, assumed constant along the chord, and added to the quarter-chord velocity. \texttt{develop} instead evaluated the other panels' bound segments \emph{on the quarter-chord line itself} (commit \texttt{9c43c1a}), which~\cite{li2020} calls LL-P\&S and shows to be log-singular and non-convergent. This is the cause of the problem treated here (Section~\ref{sec:problem}). A literal implementation of the~\cite{li2020} recipe in this code was also tested and fails on straight wings (Section~\ref{sec:lit}); the 2026 paper and its online appendix~\cite{appendix2026} do not specify the quarter-chord term further, so the form used in the authors' code needs clarification with them. The branch replaces the term by the regularisation of Section~\ref{sec:fix}.
-  \item \emph{The direction of the attached-trailed legs.} Reference~\cite{gaunaa2026} aligns the bound part of the trailed vortex with the local chordwise direction, i.e.\ perpendicular to the quarter-chord line (CP1). The code keeps the legs along the section ribs; the panel frame, the chord and the three-quarter-chord control point do follow CP1. On the V3 the two directions differ by up to 0.77 in chord-to-span skew at the tips. Perpendicular legs were compared again with the regularisation of Section~\ref{sec:fix} in place (Section~\ref{sec:legs}): they cannot be built on a kinked planform (adjacent perpendiculars cross and the solve returns NaN), they lower the V3 lift by 6\,\% and worsen the comparison with RANS (mean $|\Delta C_L|$ 0.031 instead of 0.020), and with the attached-trailed force the on-blade induced drag sits 2.5--4\,\% above the Trefftz plane, whereas rib legs sit within 1.5\,\%. (The authors' own swept wings show a discrepancy of the same size but of the opposite sign: on-blade induced drag 1--5\,\% \emph{below} the Trefftz plane, Table~2 of~\cite{gaunaa2026} and the appendix~\cite{appendix2026}; their VLM reference is 3\,\% below as well.) The ribs are kept. This remains a documented deviation; the regularisation works with either leg direction.
+  \item \emph{The direction of the attached-trailed legs.} Reference~\cite{gaunaa2026} (Section~3) states that the framework ``does not indicate how the trailed vorticity should connect from the 1/4 chord junctions to the trailing edge'', that this ``is not specified by theoretical results'' and ``is effectively a modeling choice'', and aligns the legs ``with the local chordwise direction up to the trailing edge'', i.e.\ perpendicular to the quarter-chord line (CP1). The code's default keeps the legs along the input ribs; the paper's construction and a streamwise one are now available as options (\texttt{leg\_direction}), and the three were compared against a vortex-lattice referee (Section~\ref{sec:legs}, Figures~\ref{fig:legs} and~\ref{fig:referee}). The perpendicular legs lose 9\,\% of the lift on a kinked swept wing and 8\,\% on the V3, where they also cross at the tips above 80 panels; rib and streamwise legs reproduce the lifting-surface lift within 1\,\% on straight, yawed, kinked, arc and swept--anhedral elliptic wings (streamwise: 2\,\% low on the arc). The ribs are kept as the default. This is now a documented choice backed by a referee rather than an untested deviation.
 \end{enumerate}
 
 \section{Problem statement}
@@ -175,29 +175,76 @@ V3 kite, perpendicular legs & -- & -- & 1.042 & 1.038 & --\\
 
 Two residuals remain and are unrelated to the bound vortex: the swept wing converges to 0.99 rather than 1.00, and the straight wing with skewed ribs sits at 1.03 with or without the fix. Both point to the attached-trailed force on non-perpendicular legs and are a separate, smaller item. The 4\,\% excess with perpendicular legs on the V3 is likewise not caused by the bound-vortex term (it is the same with the bound segments on the line).
 
-\subsection{Rib versus perpendicular legs}
+\subsection{Direction of the attached-trailed legs}
 \label{sec:legs}
-The September choice of rib legs was made with the singular bound-on-line term. Table~\ref{tab:legs} repeats the comparison with eq.~\eqref{eq:fix} in place (\texttt{leg\_direction\_study.py}). Perpendicular legs are built per node from the mean span-perpendicular chord direction of the two adjacent panels, with length $(1-a)\bar c$ from the bound point; the control point, frame and chord are the CP1 ones in both cases.
+Theory fixes the inner 2D section (CP1: velocity, chord and angle of attack perpendicular to the quarter-chord line) but not the path of the attached-trailed vorticity from the bound vortex to the trailing edge; reference~\cite{gaunaa2026} calls it a modelling choice and takes the CP1 chord direction. Three constructions are implemented (\texttt{BodyAerodynamics(leg\_direction=...)}, Figure~\ref{fig:legs}):
+\begin{itemize}[nosep]
+  \item \texttt{rib} (default): along the interpolated input sections to their trailing-edge points, control point on the section at the control-point chord fraction. On a kite these are the ribs of the real wing; on the test wings they are drawn along the flow (swept wings), along the chord (arc) or deliberately skewed (straight wing).
+  \item \texttt{streamwise}: along the apparent velocity projected onto the local surface, up to the trailing-edge curve, rebuilt whenever the inflow is set; a Weissinger-type lattice.
+  \item \texttt{perpendicular}: the paper's choice. The tangent of the quarter-chord line is averaged over plus and minus one leg length, $(1-a)c$, before the perpendicular is taken, so that the legs fan out instead of crossing at a planform kink (Figure~\ref{fig:legs}b); the averaging length is the leg's own scale, not a free parameter. Legs that still cross raise an error.
+\end{itemize}
+In the last two the leg ends at the point of the trailing-edge curve closest to the leg's ray (a ray does not meet a polyline on a curved surface exactly), the curve being extended beyond its ends so that a leg leaving a skewed tip still ends on the trailing-edge line, and the control point moves with the legs so that it stays between the panel's own two legs (midway between parallel legs this is the paper's 3/4-chord point of the CP1 section; without this move the control points of a kinked wing land on neighbouring legs and the solve diverges). The curved bound-vortex regularisation of Section~\ref{sec:fix} and the AT force follow whichever legs are built.
+
+\begin{figure}[p]\centering
+\includegraphics[width=\textwidth]{10_leg_direction_geometry.png}
+\caption{The three leg constructions. Top views (flow downwards) and one side view, with the bound vortex (black), the aerodynamic centres (dots), the control points (crosses in the colour of their legs) and, in grey, the lattice of the vortex-lattice referee. (a) A straight wing whose ribs are drawn 22$^\circ$ skewed: rib legs follow the drawing, streamwise and perpendicular legs end on the trailing-edge line and give the straight-wing result. (b) The root of the kinked 30$^\circ$ swept wing: streamwise ribs against the perpendicular fan. (c) The swept--anhedral elliptic wing. (d) The arc wing from the side: streamwise legs climb along the nearly vertical tip at the angle of attack. (e, f) The V3: the ribs are nearly streamwise over the middle and skewed at the tips, where the perpendicular legs become long (up to $2.9\times$ the leg length at 80 panels) and end up to $1.6\,c$ inboard of the section's own trailing-edge point.}
+\label{fig:legs}
+\end{figure}
+
+\paragraph{Referee.} The Trefftz plane checks the induced drag of a given circulation but cannot judge the lift. The vortex-lattice method of AeroSandbox~\cite{aerosandbox} was therefore run on the same wings with flat-plate sections ($C_l=2\pi\alpha$, as in the VSM runs here), 16 chordwise by 80--160 spanwise panels, trailing legs along the body axis (\texttt{vlm\_referee.py}). For the non-planar wings its near-field drag is 8--14\,\% below the Trefftz drag of its own circulation, so the latter is used as the reference. For the V3 the referee is approximate: AeroSandbox takes its sections perpendicular to the local span, which unskews the tip ribs and moves the trailing edge there. Figure~\ref{fig:referee} and Table~\ref{tab:referee} give the result; Table~\ref{tab:legs3} the on-blade over Trefftz ratios and the V3 polars against RANS.
+
+\begin{figure}[p]\centering
+\includegraphics[width=\textwidth]{11_leg_direction_referee.png}
+\caption{Leg direction against the vortex-lattice referee and RANS. Top: strip circulation of the VLM and of the VSM with the three leg options on the kinked swept wing, the elliptic wing and the inviscid V3. Bottom left and middle: lift and on-blade induced drag of the VSM relative to the VLM. Bottom right: V3 viscous drag against RANS~\cite{poland2026} for the three options.}
+\label{fig:referee}
+\end{figure}
 
 \begin{table}[h]\centering\small
-\caption{Rib against perpendicular legs, attached-trailed (AT) force on and off, $N=80$. Top: on-blade over Trefftz induced drag, inviscid polars. Bottom: V3 viscous polars (CAD geometry, 2D RANS polars, 50 panels) against RANS~\cite{poland2026} at $1$--$13^\circ$.}
-\label{tab:legs}
-\begin{tabular}{lcccc}
+\caption{Lift and induced drag of the VSM with the three leg options relative to the vortex-lattice referee (finest meshes; VSM at $N=80$, elliptic $N=160$). Induced drag: VSM on-blade over VLM Trefftz.}
+\label{tab:referee}
+\begin{tabular}{lcc|cc|cc|cc}
 \toprule
- & rib, AT on & rib, AT off & perp., AT on & perp., AT off\\
+ & \multicolumn{2}{c|}{VLM} & \multicolumn{2}{c|}{rib} & \multicolumn{2}{c|}{streamwise} & \multicolumn{2}{c}{perpendicular}\\
+case & $C_L$ & $C_{D_i}$ & $C_L$ & $C_{D_i}$ & $C_L$ & $C_{D_i}$ & $C_L$ & $C_{D_i}$\\
 \midrule
-circular arc, $110^\circ$, $R=4c$ & 0.999 & 0.946 & 0.999 & 0.946\\
-elliptic, 10\,\% sweep, 25\,\% anhedral & 1.015 & 0.974 & 1.025 & 1.002\\
-V3 kite, $10^\circ$ & 1.008 & 0.917 & 1.038 & 0.994\\
-swept $30^\circ$, kinked at the root & 0.982 & 0.980 & NaN & NaN\\
-\midrule
-V3 mean $|\Delta C_L|$ & 0.020 & 0.017 & 0.031 & 0.037\\
-V3 mean $|\Delta C_D|/C_D$ & 3.0\,\% & 1.4\,\% & 3.8\,\% & 2.3\,\%\\
+straight AR 8, $5^\circ$ & 0.402 & 0.00654 & $-0.2\,\%$ & $-0.9\,\%$ & $-0.2\,\%$ & $-0.9\,\%$ & $-0.2\,\%$ & $-0.9\,\%$\\
+yawed $30^\circ$, $5^\circ$ & 0.360 & 0.00537 & $0.0\,\%$ & $-0.6\,\%$ & $0.0\,\%$ & $-0.6\,\%$ & $+1.4\,\%$ & $+2.0\,\%$\\
+kinked swept $30^\circ$, $5^\circ$ & 0.363 & 0.00568 & $-0.4\,\%$ & $-3.0\,\%$ & $-0.4\,\%$ & $-3.0\,\%$ & $-8.8\,\%$ & $+6.7\,\%$\\
+arc $110^\circ$, $8^\circ$ & 0.577 & 0.01481 & $+0.3\,\%$ & $-3.4\,\%$ & $-2.1\,\%$ & $-1.2\,\%$ & $+0.3\,\%$ & $-3.4\,\%$\\
+elliptic, swept--anhedral, $10^\circ$ & 0.807 & 0.02643 & $+0.9\,\%$ & $-0.1\,\%$ & $+0.1\,\%$ & $-4.4\,\%$ & $+0.8\,\%$ & $-0.3\,\%$\\
+V3, flat plate, $10^\circ$ (approx.) & 0.624 & 0.02961 & $+2.3\,\%$ & $-4.0\,\%$ & $-1.9\,\%$ & $-8.6\,\%$ & $-7.9\,\%$ & $-4.5\,\%$\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-On the arc the ribs are perpendicular and the two coincide; there the AT force is required (0.946 to 0.999). On the elliptic wing and the V3 both the AT contribution ($+0.04$ and $+0.09$ with ribs, $+0.02$ and $+0.04$ with perpendicular legs) and the remainder depend on the leg direction, and their sum is within 1.5\,\% of the Trefftz plane with ribs but 2.5--4\,\% high with perpendicular legs. Dropping the AT force with perpendicular legs gives 1.00 on those two wings but 0.946 on the arc, so no rule is consistent on all three. The excess with perpendicular legs is not a bound-vortex effect (Table~\ref{tab:fix} shows it with the bound segments on the line as well); it is a property of chordwise legs on a swept quarter-chord line, where the leg carries a Kutta--Joukowski force from the downwash with a streamwise component. The authors' results on swept wings differ from the Trefftz plane by a similar amount but in the opposite direction: for the swept--anhedral elliptic wing, Table~2 of~\cite{gaunaa2026} gives $e_{\mathrm{Osw,Blade}}=1.101$ against $e_{\mathrm{Osw,Trefftz}}=1.080$ for LL-Gaunaa, i.e.\ on-blade induced drag 1.9\,\% \emph{below} the Trefftz plane, and their VLM reference is 2.8\,\% below (1.106 against 1.075); the appendix~\cite{appendix2026} gives 5\,\% and 1\,\% below for the 15\,\% and 25\,\% swept wings. The authors read this as a limitation of the Trefftz-plane analysis for curved wings. Note also that~\cite{gaunaa2026} (Section~3) runs the chordwise legs ``up to the trailing edge'', whereas the perpendicular legs tested here have the fixed length $(1-a)\bar c$ and end on the trailing edge only where it is parallel to the quarter-chord line; the paper states explicitly that the leg direction ``is not specified by theoretical results'' and ``is effectively a modeling choice''. On the V3 the perpendicular legs also lower the inviscid lift from 0.639 to 0.600 (the fixed-length leg at the curved tips ends far from the trailing edge), which moves the viscous $C_L$ away from RANS at every angle below $10^\circ$. On the kinked swept wing they cannot be built. The rib legs are therefore kept: constructible on every input planform, within 1.5\,\% of the far-wake drag on all curved cases, and the best V3 agreement with RANS (within 3\,\% in $C_D$ up to $10^\circ$; the 13$^\circ$ point, 10\,\% high, is near the RANS stall).
+\begin{table}[h]\centering\small
+\caption{Top: on-blade over Trefftz induced drag with the attached-trailed force, $N=80$ (\texttt{leg\_direction\_study.py}). Bottom: V3 viscous polars (CAD geometry, 2D RANS polars, 50 panels) against RANS~\cite{poland2026}, $1$--$13^\circ$; the drag error up to $10^\circ$ in brackets.}
+\label{tab:legs3}
+\begin{tabular}{lccc}
+\toprule
+ & rib & streamwise & perpendicular\\
+\midrule
+straight AR 8 & 1.000 & 1.000 & 1.000\\
+straight, ribs skewed $22^\circ$ & 1.030 & 1.000 & 1.000\\
+yawed $30^\circ$ & 1.002 & 1.002 & 0.991\\
+kinked swept $30^\circ$ & 0.982 & 0.982 & 1.093\\
+circular arc & 0.999 & 1.035 & 0.999\\
+elliptic, swept--anhedral & 1.015 & 0.986 & 1.024\\
+V3 kite, $10^\circ$ & 1.008 & 1.008 & 1.018 (crosses at $N=160$)\\
+\midrule
+V3 mean $|\Delta C_L|$ & 0.020 & 0.019 & 0.058\\
+V3 mean $|\Delta C_D|/C_D$ & 3.0\,\% (1.4\,\%) & 2.2\,\% (0.3\,\%) & 3.5\,\% (2.5\,\%)\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{What the referee says.} On the planar wings the streamwise legs, which coincide with the ribs there, reproduce the lifting-surface lift to 0.4\,\% and the induced drag within 3\,\%; the perpendicular legs are 1.4\,\% high on the yawed wing and 8.8\,\% low on the kinked wing, with the induced drag 6.7\,\% high. A perpendicular lattice is a sheared Weissinger lattice; at a kink the fan of legs changes the downwash at the neighbouring control points, and even without a kink the sheared lattice is not the better discretisation. On the arc the rib and perpendicular legs coincide (chordwise) and are within 0.3\,\% in lift; the streamwise legs, which climb along the vertical tips, are 2.1\,\% low. On the elliptic wing all three are within 1\,\% in lift, the streamwise legs closest. On the V3 the approximate referee puts the rib legs 2.3\,\% high and the streamwise legs 1.9\,\% low, with the perpendicular legs 8\,\% low; against RANS the streamwise legs give the closest polars (drag within 0.3\,\% up to $10^\circ$, lift 0.879 against 0.869 at $10^\circ$ where the ribs give 0.917).
+
+The on-blade over Trefftz ratio is not a criterion between rib and streamwise legs (both are within 2\,\% except the streamwise arc at 1.035, where the climbing legs carry an attached-trailed force the flow-aligned legs of the other options do not); it does reject the perpendicular legs on the kinked wing (1.09, rising with $N$) and the singular earlier construction. The skewed-rib straight wing shows what the rib legs cost when the ribs are not aligned with the flow: the same wing, drawn with skewed ribs, gives 1.03 and 0.7\,\% less lift, whereas streamwise and perpendicular legs return the straight-wing result exactly.
+
+\paragraph{Decision.} The perpendicular legs are rejected with evidence. Between rib and streamwise legs the referee does not decide: each is within 1\,\% of the VLM lift on four of the five wings it can judge, the ribs win on the arc and the streamwise legs on the elliptic wing and against RANS on the V3. The ribs stay the default, because on the V3 they are the physical ribs, they need no inflow to be built, and nothing in the evidence shows them wrong; the streamwise construction is one keyword away and is the one to use when the ribs of an input geometry are drawn obliquely to the flow. The argument that chord and legs should follow the same direction has been tested in the one form the theory allows, the all-perpendicular CP1 construction, and it loses to the CP1 frame with flow-aligned legs; the paper itself separates the two choices.
+
+\paragraph{The authors' numbers.} For the swept--anhedral elliptic wing Table~2 of~\cite{gaunaa2026} gives $e_{\mathrm{Osw,Blade}}=1.101$ against $e_{\mathrm{Osw,Trefftz}}=1.080$ for LL-Gaunaa, i.e.\ on-blade induced drag 1.9\,\% \emph{below} the Trefftz plane, and their VLM reference is 2.8\,\% below (1.106 against 1.075); the appendix~\cite{appendix2026} gives 5\,\% and 1\,\% below for the 15\,\% and 25\,\% swept wings. The authors read this as a limitation of the Trefftz-plane analysis for curved wings. Here the near-field drag of the VLM is likewise below its own Trefftz drag on the non-planar wings (8\,\% on the elliptic wing), for the same reason: trailing legs that are not aligned with the wind carry a force that the near-field evaluation drops.
 
 \subsection{Independent evidence: the arc self-induction}
 On the arc the chordwise self-induction that makes on-blade equal Trefftz is $u\approx-0.19$\,m/s (interpolating between the trailed-only value, ratio 1.079 at $u=0$, and the on-line value at $N=80$, ratio 0.951 at $u=-0.34$\,m/s). The chordwise-spread sheet gives $u=-0.186$\,m/s at every $N$ from 40 to 320 (Figure~\ref{fig:explain}b). Nothing was tuned to obtain this agreement.
@@ -232,7 +279,7 @@ The remaining gap to the wind tunnel is lift-dependent, $\Delta C_D\approx0.003+
 \begin{itemize}[nosep]
   \item The mechanism of the fix (straighten locally, regularise the legs, keep the far field) is that of Reid and Hunsaker~\cite{reid2020}; the difference-form goes back to Li et al.~\cite{li2018}. The contribution here is the replacement of the two empirical lengths by the thin-airfoil chordwise distribution, which fixes the cut-off at $0.15\,c$ from theory, and the demonstration that this yields Trefftz-consistent induced drag on curved kites. It should be presented as such, with~\cite{reid2020,li2020,guermond1990} cited.
   \item To be confirmed with the authors of~\cite{gaunaa2026,li2020}: how the curved bound-vortex influence is applied at the quarter chord in their code, and how it behaves when the number of sections is doubled.
-  \item Open: the attached-trailed force on legs that are skewed or swept with respect to the flow (swept wing 0.99, skewed ribs 1.03, perpendicular legs on the swept V3 and elliptic lines 1.025--1.04, Section~\ref{sec:legs}). The leg direction itself stays with the ribs (Section~\ref{sec:legs}). Not quantified: the section polars are rib-section polars while CP1 applies them in the span-perpendicular plane.
+  \item Settled with a referee (Section~\ref{sec:legs}): the paper's perpendicular legs are rejected; rib legs stay the default, streamwise legs are available and preferable when the input ribs are oblique to the flow. Open: the attached-trailed force on legs that are not aligned with the flow (kinked wing 0.98, skewed ribs 1.03, streamwise legs on the arc 1.035), and a V3 referee with the exact skewed tips (AeroSandbox unskews them). Not quantified: the section polars are rib-section polars while CP1 applies them in the span-perpendicular plane.
 \end{itemize}
 
 \begin{thebibliography}{99}\small
@@ -248,6 +295,7 @@ The remaining gap to the wind tunnel is lift-dependent, $\Delta C_D\approx0.003+
 \bibitem{phillips2000} W.~F.~Phillips, D.~O.~Snyder, Modern adaptation of Prandtl's classic lifting-line theory, J.\ Aircraft 37 (2000) 662--670.
 \bibitem{ranneberg2015} M.~Ranneberg, Direct wing design and inverse airfoil identification with the nonlinear Weissinger method, arXiv:1501.04983 (2015).
 \bibitem{qblade} QBlade documentation, Lifting line free vortex wake, \url{https://docs.qblade.org/src/theory/aerodynamics/lifting_line/lifting_line.html}.
+\bibitem{aerosandbox} P.~D.~Sharpe, AeroSandbox: a differentiable framework for aircraft design optimization, MIT (2021), \url{https://github.com/peterdsharpe/AeroSandbox}; version 4.2.8, \texttt{VortexLatticeMethod}.
 \bibitem{poland2026} J.~A.~W.~Poland, J.~M.~van Spronsen, M.~Gaunaa, R.~Schmehl, Wind tunnel load measurements of a leading-edge inflatable kite rigid-scale model, Wind Energ.\ Sci.\ 11 (2026) 911.
 \end{thebibliography}
 

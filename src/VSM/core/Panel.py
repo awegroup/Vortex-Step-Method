@@ -98,6 +98,27 @@ class Panel:
         self._filaments.append(BoundFilament(x1=bound_point_1, x2=self._TE_point_1))
         self._filaments.append(BoundFilament(x1=self._TE_point_2, x2=bound_point_2))
 
+    def set_leg_end_points(self, te_point_1, te_point_2, control_point=None):
+        """Move the ends of the two attached-trailed legs, and with them the
+        start of the wake, to the given points on the trailing-edge curve,
+        and optionally the control point.
+
+        The section corners, chord and frame are kept. Used when the legs are
+        built perpendicular to the quarter-chord line instead of along the
+        input ribs (``BodyAerodynamics(..., leg_direction="perpendicular")``);
+        the control point then moves with the legs so that it stays between
+        the panel's own two legs.
+        """
+        self._TE_point_1 = np.asarray(te_point_1, dtype=float)
+        self._TE_point_2 = np.asarray(te_point_2, dtype=float)
+        if control_point is not None:
+            self._control_point = np.asarray(control_point, dtype=float)
+        self._filaments = [
+            BoundFilament(x1=self._bound_point_2, x2=self._bound_point_1),
+            BoundFilament(x1=self._bound_point_1, x2=self._TE_point_1),
+            BoundFilament(x1=self._TE_point_2, x2=self._bound_point_2),
+        ]
+
     ###########################
     ## GETTER FUNCTIONS
     ###########################

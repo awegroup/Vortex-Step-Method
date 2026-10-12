@@ -273,6 +273,27 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
   edge (Sec. 3 of the paper). Zero net effect on unswept wings, needed for swept
   ones. Reported per section boundary in `F_attached_trailed_distribution` and
   folded into `F_distribution` and the totals.
+- **Direction of the attached-trailed legs**,
+  `BodyAerodynamics(..., leg_direction=...)` (also on `instantiate`). The paper
+  states that theory does not fix this direction and chooses the chordwise
+  direction of CP1, perpendicular to the quarter-chord line, up to the
+  trailing edge. Three constructions are available (figure 10): `"rib"`
+  (default) runs the legs along the interpolated input sections to their
+  trailing-edge points, with the control point on the section; `"streamwise"`
+  runs them along the apparent velocity projected onto the surface, up to the
+  trailing-edge curve, and rebuilds them whenever `va` is set; `"perpendicular"`
+  is the paper's choice, with the tangent of the quarter-chord line averaged
+  over one leg length so that the legs do not cross at a planform kink. With
+  the last two the control point moves with the legs so that it stays between
+  the panel's own two legs. Against a vortex-lattice method (AeroSandbox,
+  `docs/validation/vlm_referee.py`, figure 11) rib and streamwise legs
+  reproduce the lift of straight, yawed, kinked-swept, arc and
+  swept-anhedral elliptic wings within 1% (streamwise: 2% low on the arc) and
+  the induced drag within 1-4%; perpendicular legs lose 9% of the lift on the
+  kinked swept wing and 8% on the V3, where they also cross at the tips above
+  80 panels. On the V3 the rib legs are the ribs of the real kite; streamwise
+  legs give the closest V3 polars to RANS. Details in
+  `docs/validation/curved_bound_vortex_report.pdf`, Section 4.3.
 
 Every solve of a wing in one uniform inflow also reports
 `results["drag_induced_trefftz"]`, the Trefftz-plane induced drag
@@ -293,7 +314,7 @@ chord directions, the red line with quarter-chord directions
 ![V3 polars before and after the consistency fixes](consistency_fixes_V3_polars.png)
 
 More figures (frame, Trefftz check, attached-trailed force, relaxation,
-wake direction) with their descriptions are in [figures/README.md](figures/README.md).
+wake direction, leg direction) with their descriptions are in [figures/README.md](figures/README.md).
 
 ### Frozen wake direction
 

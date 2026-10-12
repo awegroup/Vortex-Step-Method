@@ -13,6 +13,7 @@ from VSM.core.utils import (
     assemble_AIC_matrices,
     induced_velocity_at_points,
     assemble_curved_bound_correction_AIC,
+    perpendicular_leg_end_points,
     thin_airfoil_strips,
 )
 from . import jit_cross, jit_norm, jit_dot
@@ -60,10 +61,39 @@ class BodyAerodynamics:
         bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
+        leg_direction: str = "rib",
     ):
+        """
+        Args:
+            wings (list): Wing instances.
+            bridle_line_system (list, optional): bridle lines as [p1, p2, diameter].
+            aerodynamic_center_location (float): chord fraction of the bound vortex.
+            control_point_location (float): chord fraction of the control point.
+            leg_direction (str): direction of the attached-trailed legs, the
+                chordwise vortex segments between the bound vortex and the
+                trailing edge. ``"rib"``: along the (interpolated) input
+                sections, ending at their trailing-edge points. ``"perpendicular"``:
+                perpendicular to the local quarter-chord line, up to the
+                trailing-edge curve, as in Gaunaa, Li & Pirrung (TORQUE 2026,
+                Sec. 3), with the control point between the panel's two legs;
+                see ``utils.perpendicular_leg_end_points``. ``"streamwise"``:
+                along the apparent velocity projected onto the local surface,
+                up to the trailing-edge curve, rebuilt whenever ``va`` is set
+                (a Weissinger-type lattice; identical to ``"rib"`` on wings whose
+                ribs are drawn along the flow). The panel frame
+                and the chord length are the span-perpendicular ones (CP1) in
+                both cases; with ``"rib"`` the control point lies on the
+                interpolated rib at the control-point chord fraction.
+        """
+        if leg_direction not in ("rib", "perpendicular", "streamwise"):
+            raise ValueError(
+                "leg_direction must be 'rib', 'perpendicular' or 'streamwise', "
+                f"got {leg_direction!r}"
+            )
         self._wings = wings
         self._aerodynamic_center_location = aerodynamic_center_location
         self._control_point_location = control_point_location
+        self._leg_direction = leg_direction
 
         self._bridle_line_system = bridle_line_system
         self._reference_point = np.zeros(3, dtype=float)
@@ -86,6 +116,7 @@ class BodyAerodynamics:
     def _build_panels(self):
         """Helper method to build the panel list from the current wing geometry."""
         panels = []
+        wing_panel_groups = []
         for wing in self.wings:
             section_list = wing.refine_aerodynamic_mesh()
             n_panels_per_wing = len(section_list) - 1
@@ -105,8 +136,9 @@ class BodyAerodynamics:
                 self._aerodynamic_center_location,
                 self._control_point_location,
             )
+            wing_panels = []
             for j in range(n_panels_per_wing):
-                panels.append(
+                wing_panels.append(
                     Panel(
                         section_list[j],
                         section_list[j + 1],
@@ -119,8 +151,67 @@ class BodyAerodynamics:
                         z_airf_list[j],
                     )
                 )
+            if self._leg_direction == "perpendicular":
+                self._apply_perpendicular_legs(wing_panels, section_list)
+            wing_panel_groups.append((wing_panels, section_list))
+            panels.extend(wing_panels)
+        self._wing_panel_groups = wing_panel_groups
         self._panels = panels
         self._n_panels = len(panels)
+
+    def _apply_perpendicular_legs(self, wing_panels, section_list, direction=None):
+        """Replace the rib legs of one wing by legs perpendicular to the
+        quarter-chord line (or along ``direction``, projected onto the
+        surface) that end on the trailing-edge curve."""
+        bound_nodes = np.array(
+            [p.bound_point_1 for p in wing_panels] + [wing_panels[-1].bound_point_2],
+            dtype=float,
+        )
+        te_nodes = np.array([sec.TE_point for sec in section_list], dtype=float)
+        normals = None
+        if direction is not None:
+            normals = np.array([p.x_airf for p in wing_panels], dtype=float)
+        ends = perpendicular_leg_end_points(
+            bound_nodes,
+            te_nodes,
+            np.array([p.y_airf for p in wing_panels], dtype=float),
+            np.array([p.chord for p in wing_panels], dtype=float),
+            float(self._aerodynamic_center_location),
+            direction=direction,
+            normals=normals,
+        )
+        # The control point goes between the panel's own two legs, at the
+        # control-point fraction along them, with the same spanwise weights
+        # that place the aerodynamic centre on the bound segment. Between
+        # parallel perpendicular legs this is the 3/4-chord point of the CP1
+        # section (the paper's control point); where the legs fan out near a
+        # kink or a tip it stays between them, as it does between the rib
+        # legs in the default construction.
+        t_leg = (self._control_point_location - self._aerodynamic_center_location) / (
+            1.0 - self._aerodynamic_center_location
+        )
+        for j, panel in enumerate(wing_panels):
+            b1, b2 = panel.bound_point_1, panel.bound_point_2
+            w1 = np.linalg.norm(panel.aerodynamic_center - b2) / np.linalg.norm(b1 - b2)
+            control_point = w1 * (b1 + t_leg * (ends[j] - b1)) + (1.0 - w1) * (
+                b2 + t_leg * (ends[j + 1] - b2)
+            )
+            panel.set_leg_end_points(ends[j], ends[j + 1], control_point)
+
+    def _apply_streamwise_legs(self, va_distribution):
+        """Streamwise legs: along the mean apparent velocity, projected onto
+        the local surface, up to the trailing-edge curve. Called whenever
+        ``va`` is set, since the legs follow the inflow."""
+        va_mean = np.mean(np.atleast_2d(np.asarray(va_distribution, dtype=float)), axis=0)
+        norm = np.linalg.norm(va_mean)
+        if norm < 1e-12:
+            raise ValueError("streamwise legs need a non-zero apparent velocity")
+        for wing_panels, section_list in self._wing_panel_groups:
+            self._apply_perpendicular_legs(wing_panels, section_list, direction=va_mean / norm)
+
+    @property
+    def leg_direction(self):
+        return self._leg_direction
 
     ####################
     ## CLASS METHODS ###
@@ -137,6 +228,7 @@ class BodyAerodynamics:
         ml_models_dir=None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
+        leg_direction: str = "rib",
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -151,6 +243,7 @@ class BodyAerodynamics:
                 center / bound vortex (default: 0.25).
             control_point_location (float): Chord fraction (from LE) of the control point
                 (default: 0.75).
+            leg_direction (str): ``"rib"`` or ``"perpendicular"``, see ``BodyAerodynamics.__init__``.
 
         Returns:
             BodyAerodynamics instance.
@@ -348,12 +441,14 @@ class BodyAerodynamics:
                 bridle_lines,
                 aerodynamic_center_location=aerodynamic_center_location,
                 control_point_location=control_point_location,
+                leg_direction=leg_direction,
             )
         else:
             return cls(
                 [wing_instance],
                 aerodynamic_center_location=aerodynamic_center_location,
                 control_point_location=control_point_location,
+                leg_direction=leg_direction,
             )
 
     def rotate(
@@ -562,6 +657,9 @@ class BodyAerodynamics:
             va_distribution += -np.cross(self._body_rates, control_points - r0)
 
         # push to panels
+        if self._leg_direction == "streamwise":
+            self._apply_streamwise_legs(va_distribution)
+
         for i, panel in enumerate(self.panels):
             panel.va = va_distribution[i]
 

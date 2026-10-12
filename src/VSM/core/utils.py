@@ -484,3 +484,148 @@ def point_in_quad(pt, corners):
     return point_in_triangle(
         pt, corners[0], corners[1], corners[2]
     ) or point_in_triangle(pt, corners[0], corners[2], corners[3])
+
+
+def perpendicular_leg_end_points(
+    bound_nodes, te_nodes, chord_dir, chords, ac_fraction, direction=None, normals=None
+):
+    """End points of attached-trailed legs perpendicular to the quarter-chord line.
+
+    Gaunaa, Li & Pirrung (TORQUE 2026, Sec. 3) run the attached part of the
+    trailed vortex from the bound vortex "along the local chordwise direction
+    up to the trailing edge", the chordwise direction being that of the
+    Crossflow Principle (CP1): perpendicular to the local quarter-chord line.
+    The legs then depend only on the quarter-chord line and the trailing-edge
+    curve, not on where the input ribs were drawn.
+
+    Where the line turns by more than about one radian within one leg length
+    (a planform kink, a tip whose curvature radius is below a chord) plain
+    perpendiculars cross. The line tangent is therefore averaged over plus and
+    minus one leg length, ``(1 - ac) c``, of arc length around each node before
+    the perpendicular is taken. On a straight or uniformly swept line this is
+    the plain perpendicular. At a kink it turns the leg at the kink into the
+    bisector (streamwise at the root of a symmetric swept wing) and blends to
+    the perpendicular within one leg length. The averaging length is the leg's
+    own scale, not a free parameter. Legs that still cross raise an error.
+
+    Args:
+        bound_nodes (np.ndarray): (n+1, 3) bound-vortex nodes in panel order
+            (node ``k`` is ``bound_point_1`` of panel ``k``; node ``n`` is
+            ``bound_point_2`` of the last panel).
+        te_nodes (np.ndarray): (n+1, 3) section trailing-edge points in the
+            same order; their polyline is the trailing-edge curve.
+        chord_dir (np.ndarray): (n, 3) span-perpendicular chord directions of
+            the panels, leading edge to trailing edge (``Panel.y_airf``).
+        chords (np.ndarray): (n,) perpendicular chords of the panels.
+        ac_fraction (float): chord fraction of the bound vortex.
+        direction (np.ndarray, optional): a fixed leg direction (3,), e.g. the
+            apparent-velocity direction for streamwise legs. It is projected
+            onto the local surface (perpendicular to ``normals``) at each
+            node and used instead of the perpendicular to the quarter-chord
+            line; the tangent averaging is then not needed.
+        normals (np.ndarray, optional): (n, 3) panel normals (``Panel.x_airf``),
+            required with ``direction``.
+
+    Returns:
+        np.ndarray: (n+1, 3) leg end points, on the trailing-edge polyline
+        (or on the straight extension of its first or last segment, for a
+        leg that leaves a skewed tip through the tip edge).
+
+    Raises:
+        ValueError: if a leg does not reach the trailing-edge curve or two
+            neighbouring legs cross (end points not ordered along the edge).
+    """
+    B = np.asarray(bound_nodes, dtype=float)
+    T = np.asarray(te_nodes, dtype=float)
+    Y = np.asarray(chord_dir, dtype=float)
+    c = np.asarray(chords, dtype=float).ravel()
+    n = len(c)
+    if B.shape != (n + 1, 3) or T.shape != (n + 1, 3) or Y.shape != (n, 3):
+        raise ValueError("perpendicular_leg_end_points: inconsistent array shapes")
+
+    seg = B[1:] - B[:-1]
+    seg_len = np.linalg.norm(seg, axis=1)
+    if np.any(seg_len < 1e-12):
+        raise ValueError("repeated bound-vortex nodes")
+    tangent = seg / seg_len[:, None]
+    s_node = np.concatenate(([0.0], np.cumsum(seg_len)))
+
+    te_seg = T[1:] - T[:-1]
+    te_len = np.linalg.norm(te_seg, axis=1)
+    if np.any(te_len < 1e-12):
+        raise ValueError("repeated trailing-edge points")
+    s_te = np.concatenate(([0.0], np.cumsum(te_len)))
+
+    ends = np.zeros_like(B)
+    s_end = np.zeros(n + 1)
+    for k in range(n + 1):
+        adjacent = [j for j in (k - 1, k) if 0 <= j < n]
+        leg_length = (1.0 - ac_fraction) * float(np.mean(c[adjacent]))
+
+        # tangent of the quarter-chord line averaged over +- one leg length
+        lo, hi = s_node[k] - leg_length, s_node[k] + leg_length
+        overlap = np.minimum(s_node[1:], hi) - np.maximum(s_node[:-1], lo)
+        overlap = np.clip(overlap, 0.0, None)
+        t_avg = overlap @ tangent
+        if np.linalg.norm(t_avg) < 1e-12:
+            t_avg = tangent[adjacent].sum(axis=0)
+        t_avg = t_avg / np.linalg.norm(t_avg)
+
+        if direction is None:
+            # leg direction: the chord direction with its component along the
+            # averaged tangent removed (points from the bound vortex aft)
+            y = Y[adjacent].sum(axis=0)
+            d = y - np.dot(y, t_avg) * t_avg
+        else:
+            # fixed direction projected onto the local surface
+            nrm = np.asarray(normals, dtype=float)[adjacent].sum(axis=0)
+            nrm = nrm / np.linalg.norm(nrm)
+            d = np.asarray(direction, dtype=float)
+            d = d - np.dot(d, nrm) * nrm
+        d_norm = np.linalg.norm(d)
+        if d_norm < 1e-9:
+            raise ValueError(f"leg direction at node {k} is degenerate (along the span or the normal)")
+        d = d / d_norm
+
+        # The leg ends at the point of the trailing-edge curve closest to the
+        # ray B_k + t d, t > 0. A ray in 3D does not meet a polyline on a
+        # curved surface exactly, so the closest point is used rather than an
+        # intersection; it lies on a segment, or on the straight extension of
+        # the first or last segment, so that a leg leaving a skewed tip
+        # through the tip edge still ends on the trailing-edge line.
+        w0 = B[k][None, :] - T[:-1]
+        b = te_seg @ d
+        cc = te_len**2
+        dd = w0 @ d
+        e0 = np.einsum("ij,ij->i", te_seg, w0)
+        denom = cc - b * b
+        regular = denom > 1e-10 * cc
+        u = np.where(regular, (e0 - b * dd) / np.where(regular, denom, 1.0), 0.0)
+        lower = np.zeros(len(te_len))
+        upper = np.ones(len(te_len))
+        lower[0], upper[-1] = -np.inf, np.inf
+        u = np.clip(u, lower, upper)
+        P = T[:-1] + u[:, None] * te_seg
+        t = (P - B[k][None, :]) @ d
+        ahead = t > 0.0
+        if not np.any(ahead):
+            raise ValueError(
+                f"the perpendicular attached-trailed leg of node {k} does not reach "
+                "the trailing-edge curve; use leg_direction='rib'"
+            )
+        dist = np.linalg.norm(B[k][None, :] + t[:, None] * d[None, :] - P, axis=1)
+        dist[~ahead] = np.inf
+        m = int(np.argmin(dist))
+        u_clip = u
+        ends[k] = P[m]
+        s_end[k] = s_te[m] + u_clip[m] * te_len[m]
+
+    crossing = np.where(np.diff(s_end) <= 0.0)[0]
+    if crossing.size:
+        k = int(crossing[0])
+        raise ValueError(
+            f"attached-trailed legs cross between nodes {k} and {k + 1}: the "
+            "quarter-chord line turns by more than one leg length there; use "
+            "leg_direction='rib'"
+        )
+    return ends
