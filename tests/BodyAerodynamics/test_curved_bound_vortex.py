@@ -86,3 +86,39 @@ def test_arc_wing_ratio_is_mesh_independent():
     r40 = _ratio(_arc(40))
     r80 = _ratio(_arc(80))
     assert abs(r80 - r40) < 3e-3
+
+
+def test_curved_bound_correction_is_cached_per_geometry():
+    """The quarter-chord correction depends on the geometry only: a second
+    inflow on the same panels reuses it, a moved geometry recomputes it."""
+    import VSM.core.BodyAerodynamics as BA
+
+    calls = []
+    original = BA.assemble_curved_bound_correction_AIC
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    BA.assemble_curved_bound_correction_AIC = counting
+    try:
+        body = _arc(16)
+        solver = Solver(allowed_error=1e-7, max_iterations=4000)
+        body.va_initialize(10.0, 8.0, 0.0)
+        r1 = solver.solve(body)
+        body.va_initialize(20.0, 4.0, 5.0)
+        r2 = solver.solve(body)
+        assert len(calls) == 1, "same geometry, different inflow: one kernel evaluation"
+        # a fresh body with the same geometry gives the same answer as the cached one
+        body_ref = _arc(16)
+        body_ref.va_initialize(20.0, 4.0, 5.0)
+        r_ref = solver.solve(body_ref)
+        assert np.isclose(r2["cl"], r_ref["cl"], rtol=1e-12)
+        assert np.isclose(r2["cd"], r_ref["cd"], rtol=1e-12)
+        # moving the geometry invalidates the cache
+        body.rotate(angle_deg=5.0, axis=[0.0, 1.0, 0.0])
+        body.va_initialize(20.0, 4.0, 5.0)
+        solver.solve(body)
+        assert len(calls) == 3
+    finally:
+        BA.assemble_curved_bound_correction_AIC = original

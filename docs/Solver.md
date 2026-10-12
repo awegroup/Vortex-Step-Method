@@ -264,7 +264,11 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
   identically zero on straight wings, has no tunable length (the distribution
   fixes the cut-off at 0.15 c), and brings the on-blade induced drag within 1%
   of the Trefftz plane on an arc wing, the V3 and the paper's swept-anhedral
-  elliptic wing at every resolution (figure 08). It shares its mechanism with
+  elliptic wing at every resolution (figure 08). The correction depends on
+  the panel geometry only, so it is computed once per geometry (about 0.5 s at
+  50 panels) and reused for every inflow and circulation until the panels are
+  rebuilt or moved; a coupled trim that solves one deformed shape hundreds of
+  times pays for it once. It shares its mechanism with
   the effective-lifting-line method of Reid & Hunsaker (2020), whose two
   empirical lengths it replaces. On the V3 it raises the drag by about 5% of the
   induced drag at 10 deg, onto the RANS value (figure 09).
