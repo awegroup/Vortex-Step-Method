@@ -1,4 +1,3 @@
-import hashlib
 import numpy as np
 import logging
 import pandas as pd
@@ -18,6 +17,25 @@ from VSM.core.utils import (
     thin_airfoil_strips,
 )
 from . import jit_cross, jit_norm, jit_dot
+
+
+def _rigid_rotation_between(points_0, points_1, dirs_0, dirs_1, rel_tol=1e-9):
+    """Rotation matrix R with points_1 = R points_0 + t and dirs_1 = R dirs_0
+    (Kabsch), or None when the two point sets are not the same rigid body
+    to within ``rel_tol`` of the geometry's size."""
+    c0 = points_0.mean(axis=0)
+    c1 = points_1.mean(axis=0)
+    q0 = points_0 - c0
+    q1 = points_1 - c1
+    scale = max(float(np.abs(q0).max()), 1e-300)
+    u, _, vt = np.linalg.svd(q0.T @ q1)
+    d = np.sign(np.linalg.det(vt.T @ u.T))
+    R = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+    if np.abs(q0 @ R.T - q1).max() > rel_tol * scale:
+        return None
+    if np.abs(dirs_0 @ R.T - dirs_1).max() > rel_tol:
+        return None
+    return R
 
 
 class BodyAerodynamics:
@@ -2090,6 +2108,42 @@ class BodyAerodynamics:
             rates_in_body_frame=rates_in_body_frame,
         )
 
+    def _curved_bound_correction_cached(
+        self, eval_points, bp1, bp2, te1, te2, chord_dir, chords, va_norm, core_radius_fraction
+    ):
+        """The curved bound-vortex correction (3, N, N) for the current panels,
+        from the cache when the panels are the cached ones up to a rigid
+        rotation and translation, otherwise recomputed and stored."""
+        ac = float(self._aerodynamic_center_location)
+        points = np.vstack([eval_points, bp1, bp2, te1, te2])
+        cache = getattr(self, "_curved_bound_cache", None)
+        if (
+            cache is not None
+            and cache["ac"] == ac
+            and cache["core"] == float(core_radius_fraction)
+            and cache["points"].shape == points.shape
+            and np.allclose(cache["chords"], chords, rtol=0.0, atol=1e-12)
+        ):
+            R = _rigid_rotation_between(cache["points"], points, cache["chord_dir"], chord_dir)
+            if R is not None:
+                if np.allclose(R, np.eye(3), atol=1e-14):
+                    return cache["AIC"]
+                return np.ascontiguousarray(np.einsum("ab,bij->aij", R, cache["AIC"]))
+        strip_x, strip_w = thin_airfoil_strips()
+        AIC_corr = assemble_curved_bound_correction_AIC(
+            eval_points, bp1, bp2, te1, te2, chord_dir, chords, va_norm,
+            ac, float(core_radius_fraction), strip_x, strip_w,
+        )
+        self._curved_bound_cache = {
+            "ac": ac,
+            "core": float(core_radius_fraction),
+            "points": points.copy(),
+            "chord_dir": np.array(chord_dir, dtype=float),
+            "chords": np.array(chords, dtype=float),
+            "AIC": AIC_corr,
+        }
+        return AIC_corr
+
     def update_effective_angle_of_attack_if_VSM(
         self,
         gamma,
@@ -2143,41 +2197,18 @@ class BodyAerodynamics:
         chord_dir = np.ascontiguousarray(y_airf_array, dtype=float)
         # The correction depends on the panel geometry only (the wake terms
         # cancel between the actual and the unrolled systems, and the leg core
-        # radius has no measurable effect), so it is computed once per
-        # geometry and reused for every inflow and circulation. A coupled
-        # trim solves the same deformed geometry hundreds of times; the
-        # kernel costs about 0.5 s at 50 panels. The key hashes the arrays
-        # the kernel reads, so any rebuild or moved point invalidates it.
-        key = (
-            float(self._aerodynamic_center_location),
+        # radius has no measurable effect), so it is computed once per shape
+        # and reused for every inflow and circulation. A trim that rotates
+        # the body for each residual evaluation keeps the shape: the stored
+        # matrix is then rotated instead of rebuilt (its entries are velocity
+        # vectors, so they rotate with the geometry and ignore translations).
+        # The kernel costs about 0.5 s at 50 panels; a coupled trim solves
+        # one deformed shape hundreds of times.
+        AIC_corr = self._curved_bound_correction_cached(
+            eval_points, bound_point_1, bound_point_2, TE_point_1, TE_point_2,
+            chord_dir, chords, np.ascontiguousarray(va_norm_array, dtype=float).ravel(),
             float(core_radius_fraction),
-            hashlib.sha1(
-                b"".join(
-                    a.tobytes()
-                    for a in (eval_points, bound_point_1, bound_point_2, TE_point_1, TE_point_2, chord_dir, chords)
-                )
-            ).hexdigest(),
         )
-        cache = getattr(self, "_curved_bound_cache", None)
-        if cache is not None and cache[0] == key:
-            AIC_corr = cache[1]
-        else:
-            strip_x, strip_w = thin_airfoil_strips()
-            AIC_corr = assemble_curved_bound_correction_AIC(
-                eval_points,
-                bound_point_1,
-                bound_point_2,
-                TE_point_1,
-                TE_point_2,
-                chord_dir,
-                chords,
-                np.ascontiguousarray(va_norm_array, dtype=float).ravel(),
-                float(self._aerodynamic_center_location),
-                float(core_radius_fraction),
-                strip_x,
-                strip_w,
-            )
-            self._curved_bound_cache = (key, AIC_corr)
         AIC_x = AIC_x + AIC_corr[0]
         AIC_y = AIC_y + AIC_corr[1]
         AIC_z = AIC_z + AIC_corr[2]

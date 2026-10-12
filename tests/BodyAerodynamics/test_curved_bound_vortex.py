@@ -115,10 +115,27 @@ def test_curved_bound_correction_is_cached_per_geometry():
         r_ref = solver.solve(body_ref)
         assert np.isclose(r2["cl"], r_ref["cl"], rtol=1e-12)
         assert np.isclose(r2["cd"], r_ref["cd"], rtol=1e-12)
-        # moving the geometry invalidates the cache
+        # a rigid rotation keeps the shape: the stored matrix is rotated, not rebuilt,
+        # and the result equals that of a body built in the rotated position
         body.rotate(angle_deg=5.0, axis=[0.0, 1.0, 0.0])
         body.va_initialize(20.0, 4.0, 5.0)
-        solver.solve(body)
+        r_rot = solver.solve(body)
+        assert len(calls) == 2
+        body_rot = _arc(16)
+        body_rot.rotate(angle_deg=5.0, axis=[0.0, 1.0, 0.0])
+        body_rot.va_initialize(20.0, 4.0, 5.0)
+        r_rot_ref = solver.solve(body_rot)
         assert len(calls) == 3
+        assert np.isclose(r_rot["cl"], r_rot_ref["cl"], rtol=1e-10)
+        assert np.isclose(r_rot["cd"], r_rot_ref["cd"], rtol=1e-10)
+        # a deformation (different shape) recomputes
+        wing = body.wings[0]
+        le = np.array([sec.LE_point for sec in wing.sections])
+        te = np.array([sec.TE_point for sec in wing.sections])
+        te[len(te) // 2] += np.array([0.1, 0.0, 0.0])
+        body.update_from_points(le, te, "reuse_initial_polar_data", [sec.polar_data for sec in wing.sections])
+        body.va_initialize(20.0, 4.0, 5.0)
+        solver.solve(body)
+        assert len(calls) == 4
     finally:
         BA.assemble_curved_bound_correction_AIC = original
