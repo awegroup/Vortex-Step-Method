@@ -277,12 +277,12 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
   `BodyAerodynamics(..., leg_direction=...)` (also on `instantiate`). The paper
   states that theory does not fix this direction and chooses the chordwise
   direction of CP1, perpendicular to the quarter-chord line, up to the
-  trailing edge. Three constructions are available (figure 10): `"streamwise"`
-  (default) runs the legs along the apparent velocity projected onto the
-  surface, up to the trailing-edge curve, and rebuilds them whenever `va` is
-  set; `"rib"` (the default until October 2026) runs them along the
-  interpolated input sections to their trailing-edge points, with the control
-  point on the section; `"perpendicular"`
+  trailing edge. Three constructions are available (figure 10): `"rib"`
+  (default) runs the legs along the interpolated input sections to their
+  trailing-edge points, with the control point on the section, a fixed
+  vortex system independent of the inflow; `"streamwise"` runs them along
+  the mean apparent velocity projected onto the surface, up to the
+  trailing-edge curve, and rebuilds them whenever `va` is set; `"perpendicular"`
   is the paper's choice, with the tangent of the quarter-chord line averaged
   over one leg length so that the legs do not cross at a planform kink. With
   the last two the control point moves with the legs so that it stays between
@@ -292,15 +292,15 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
   swept-anhedral elliptic wings within 1% (streamwise: 2% low on the arc) and
   the induced drag within 1-4%; perpendicular legs lose 9% of the lift on the
   kinked swept wing and 8% on the V3, where they also cross at the tips above
-  80 panels. Streamwise legs are the default because they depend only on the
-  quarter-chord line, the trailing edge and the flow (not on how the input
-  sections were drawn), follow the inflow in sideslip, and give the closest V3
-  polars to RANS (and the RANS lift slope); their known cost is 1-3% of lift
-  on the nearly vertical tips of an arc wing at 4-15 deg, where the chordwise
-  rib legs are within 2%. An inflow without a mean direction (pure rotation)
-  falls back to the rib legs with a warning. The thesis-based verification
-  tests keep `leg_direction="rib"` because they check the thesis vortex
-  system. Details in
+  80 panels. The rib legs stay the default: same accuracy, a fixed vortex
+  system, and the code's main use is trim finding with an inflow that varies
+  along the span, where the streamwise construction can only use the mean
+  direction. Streamwise legs are the option for uniform-inflow studies of
+  wings whose sections are drawn obliquely to the flow, or in sideslip: they
+  give the closest V3 polars to RANS (and the RANS lift slope) at a cost of
+  1-3% of lift on the nearly vertical tips of an arc wing at 4-15 deg, where
+  the chordwise rib legs are within 2%. An inflow without a mean direction
+  (pure rotation) falls back to the rib legs with a warning. Details in
   `docs/validation/curved_bound_vortex_report.pdf`, Section 4.3.
 
 Every solve of a wing in one uniform inflow also reports

@@ -61,7 +61,7 @@ class BodyAerodynamics:
         bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
-        leg_direction: str = "streamwise",
+        leg_direction: str = "rib",
     ):
         """
         Args:
@@ -71,14 +71,16 @@ class BodyAerodynamics:
             control_point_location (float): chord fraction of the control point.
             leg_direction (str): direction of the attached-trailed legs, the
                 chordwise vortex segments between the bound vortex and the
-                trailing edge. ``"streamwise"`` (default): along the apparent
-                velocity projected onto the local surface, up to the
-                trailing-edge curve, rebuilt whenever ``va`` is set; depends
-                only on the quarter-chord line, the trailing edge and the
-                flow, not on how the input sections were drawn, and follows
-                the inflow in sideslip. ``"rib"``: along the (interpolated)
-                input sections, ending at their trailing-edge points (the
-                behaviour before October 2026). ``"perpendicular"``:
+                trailing edge. ``"rib"`` (default): along the (interpolated)
+                input sections, ending at their trailing-edge points; a fixed
+                vortex system, independent of the inflow. ``"streamwise"``:
+                along the mean apparent velocity projected onto the local
+                surface, up to the trailing-edge curve, rebuilt whenever ``va``
+                is set; depends only on the quarter-chord line, the trailing
+                edge and the flow, not on how the input sections were drawn,
+                and follows the inflow in sideslip, but with a spanwise-varying
+                inflow (body rates, distributed ``va``) it uses the mean
+                direction only. ``"perpendicular"``:
                 perpendicular to the local quarter-chord line, up to the
                 trailing-edge curve, as in Gaunaa, Li & Pirrung (TORQUE 2026,
                 Sec. 3), with the control point between the panel's two legs;
@@ -255,7 +257,7 @@ class BodyAerodynamics:
         ml_models_dir=None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
-        leg_direction: str = "streamwise",
+        leg_direction: str = "rib",
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -270,7 +272,7 @@ class BodyAerodynamics:
                 center / bound vortex (default: 0.25).
             control_point_location (float): Chord fraction (from LE) of the control point
                 (default: 0.75).
-            leg_direction (str): ``"streamwise"`` (default), ``"rib"`` or ``"perpendicular"``, see ``BodyAerodynamics.__init__``.
+            leg_direction (str): ``"rib"`` (default), ``"streamwise"`` or ``"perpendicular"``, see ``BodyAerodynamics.__init__``.
 
         Returns:
             BodyAerodynamics instance.

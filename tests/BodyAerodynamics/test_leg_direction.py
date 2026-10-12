@@ -1,5 +1,5 @@
-"""Direction of the attached-trailed legs: along the flow (default), along
-the ribs, or perpendicular to the quarter-chord line
+"""Direction of the attached-trailed legs: along the ribs (default), along
+the mean flow, or perpendicular to the quarter-chord line
 (``BodyAerodynamics(leg_direction=...)``).
 
 Perpendicular legs depend only on the quarter-chord line and the
