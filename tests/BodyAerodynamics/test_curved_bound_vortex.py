@@ -24,7 +24,7 @@ def _straight(n_panels, half_span=4.0):
     wing = Wing(n_panels=n_panels, spanwise_panel_distribution="uniform")
     for y in np.linspace(-half_span, half_span, n_panels + 1):
         wing.add_section(np.array([0.0, y, 0.0]), np.array([1.0, y, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], leg_direction="rib")  # chordwise legs isolate the bound-vortex term
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
@@ -35,7 +35,7 @@ def _arc(n_panels, radius=4.0, half_angle_deg=55.0):
     for th in np.radians(np.linspace(-half_angle_deg, half_angle_deg, n_panels + 1)):
         le = np.array([0.0, radius * np.sin(th), radius * np.cos(th)])
         wing.add_section(le, le + np.array([1.0, 0.0, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing])
+    body = BodyAerodynamics([wing], leg_direction="rib")  # chordwise legs isolate the bound-vortex term
     body.va_initialize(10.0, 8.0, 0.0)
     return body
 

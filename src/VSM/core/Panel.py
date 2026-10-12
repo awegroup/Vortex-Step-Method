@@ -92,6 +92,12 @@ class Panel:
         # Conceptually, you should mulitply by the width of the bound vortex and thus take the average width.
         self._width = jit_norm(bound_point_2 - bound_point_1)
 
+        # rib legs and control point as built from the sections, kept so that
+        # another leg construction can be undone (set_leg_end_points)
+        self._rib_TE_point_1 = np.array(self._TE_point_1, dtype=float)
+        self._rib_TE_point_2 = np.array(self._TE_point_2, dtype=float)
+        self._rib_control_point = np.array(control_point, dtype=float)
+
         ### Setting up the filaments (order used to reversed for right-to-left input)
         self._filaments = []
         self._filaments.append(BoundFilament(x1=bound_point_2, x2=bound_point_1))
@@ -113,6 +119,16 @@ class Panel:
         self._TE_point_2 = np.asarray(te_point_2, dtype=float)
         if control_point is not None:
             self._control_point = np.asarray(control_point, dtype=float)
+        self._rebuild_filaments()
+
+    def reset_legs_to_ribs(self):
+        """Restore the rib legs and the section control point."""
+        self._TE_point_1 = self._rib_TE_point_1.copy()
+        self._TE_point_2 = self._rib_TE_point_2.copy()
+        self._control_point = self._rib_control_point.copy()
+        self._rebuild_filaments()
+
+    def _rebuild_filaments(self):
         self._filaments = [
             BoundFilament(x1=self._bound_point_2, x2=self._bound_point_1),
             BoundFilament(x1=self._bound_point_1, x2=self._TE_point_1),

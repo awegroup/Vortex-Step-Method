@@ -60,6 +60,10 @@ OUT = Path(__file__).resolve().parent
 FIG = ROOT / "docs" / "figures"
 DATA = ROOT / "data" / "TUDELFT_V3_KITE"
 REGULARISED = BA.assemble_curved_bound_correction_AIC
+# The geometries below use rib legs unless told otherwise: the tables of the
+# report's Sections 2-4 isolate the quarter-chord bound-vortex term and were
+# made with rib legs (the default until October 2026). The leg direction is
+# compared separately in leg_direction_study.py and vlm_referee.py.
 
 _a = np.radians(np.linspace(-25, 25, 101))
 INVISCID = np.column_stack((_a, 2 * np.pi * _a, 0 * _a, 0 * _a))
@@ -72,7 +76,7 @@ def straight(n, half_span=4.0, skew=0.0, **body_kwargs):
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for y in np.linspace(-half_span, half_span, n + 1):
         wing.add_section(np.array([0.0, y, 0.0]), np.array([1.0, y + skew, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **body_kwargs)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **body_kwargs})
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
@@ -83,7 +87,7 @@ def swept(n, sweep_deg=30.0, half_span=4.0, **body_kwargs):
     for y in np.linspace(-half_span, half_span, n + 1):
         x = abs(y) * np.tan(np.radians(sweep_deg))
         wing.add_section(np.array([x, y, 0.0]), np.array([x + 1.0, y, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **body_kwargs)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **body_kwargs})
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
@@ -94,7 +98,7 @@ def yawed(n, sweep_deg=30.0, half_span=4.0, **body_kwargs):
     for y in np.linspace(-half_span, half_span, n + 1):
         x = y * np.tan(np.radians(sweep_deg))
         wing.add_section(np.array([x, y, 0.0]), np.array([x + 1.0, y, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **body_kwargs)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **body_kwargs})
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
@@ -105,7 +109,7 @@ def arc(n, radius=4.0, half_angle_deg=55.0, **body_kwargs):
     for th in np.radians(np.linspace(-half_angle_deg, half_angle_deg, n + 1)):
         le = np.array([0.0, radius * np.sin(th), radius * np.cos(th)])
         wing.add_section(le, le + np.array([1.0, 0.0, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **body_kwargs)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **body_kwargs})
     body.va_initialize(10.0, 8.0, 0.0)
     return body
 
@@ -121,7 +125,7 @@ def elliptic_swept_anhedral(n, aspect_ratio=8.0, sweep=0.10, anhedral=0.25, **bo
         x = sweep * s * eta**2
         z = -anhedral * s * eta**2
         wing.add_section(np.array([x, y, z]), np.array([x + c, y, z]), INVISCID)
-    body = BodyAerodynamics([wing], **body_kwargs)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **body_kwargs})
     body.va_initialize(10.0, 10.0, 0.0)
     return body
 
@@ -136,7 +140,7 @@ def v3_inviscid(n, alpha=10.0, **body_kwargs):
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for row in _V3["wing_sections"]["data"]:
         wing.add_section(np.array(row[1:4], float), np.array(row[4:7], float), INVISCID)
-    body = BodyAerodynamics([wing], **body_kwargs)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **body_kwargs})
     body.va_initialize(2.82, alpha, 0.0)
     return body
 

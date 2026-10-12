@@ -61,7 +61,7 @@ class BodyAerodynamics:
         bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
-        leg_direction: str = "rib",
+        leg_direction: str = "streamwise",
     ):
         """
         Args:
@@ -71,16 +71,20 @@ class BodyAerodynamics:
             control_point_location (float): chord fraction of the control point.
             leg_direction (str): direction of the attached-trailed legs, the
                 chordwise vortex segments between the bound vortex and the
-                trailing edge. ``"rib"``: along the (interpolated) input
-                sections, ending at their trailing-edge points. ``"perpendicular"``:
+                trailing edge. ``"streamwise"`` (default): along the apparent
+                velocity projected onto the local surface, up to the
+                trailing-edge curve, rebuilt whenever ``va`` is set; depends
+                only on the quarter-chord line, the trailing edge and the
+                flow, not on how the input sections were drawn, and follows
+                the inflow in sideslip. ``"rib"``: along the (interpolated)
+                input sections, ending at their trailing-edge points (the
+                behaviour before October 2026). ``"perpendicular"``:
                 perpendicular to the local quarter-chord line, up to the
                 trailing-edge curve, as in Gaunaa, Li & Pirrung (TORQUE 2026,
                 Sec. 3), with the control point between the panel's two legs;
-                see ``utils.perpendicular_leg_end_points``. ``"streamwise"``:
-                along the apparent velocity projected onto the local surface,
-                up to the trailing-edge curve, rebuilt whenever ``va`` is set
-                (a Weissinger-type lattice; identical to ``"rib"`` on wings whose
-                ribs are drawn along the flow). The panel frame
+                see ``utils.perpendicular_leg_end_points``. Streamwise and rib
+                legs coincide on wings whose ribs are drawn along the flow.
+                The panel frame
                 and the chord length are the span-perpendicular ones (CP1) in
                 both cases; with ``"rib"`` the control point lies on the
                 interpolated rib at the control-point chord fraction.
@@ -157,6 +161,14 @@ class BodyAerodynamics:
             panels.extend(wing_panels)
         self._wing_panel_groups = wing_panel_groups
         self._panels = panels
+        # after a rebuild (rotate, update_from_points) streamwise legs must
+        # follow the inflow already set; before the first va they are ribs
+        va_distribution = getattr(self, "_va_distribution", None)
+        if self._leg_direction == "streamwise" and va_distribution is not None:
+            if len(va_distribution) == len(panels):
+                self._apply_streamwise_legs(va_distribution)
+            else:  # panel count changed: only the mean direction is meaningful
+                self._apply_streamwise_legs(np.mean(va_distribution, axis=0, keepdims=True))
         self._n_panels = len(panels)
 
     def _apply_perpendicular_legs(self, wing_panels, section_list, direction=None):
@@ -201,13 +213,28 @@ class BodyAerodynamics:
     def _apply_streamwise_legs(self, va_distribution):
         """Streamwise legs: along the mean apparent velocity, projected onto
         the local surface, up to the trailing-edge curve. Called whenever
-        ``va`` is set, since the legs follow the inflow."""
-        va_mean = np.mean(np.atleast_2d(np.asarray(va_distribution, dtype=float)), axis=0)
+        ``va`` is set, since the legs follow the inflow.
+
+        An inflow without a usable mean direction (pure rotation, a flow
+        that does not run from the bound vortex towards the trailing edge)
+        has no streamwise legs; the rib legs are then used and a warning is
+        logged, so that such a case still solves."""
+        va = np.atleast_2d(np.asarray(va_distribution, dtype=float))
+        va_mean = np.mean(va, axis=0)
         norm = np.linalg.norm(va_mean)
-        if norm < 1e-12:
-            raise ValueError("streamwise legs need a non-zero apparent velocity")
-        for wing_panels, section_list in self._wing_panel_groups:
-            self._apply_perpendicular_legs(wing_panels, section_list, direction=va_mean / norm)
+        speed = float(np.mean(np.linalg.norm(va, axis=1)))
+        try:
+            if speed <= 0.0 or norm < 1e-3 * speed:
+                raise ValueError("the mean apparent velocity is zero (pure rotation?)")
+            for wing_panels, section_list in self._wing_panel_groups:
+                self._apply_perpendicular_legs(wing_panels, section_list, direction=va_mean / norm)
+        except ValueError as err:
+            logging.warning(
+                "streamwise attached-trailed legs cannot be built for this inflow "
+                f"({err}); using the rib legs for this inflow"
+            )
+            for panel in self._panels:
+                panel.reset_legs_to_ribs()
 
     @property
     def leg_direction(self):
@@ -228,7 +255,7 @@ class BodyAerodynamics:
         ml_models_dir=None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
-        leg_direction: str = "rib",
+        leg_direction: str = "streamwise",
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -243,7 +270,7 @@ class BodyAerodynamics:
                 center / bound vortex (default: 0.25).
             control_point_location (float): Chord fraction (from LE) of the control point
                 (default: 0.75).
-            leg_direction (str): ``"rib"`` or ``"perpendicular"``, see ``BodyAerodynamics.__init__``.
+            leg_direction (str): ``"streamwise"`` (default), ``"rib"`` or ``"perpendicular"``, see ``BodyAerodynamics.__init__``.
 
         Returns:
             BodyAerodynamics instance.
@@ -657,6 +684,8 @@ class BodyAerodynamics:
             va_distribution += -np.cross(self._body_rates, control_points - r0)
 
         # push to panels
+        # kept for a rebuild of the panels (rotate, update_from_points)
+        self._va_distribution = np.array(va_distribution, dtype=float)
         if self._leg_direction == "streamwise":
             self._apply_streamwise_legs(va_distribution)
 

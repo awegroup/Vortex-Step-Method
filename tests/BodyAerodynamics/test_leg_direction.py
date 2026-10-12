@@ -1,5 +1,6 @@
-"""Direction of the attached-trailed legs: along the ribs or perpendicular to
-the quarter-chord line or along the flow (``BodyAerodynamics(leg_direction=...)``).
+"""Direction of the attached-trailed legs: along the flow (default), along
+the ribs, or perpendicular to the quarter-chord line
+(``BodyAerodynamics(leg_direction=...)``).
 
 Perpendicular legs depend only on the quarter-chord line and the
 trailing-edge curve, so (a) they coincide with the ribs wherever the ribs are
@@ -25,7 +26,7 @@ def _straight(n, skew=0.0, **kw):
     wing = Wing(n_panels=n, spanwise_panel_distribution="uniform")
     for y in np.linspace(-4.0, 4.0, n + 1):
         wing.add_section(np.array([0.0, y, 0.0]), np.array([1.0, y + skew, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **kw)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **kw})
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
@@ -36,7 +37,7 @@ def _swept(n, sweep_deg, **kw):
     for y in np.linspace(-4.0, 4.0, n + 1):
         x = abs(y) * np.tan(np.radians(sweep_deg))
         wing.add_section(np.array([x, y, 0.0]), np.array([x + 1.0, y, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **kw)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **kw})
     body.va_initialize(20.0, 5.0, 0.0)
     return body
 
@@ -46,7 +47,7 @@ def _arc(n, **kw):
     for th in np.radians(np.linspace(-55.0, 55.0, n + 1)):
         le = np.array([0.0, 4.0 * np.sin(th), 4.0 * np.cos(th)])
         wing.add_section(le, le + np.array([1.0, 0.0, 0.0]), INVISCID)
-    body = BodyAerodynamics([wing], **kw)
+    body = BodyAerodynamics([wing], **{"leg_direction": "rib", **kw})
     body.va_initialize(10.0, 8.0, 0.0)
     return body
 
@@ -171,3 +172,23 @@ def test_streamwise_legs_follow_the_inflow():
     yaw = np.degrees(np.arctan2(legs[:, 1], legs[:, 0]))
     assert np.allclose(yaw, expected_yaw, atol=1e-9)
     assert not np.allclose(te_0, te_1)
+
+
+def test_streamwise_legs_fall_back_to_ribs_for_pure_rotation(caplog):
+    """A body that only rotates has no mean inflow direction: the rib legs
+    are used, with a warning, and the solve goes through."""
+    import logging
+
+    body = _straight(12, skew=0.4, leg_direction="streamwise")
+    rib_te = np.array([p._rib_TE_point_1 for p in body.panels])
+    centre = np.mean([p.control_point for p in body.panels], axis=0)
+    with caplog.at_level(logging.WARNING):
+        body.va_initialize(Umag=0.0, angle_of_attack=0.0, side_slip=0.0,
+                           body_rates=[0.3, -0.2, 0.1],
+                           body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
+                           reference_point=centre)
+    assert any("rib legs" in m for m in caplog.messages)
+    assert np.allclose(np.array([p.TE_point_1 for p in body.panels]), rib_te)
+    # a proper inflow restores the streamwise legs
+    body.va_initialize(20.0, 5.0, 0.0)
+    assert not np.allclose(np.array([p.TE_point_1 for p in body.panels]), rib_te)
