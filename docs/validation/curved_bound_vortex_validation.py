@@ -211,6 +211,31 @@ def _ring_trailed(bp1, bp2, te1, te2, ep, wake, U):
     )
 
 
+def _curved_minus_straight_cp(eval_points, bp1, bp2, te1, te2, cdir, chords, va_norm, ac, core, sx, sw):
+    """Hypothesised form of the authors' LL-Gaunaa quarter-chord term: the bound
+    segments of the real wing minus those of the wing unrolled onto panel i's
+    tangent, single filaments, evaluated at the 3/4-chord control point of
+    panel i and reused at the quarter chord (constant along the chord). Zero
+    on straight wings by construction; finite because the control point is
+    half a chord off every line; no treatment of the legs."""
+    n = len(chords)
+    out = np.zeros((3, n, n))
+    fwd = np.linalg.norm(bp1[0] - bp2[1]) < np.linalg.norm(bp2[0] - bp1[1]) if n > 1 else True
+    L = np.linalg.norm(bp2 - bp1, axis=1)
+    s = np.concatenate(([0.0], np.cumsum(L)))
+    sgn = 1.0 if fwd else -1.0
+    for i in range(n):
+        C = eval_points[i] + (0.75 - ac) * chords[i] * cdir[i]  # 3/4-chord control point
+        t = (bp2[i] - bp1[i]) / L[i]
+        sP = 0.5 * (s[i] + s[i + 1])
+        for j in range(n):
+            ra = eval_points[i] + sgn * (s[j] - sP) * t
+            rb = eval_points[i] + sgn * (s[j + 1] - sP) * t
+            ub1, ub2 = (ra, rb) if fwd else (rb, ra)
+            out[:, i, j] = _seg(bp2[j], bp1[j], C) - _seg(ub2, ub1, C)
+    return out
+
+
 def _reid_hunsaker(eval_points, bp1, bp2, te1, te2, cdir, chords, va_norm, ac, core, sx, sw):
     """Reid & Hunsaker (2020): for each control point the lifting line is
     straightened near the point (Gaussian blend of width STATE['blend'] times
@@ -343,6 +368,32 @@ def table_reid_hunsaker():
         rows[f"{case} | RH MachUpX defaults"] = [(N, rt)]
         print(f"  {case:36s} MachUpX defaults (0.15 c, semispan)  N={N}: {rt:.3f}", flush=True)
     return rows
+
+
+def table_hypothesis(quick):
+    """The hypothesised Li/Gaunaa form with rib legs and with the paper's
+    perpendicular legs, against the sheet regularisation."""
+    print("\non-blade / Trefftz, curved-minus-straight bound segments at the 3/4 chord reused at the 1/4 chord (single filaments)")
+    cases = [
+        ("straight AR 8", straight, (40, 80)),
+        ("arc 110 deg, R = 4c", arc, (20, 40, 80) if quick else (20, 40, 80, 160)),
+        ("elliptic, 10% sweep, 25% anhedral", elliptic_swept_anhedral, (40, 80) if quick else (40, 80, 160)),
+        ("V3 kite, inviscid, 10 deg", v3_inviscid, (40, 80) if quick else (40, 80, 160)),
+        ("swept 30 deg (kinked)", swept, (40, 80)),
+    ]
+    out = {}
+    for name, mk, Ns in cases:
+        for legs in ("rib", "perpendicular"):
+            vals = []
+            for N in Ns:
+                try:
+                    r, cl = ratio(mk(N, leg_direction=legs), _curved_minus_straight_cp)
+                except ValueError:
+                    r = float("nan")
+                vals.append((N, r))
+            out[f"{name} | {legs}"] = vals
+            print(f"  {name:34s} {legs:13s} " + "  ".join(f"N={N}: {r:.3f}" for N, r in vals), flush=True)
+    return out
 
 
 def arc_self_induction():
@@ -556,14 +607,23 @@ def figure_09(pol):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--quick", action="store_true", help="only the regularised, on-line and trailed-only variants")
+    ap.add_argument("--hypothesis", action="store_true", help="only the table of the hypothesised Li/Gaunaa form")
     ap.add_argument("--figures", action="store_true", help="also regenerate docs/figures/08 and 09")
     args = ap.parse_args(argv)
     out = {}
     t0 = time.time()
+    if args.hypothesis:
+        path = OUT / "curved_bound_vortex_validation.json"
+        out = json.load(open(path)) if path.exists() else {}
+        out["hypothesis"] = table_hypothesis(args.quick)
+        json.dump(out, open(path, "w"), indent=1)
+        print(f"\nresults written to {path}  ({time.time() - t0:.0f} s)")
+        return
     out["variants"] = table_variants(args.quick)
     out["arc_self_induction"] = arc_self_induction()
     if not args.quick:
         out["reid_hunsaker"] = table_reid_hunsaker()
+        out["hypothesis"] = table_hypothesis(args.quick)
     if args.figures:
         print("\nV3 viscous polars for figure 09")
         out["v3_polars"] = v3_polars()
