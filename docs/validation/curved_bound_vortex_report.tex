@@ -141,7 +141,13 @@ where the strip nodes lie on each node's own leg line,
 \begin{equation}
 \mathbf n_{k,jq} = \mathbf b_{k,j} + \frac{x_q - x_{ac}}{1-x_{ac}}\,(\mathbf T_{k,j}-\mathbf b_{k,j}),\qquad x_{ac}=\tfrac14,
 \end{equation}
-so that the strip legs are collinear with the actual legs, and the chordwise stations and weights follow the thin-airfoil distribution $\gamma(x)\propto\sqrt{(c-x)/x}$ through $x_q=\sin^2\phi_q$, $w_q\propto\cos^2\phi_q$, $\phi_q=(q-\tfrac12)\pi/(2M)$, $M=24$ (\texttt{thin\_airfoil\_strips}). The distribution has its centroid at $c/4$, so the far field of the sheet equals that of the single filament.
+so that the strip legs are collinear with the actual legs, and the chordwise stations and weights follow the thin-airfoil distribution $\gamma(x)\propto\sqrt{(c-x)/x}$ through $x_q=\sin^2\phi_q$, $w_q\propto\cos^2\phi_q$, $\phi_q=(q-\tfrac12)\pi/(2M)$, $M=24$ (\texttt{thin\_airfoil\_strips}). The distribution has its centroid at $c/4$, so the far field of the sheet equals that of the single filament. Figure~\ref{fig:spread} shows the strips on real and unrolled panels and what the spreading does to the induction of a neighbouring segment: nothing beyond a chord, a finite value instead of a growing one within it.
+
+\begin{figure}[p]\centering
+\includegraphics[width=\textwidth]{15_chord_spread.png}
+\caption{The chordwise spreading (\texttt{docs/validation/chord\_spread\_figure.py}). (a) Three panels of the arc wing from above: the bound vortex of each panel replaced by 24 strips at the thin-airfoil stations, line weight and shade proportional to the strip weight, each strip with its own legs on the node's leg line. (b) The same strips on the real, curved panels (red) and on the unrolled, straight panels of the middle panel's reference (green): in the panel's neighbourhood the two sheets nearly coincide, which is why their difference is small there. (c) The chordwise velocity that one neighbouring bound segment of unit strength induces at the quarter-chord point $\mathbf P_i$ against its arc-length distance, as a single filament and as the spread sheet: beyond a chord the two are the same, within a chord the filament grows without bound and the sheet levels off at the cut-off $0.15\,c$ that the distribution fixes. (d) The running sum of those contributions from the far field inwards for 40 to 320 panels: with filaments every refinement adds a new nearest neighbour and the sum keeps rising, the logarithm of Li et al.; with sheets the sum settles to the same value at every panel count.}
+\label{fig:spread}
+\end{figure}
 
 For each evaluation panel $i$, the \emph{unrolled} reference wing is built on the tangent line $\mathbf t_i$ of panel $i$ through $\mathbf P_i$: every node keeps its arc-length coordinate along the bound line, the legs are perpendicular to the line in panel $i$'s chord direction with the panel's own chord length, and the wake keeps its direction. The quarter-chord velocity is then
 \begin{equation}
