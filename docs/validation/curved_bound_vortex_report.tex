@@ -13,20 +13,20 @@
 \setlength{\parindent}{0pt}
 \title{On-blade induced drag of curved lifting lines in the Vortex Step Method:\\
 problem statement, literature, and a parameter-free regularisation}
-\author{Working document, awegroup/Vortex-Step-Method, branch \texttt{feature/curved-bound-vortex-regularisation}}
-\date{17 September 2026 (rebuilt 12 October 2026)}
+\author{Working document, awegroup/Vortex-Step-Method, \texttt{develop}}
+\date{17 September 2026, revised 13 October 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-The \texttt{develop} branch of the Python Vortex Step Method (VSM) was aligned with the coupling rules of Gaunaa, Li and Pirrung (TORQUE 2026): force magnitudes from the three-quarter-chord flow, force directions from the quarter-chord flow, and a Kutta--Joukowski force on the attached-trailed vortex legs. With these rules the on-blade induced drag equals the Trefftz-plane value exactly on straight wings, but on the TU~Delft V3 kite it is 7--15\,\% low and decreases without bound as the number of spanwise panels increases. This document states the problem, identifies its cause (the logarithmically singular self-induction of the curved bound vortex, evaluated on its own line to set the force direction, entering the drag through $\rho\Gamma\,u\sin\alpha$), reviews how the literature treats the singularity, tests the two published remedies inside the VSM framework, and describes the parameter-free regularisation now implemented: the quarter-chord velocity is built from the classical lifting-line downwash of the wing unrolled onto the local tangent line, plus the difference between the actual and the unrolled vortex systems with the bound vorticity and the leg starting points spread chordwise with the thin-airfoil distribution. The result is identically zero on straight wings, mesh-independent, and within 1\,\% of the Trefftz-plane induced drag on an arc wing, a swept wing, the swept--anhedral elliptic wing of Gaunaa et al., and the V3 kite. All tables are reproduced by \texttt{docs/validation/curved\_bound\_vortex\_validation.py}.
+The \texttt{develop} branch of the Python Vortex Step Method (VSM) was aligned with the coupling rules of Gaunaa, Li and Pirrung (TORQUE 2026): force magnitudes from the three-quarter-chord flow, force directions from the quarter-chord flow, and a Kutta--Joukowski force on the attached-trailed vortex legs. With these rules the on-blade induced drag equals the Trefftz-plane value exactly on straight wings, but on the TU~Delft V3 kite it is 7--15\,\% low and decreases without bound as the number of spanwise panels increases. This document states the problem, identifies its cause (the logarithmically singular self-induction of the curved bound vortex, evaluated on its own line to set the force direction, entering the drag through $\rho\Gamma\,u\sin\alpha$), reviews how the literature treats the singularity, tests the two published remedies inside the VSM framework, and describes the parameter-free regularisation now implemented: the quarter-chord velocity is built from the classical lifting-line downwash of the wing unrolled onto the local tangent line, plus the difference between the actual and the unrolled vortex systems with the bound vorticity and the leg starting points spread chordwise with the thin-airfoil distribution. The result is identically zero on straight wings, mesh-independent, and within 1\,\% of the Trefftz-plane induced drag on an arc wing, a swept wing, the swept--anhedral elliptic wing of Gaunaa et al., and the V3 kite. A second part settles the direction of the attached-trailed legs, which the theory leaves open, against a vortex-lattice referee: the paper's perpendicular legs lose 8--9\,\% of the lift on kinked and kite-like wings, legs along the ribs or along the flow reproduce the lifting-surface lift within 1\,\%. All tables are reproduced by the scripts in \texttt{docs/validation}.
 \end{abstract}
 
 \section{Status of the implementation with respect to Li and Gaunaa}
 \label{sec:status}
 
-The \texttt{develop} branch (commits \texttt{233a238}\ldots\texttt{62c53af}) implements the following elements of Gaunaa, Li and Pirrung~\cite{gaunaa2026} and Li, Gaunaa, Pirrung and L{\o}nb{\ae}k~\cite{li2026}:
+Since the September 2026 commits (\texttt{233a238}\ldots\texttt{62c53af}) the code implements the following elements of Gaunaa, Li and Pirrung~\cite{gaunaa2026} and Li, Gaunaa, Pirrung and L{\o}nb{\ae}k~\cite{li2026}:
 \begin{itemize}[nosep]
   \item CP1: the inner 2D velocity is the component perpendicular to the local quarter-chord line, and the chord is measured perpendicular to that line;
   \item TAT1: the section's own 2D bound-vortex induction is subtracted at the three-quarter-chord point (the VSM \texttt{subtract\_bound\_2D} term, which the code has had since its inception);
@@ -124,6 +124,7 @@ V3 kite & 1.003 & 0.966 & 0.930 & 0.885 & 1.032 & 1.053 & 1.008\\
 \begin{itemize}[nosep]
   \item \emph{Li et al.\ 2018}~\cite{li2018}: correct a straight-blade model by the difference between the curved and an imaginary straight bound vortex. Same subtraction idea as below, but with single filaments, hence mesh dependent; abandoned in~\cite{li2020}.
   \item \emph{Guermond 1990}~\cite{guermond1990}: matched-asymptotic lifting-line theory for curved and swept wings. Shows analytically that the curvature term is finite once the inner (airfoil-scale) problem is accounted for, using Hadamard finite-part integrals. It is the theoretical basis for a chord-scale cut-off but is not a numerical scheme with horseshoes and polars.
+  \item \emph{Each segment minus its own infinite line, at the quarter chord.} The natural extension of TAT1 to the neighbours: for every panel $j$ subtract from its finite bound segment the infinite line through it. It works for the own section at the three-quarter chord, where the point is half a chord from the line, and fails at the quarter-chord point, which lies at a distance from a neighbour's line that shrinks with the square of the arc-length separation: the infinite-line term then grows like one over the panel width squared. On the arc wing the mid-span sum goes $-27$, $-110$, $-448$, $-1805$ at 20, 40, 80, 160 panels, against $+0.075$ to $+0.117$ for the segments alone. Tested here, not usable.
   \item \emph{Vortex core on the bound vortex} (e.g.\ QBlade~\cite{qblade}, core radius a fraction of chord): Reid and Hunsaker note these are ``very sensitive to the cutoff/core distance''. Tested here with the code's Vatistas kernel: the projection of an on-line point to the core boundary produces spurious velocities of order $\Gamma/(4\pi\epsilon)$ and unusable results.
   \item \emph{Three-quarter-chord directions} (Weissinger, Ranneberg~\cite{ranneberg2015}, the VSM default before the \texttt{develop} branch): no singularity, but the induced drag is overestimated by 20--40\,\% on the V3~\cite{gaunaa2026}.
   \item \emph{Trefftz-plane drag only} (Ranneberg): exact for the total in steady uniform inflow, unavailable with body rates or distributed inflow, no spanwise distribution.
@@ -149,7 +150,7 @@ so that the strip legs are collinear with the actual legs, and the chordwise sta
 \label{fig:spread}
 \end{figure}
 
-For each evaluation panel $i$, the \emph{unrolled} reference wing is built on the tangent line $\mathbf t_i$ of panel $i$ through $\mathbf P_i$: every node keeps its arc-length coordinate along the bound line, the legs are perpendicular to the line in panel $i$'s chord direction with the panel's own chord length, and the wake keeps its direction. The quarter-chord velocity is then
+For each evaluation panel $i$, the \emph{unrolled} reference wing is built on the tangent line $\mathbf t_i$ of panel $i$ through $\mathbf P_i$: every node keeps its arc-length coordinate along the bound line, the legs are perpendicular to the line in panel $i$'s chord direction, each with its own panel's chord length, and the wake keeps its direction. There is one such reference wing per evaluation panel. The quarter-chord velocity is then
 \begin{equation}
 \boxed{\;
 \mathbf V_{1/4,i}=\mathbf V_\infty+\sum_j\Gamma_j\Big[\mathbf K^{\mathrm{LL}}_{j,\mathrm{unrolled}(i)}(\mathbf P_i)
@@ -158,6 +159,29 @@ For each evaluation panel $i$, the \emph{unrolled} reference wing is built on th
 \end{equation}
 Figure~\ref{fig:unroll} shows the construction. The first term is Prandtl's classical downwash of the straight wing with the actual $\Gamma(s)$, exact for straight wings (ratio 1.000). The bracket is the curvature, sweep and skew effect; it is identically zero on a straight wing with perpendicular legs, finite because both sheets regularise the near field at the chord scale, and convergent because no filament is evaluated on its own line. The semi-infinite wake filaments cancel identically between the actual and unrolled systems, so the wake model plays no role. Nothing else changes: the three-quarter-chord magnitude (which already contains the LL-mod term of~\cite{li2020}), the circulation map, the AT force and the wake are untouched. The single-filament limit of the bracket recovers the curved-minus-straight idea of~\cite{li2018}; the chordwise spreading is the discrete counterpart of the inner solution in~\cite{guermond1990}; the local straightening is the mechanism of~\cite{reid2020} without its two empirical lengths. The effective cut-off implied by the distribution is $\exp\langle\ln|x-c/4|\rangle_\gamma=0.1515\,c$; the number of strips does not matter beyond $M\approx 20$ (24 and 32 strips give the same arc self-induction to three digits). Implementation: \texttt{assemble\_curved\_bound\_correction\_AIC} in \texttt{src/VSM/core/utils.py}, called from \texttt{BodyAerodynamics.update\_effective\_angle\_of\_attack\_if\_VSM}; about 0.5\,s at 50 panels and 1\,s at 80. The matrix depends on the panel geometry only, so it is computed once per shape and reused for every inflow and circulation; a body that is the cached shape up to a rigid rotation and translation (a trim that rotates the kite for every residual evaluation) reuses the stored matrix rotated, and only a deformation recomputes it.
 
+\subsection{Reading of the formulation}
+\label{sec:reading}
+Three remarks make eq.~\eqref{eq:fix} less opaque than it looks.
+
+\emph{The rule is the one the VSM already uses at the three-quarter chord.} The outer problem is the inviscid vortex system, the inner problem the 2D section with its polar, and the coupling hands the inner model the flow it does not already contain. A 2D section is an infinite straight wing: an infinitely long straight bound sheet along the chord with a straight wake. At the three-quarter chord the own infinite bound vortex is subtracted (TAT1) because the polar has it; on a straight wing the neighbours are collinear with that infinite vortex and add nothing, and the whole trailed system stays in because the 2D model has none of it. At the quarter chord the same subtraction is made: the own straight continuation is the unrolled wing, the section's tangent line with the neighbours laid on it, so ``real minus unrolled'' is ``3D minus what the profile already knows about itself and its straight continuation'', applied to the whole system. On a straight wing the two coincide and nothing is handed over beyond Prandtl's downwash.
+
+\emph{The sheet is what the profile is made of, not a numerical device.} The three-quarter-chord sums converge (Table~\ref{tab:cpconv}): the control point is half a chord from every filament, the lumped vortex at the quarter chord with the control point at the three-quarter chord reproduces thin-airfoil lift exactly (Pistolesi), and a sheet there would change that equivalence without regularising anything. The quarter-chord point lies on the line, and there the neighbours sit at a fraction of a chord. What is there, in the inner model's own terms, is the neighbour's chordwise sheet, bent slightly out of the section's plane; two sheets at a small angle induce a finite velocity on each other, two lines do not. Spreading the bound vorticity with the thin-airfoil distribution therefore uses, for the neighbours, the vorticity the inner model already uses for the section itself; the cut-off $0.15\,c$ is that distribution's, not a choice. The unrolled system is spread with the same strips so that collinear neighbours, which are the own 2D vortex, cancel exactly. The first term of eq.~\eqref{eq:fix} is left as single filaments because it is Prandtl's exact downwash of the straight wing, which spreading the leg starts would alter; the spreading enters only through the difference, which is zero wherever the wing is straight.
+
+\emph{The two sheet terms are the same panel in two positions.} $\mathbf K^{\mathrm{sheet}}_j$ is panel $j$ where it is, on the curved line, with its legs along its rib; $\mathbf K^{\mathrm{sheet}}_{j,\mathrm{unrolled}(i)}$ is the same panel with the same strips laid on panel $i$'s tangent at the same arc-length distance, with its leg in panel $i$'s chord direction. Biot--Savart depends on where a segment is and how it is oriented with respect to $\mathbf P_i$, so the two differ wherever the wing is curved: by little for the neighbours, whose two positions almost coincide (Figure~\ref{fig:unroll}d), and by the whole curvature effect for the far panels. Nothing singular is ever subtracted from anything singular.
+
+\begin{table}[h]\centering\small
+\caption{Why the three-quarter chord needs no sheet. Arc wing, mid-span panel, unit circulation on every other panel, bound segments as single filaments: the normal component at the control point converges (the neighbours build up the infinite-line value $1/(2\pi\cdot c/2)=0.318$ that TAT1 subtracts); the chordwise component at the quarter-chord point adds a constant per doubling.}
+\label{tab:cpconv}
+\begin{tabular}{lccccc}
+\toprule
+panels & 20 & 40 & 80 & 160 & 320\\
+\midrule
+at the 3/4-chord control point, normal & 0.198 & 0.252 & 0.282 & 0.297 & 0.305\\
+at the 1/4-chord point, chordwise & 0.075 & 0.089 & 0.103 & 0.117 & 0.130\\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{figure}[p]\centering
 \includegraphics[width=\textwidth]{14_unrolling_per_panel.png}
 \caption{What ``unrolling'' means (\texttt{docs/validation/unrolling\_figure.py}). For an evaluation panel $i$ (star) the reference wing is built on panel $i$'s own tangent line through its aerodynamic centre: every node keeps its arc-length distance from the panel, the legs are perpendicular to the line in panel $i$'s chord direction with each panel's own chord, and the wake keeps its direction. There is one such reference wing per panel. (a, b) The arc wing with the references of a mid-span panel (blue) and a panel near the tip (red): the two straight wings are different, each tangent at its own panel. (c) The kinked swept wing seen from above, with the reference of a panel on the right half: the whole wing, including the other half, is laid along that panel's line, and the legs follow that panel's chord direction. (d) The distance between the actual and the unrolled nodes against their arc-length distance from the evaluation panel, for the arc wing and the V3: within a leg length the two systems coincide to second order, so the singular near field cancels in the difference of eq.~\eqref{eq:fix}; what remains is the far-field effect of the curvature, finite once both systems are spread over the chord.}
@@ -165,6 +189,7 @@ Figure~\ref{fig:unroll} shows the construction. The first term is Prandtl's clas
 \end{figure}
 
 \subsection{Verification against the Trefftz plane}
+Table~\ref{tab:fix} repeats Table~\ref{tab:conv} with eq.~\eqref{eq:fix} in place: the ratio is 1.000 on the straight wing, within 1\,\% on the arc and the V3 at every panel count, and no longer drifts.
 
 \begin{table}[h]\centering\small
 \caption{On-blade over Trefftz-plane induced drag with eq.~\eqref{eq:fix}, inviscid polars (\texttt{curved\_bound\_vortex\_validation.py}).}
@@ -178,14 +203,14 @@ straight, ribs skewed $22^\circ$ & -- & -- & 1.029 & 1.030 & --\\
 swept $30^\circ$, streamwise ribs & -- & -- & 0.971 & 0.982 & 0.988\\
 circular arc, $110^\circ$, $R=4c$ & 1.008 & 1.001 & 0.999 & 0.999 & 0.999\\
 elliptic, 10\,\% sweep, 25\,\% anhedral, rib legs & -- & -- & 1.014 & 1.015 & 1.017\\
-elliptic, same, perpendicular legs & -- & -- & 1.024 & 1.024 & --\\
+elliptic, same, perpendicular legs & -- & -- & 1.025 & 1.024 & 1.020\\
 V3 kite, rib legs & -- & 1.011 & 1.007 & 1.008 & 1.010\\
-V3 kite, perpendicular legs & -- & -- & 1.042 & 1.038 & --\\
+V3 kite, perpendicular legs & -- & -- & 1.015 & 1.018 & crosses\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Two residuals remain and are unrelated to the bound vortex: the swept wing converges to 0.99 rather than 1.00, and the straight wing with skewed ribs sits at 1.03 with or without the fix. Both point to the attached-trailed force on non-perpendicular legs and are a separate, smaller item. The 4\,\% excess with perpendicular legs on the V3 is likewise not caused by the bound-vortex term (it is the same with the bound segments on the line).
+Two residuals remain and are unrelated to the bound vortex: the swept wing converges to 0.99 rather than 1.00, and the straight wing with skewed ribs sits at 1.03 with or without the fix. Both point to the attached-trailed force on legs that are not aligned with the flow and are a separate, smaller item, taken up in Section~\ref{sec:legs}. The perpendicular-leg rows use the construction of Section~\ref{sec:legs}; on the V3 it cannot be built above 80 panels.
 
 \subsection{Direction of the attached-trailed legs}
 \label{sec:legs}
@@ -291,6 +316,7 @@ The remaining gap to the wind tunnel is lift-dependent, $\Delta C_D\approx0.003+
 \begin{itemize}[nosep]
   \item The mechanism of the fix (straighten locally, regularise the legs, keep the far field) is that of Reid and Hunsaker~\cite{reid2020}; the difference-form goes back to Li et al.~\cite{li2018}. The contribution here is the replacement of the two empirical lengths by the thin-airfoil chordwise distribution, which fixes the cut-off at $0.15\,c$ from theory, and the demonstration that this yields Trefftz-consistent induced drag on curved kites. It should be presented as such, with~\cite{reid2020,li2020,guermond1990} cited.
   \item To be confirmed with the authors of~\cite{gaunaa2026,li2020}: how the curved bound-vortex influence is applied at the quarter chord in their code, and how it behaves when the number of sections is doubled.
+  \item With body rates the apparent velocity is built at the control points and the same array feeds the quarter-chord direction and the attached-trailed force; the rotational term's variation along the chord, $\omega\times(\mathbf r_{1/4}-\mathbf r_{3/4})$, is the effective torsional rate $T_0\dot\theta$ of Li, Gaunaa and Pirrung~\cite{li2026wes}, whose coned-blade benchmark shows it worth 4\,\% of power at $10^\circ$ cone. On the V3 at 20\,m/s and a yaw rate of 0.3\,rad/s the local angle error reaches $0.8^\circ$ at the tips while the total drag changes 0.6\,\%, the error being antisymmetric across the span; the yawing moment is affected. To fix: evaluate the apparent velocity at the aerodynamic centre for the direction and at the leg points for the attached-trailed force.
   \item Settled with a referee (Section~\ref{sec:legs}): the paper's perpendicular legs are rejected; rib legs stay the default, streamwise legs are available. A streamwise construction with the local inflow direction per node would remove the mean-direction limitation. Open: the attached-trailed force on legs that are not aligned with the flow (kinked wing 0.98, skewed ribs 1.03, streamwise legs on the arc 1.035), and a V3 referee with the exact skewed tips (AeroSandbox unskews them). Not quantified: the section polars are rib-section polars while CP1 applies them in the span-perpendicular plane.
 \end{itemize}
 
@@ -298,6 +324,7 @@ The remaining gap to the wind tunnel is lift-dependent, $\Delta C_D\approx0.003+
 \bibitem{gaunaa2026} M.~Gaunaa, A.~Li, G.~R.~Pirrung, From thin airfoil theory to finite wings: consistent implementation of Lifting Line-based models, J.\ Phys.: Conf.\ Ser.\ 3224 (2026) 042030.
 \bibitem{appendix2026} M.~Gaunaa, A.~Li, G.~R.~Pirrung, Internet appendix for ``From thin airfoil theory to finite wings'', Zenodo, doi:10.5281/zenodo.18222326 (2026).
 \bibitem{li2026} A.~Li, M.~Gaunaa, G.~R.~Pirrung, K.~L{\o}nb{\ae}k, Relaxation limits and artificial viscosity for lifting line methods, TORQUE 2026.
+\bibitem{li2026wes} A.~Li, M.~Gaunaa, G.~R.~Pirrung, Unsteady airfoil aerodynamics in attached flow: from unsteady thin-airfoil theory to wind turbine implementation, Wind Energ.\ Sci.\ Discuss., doi:10.5194/wes-2026-168 (2026). Reference implementation: doi:10.5281/zenodo.22793702.
 \bibitem{li2020} A.~Li, M.~Gaunaa, G.~R.~Pirrung, N.~Ramos-Garc\'ia, S.~G.~Horcas, The influence of the bound vortex on the aerodynamics of curved wind turbine blades, J.\ Phys.: Conf.\ Ser.\ 1618 (2020) 052038.
 \bibitem{li2018} A.~Li, G.~Pirrung, H.~Aa.~Madsen, M.~Gaunaa, F.~Zahle, Fast trailed and bound vorticity modeling of swept wind turbine blades, J.\ Phys.: Conf.\ Ser.\ 1037 (2018) 062012.
 \bibitem{reid2020} J.~T.~Reid, D.~F.~Hunsaker, A general approach to lifting-line theory, applied to wings with sweep, J.\ Aircraft 58 (2021), doi:10.2514/1.C035994.
