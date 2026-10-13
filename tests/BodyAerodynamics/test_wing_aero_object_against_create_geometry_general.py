@@ -216,7 +216,7 @@ def create_geometry(model="VSM", wing_type="rectangular", plotting=False, N=40):
             coord_left_to_right[2 * idx + 1],
             polar_data,
         )
-    wing_aero = BodyAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing], leg_direction="rib")  # thesis vortex system
     wing_aero.va = Uinf
     if plotting:
         wing_aero.plot()

@@ -1444,6 +1444,10 @@ class Solver:
                 trial = evaluate(current["x"] + direction)
                 evaluations += 1
                 ratio = np.inf if finite(trial) and norm(trial) == 0 else (norm(current) / norm(trial) if finite(trial) else 0.0)
+                crossed_gate = finite(trial) and trial["gate"] != current["gate"]
+                if not finite(trial) or (
+                    ratio < self._newton_reject_ratio
+                    and not (crossed_gate and dt <= dt_restart)
                 ):
                     # Residual grew too much: reject and shrink. EXCEPT across
                     # the viscosity gate, the residual's one discontinuity:

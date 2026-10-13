@@ -45,7 +45,7 @@ def rect_wing(n, aspect_ratio, sweep_deg=0.0, dist="uniform"):
     for y in np.linspace(-aspect_ratio / 2, aspect_ratio / 2, n + 1):
         x = abs(y) * np.tan(np.radians(sweep_deg))
         w.add_section(np.array([x, y, 0.0]), np.array([x + 1.0, y, 0.0]), polar)
-    return BodyAerodynamics([w])
+    return BodyAerodynamics([w], leg_direction="rib")
 
 
 def elliptic_wing(n, aspect_ratio):
@@ -55,11 +55,11 @@ def elliptic_wing(n, aspect_ratio):
     for y in np.linspace(-b / 2, b / 2, n + 1):
         c = np.sqrt(max(1e-6, 1 - (2 * y / b) ** 2))
         w.add_section(np.array([-c / 4, y, 0.0]), np.array([3 * c / 4, y, 0.0]), polar)
-    return BodyAerodynamics([w])
+    return BodyAerodynamics([w], leg_direction="rib")
 
 
 def v3(n=50, geom=V3_GEOM):
-    return BodyAerodynamics.instantiate(n_panels=n, file_path=geom, spanwise_panel_distribution="uniform")
+    return BodyAerodynamics.instantiate(n_panels=n, file_path=geom, spanwise_panel_distribution="uniform", leg_direction="rib")
 
 
 # --------------------------------------------------------------------------
