@@ -207,6 +207,24 @@ which is the line's $\Gamma\kappa\,\mathrm{d}s/(8\pi d)$ for $d\gg|\Delta x|$ an
 
 \emph{The two sheet terms are the same panel in two positions.} $\mathbf K^{\mathrm{sheet}}_j$ is panel $j$ where it is, on the curved line, with its legs along its rib; $\mathbf K^{\mathrm{sheet}}_{j,\mathrm{unrolled}(i)}$ is the same panel with the same strips laid on panel $i$'s tangent at the same arc-length distance, with its leg in panel $i$'s chord direction. Biot--Savart depends on where a segment is and how it is oriented with respect to $\mathbf P_i$, so the two differ wherever the wing is curved: by little for the neighbours, whose two positions almost coincide (Figure~\ref{fig:unroll}d), and by the whole curvature effect for the far panels. Nothing singular is ever subtracted from anything singular.
 
+\emph{The distribution is not a sensitive choice.} The flat-plate loading is the one the lumped-vortex model assumes, but a real section loads differently, and in thin-airfoil terms its bound vorticity is its pressure jump, $\gamma(x)\propto\Delta C_p(x)$. Table~\ref{tab:strips} replaces the strip weights by the NeuralFoil loading of the V3 centre section and of a NACA~4412 (\texttt{strip\_weight\_sensitivity.py}). The LEI profile is nose-heavier than the flat plate, its cut-off $c_{\mathrm{eff}}$ falls from $0.16\,c$ to $0.13\,c$, and its centroid sits aft of the quarter chord because of the camber. The arc wing moves by at most 0.3\,\%, the V3 by 0.5--1.5\,\% of the induced drag ($\Delta C_D\le0.0005$ at $10^\circ$), the same order as the referee's own uncertainty. Since the loading depends on the angle of attack, using it would make the correction depend on the solution and cost the per-shape cache; the flat-plate weights are kept.
+
+\begin{table}[h]\centering\small
+\caption{Strip weights from real section loadings instead of the flat plate: effective cut-off, centroid, and on-blade over Trefftz induced drag (inviscid polars). NeuralFoil samples the chord from $x/c=0.016$, so the leading-edge peak is partly missed and the centroids are a few percent of chord too far aft.}
+\label{tab:strips}
+\begin{tabular}{lcccccc}
+\toprule
+strip loading & $c_{\mathrm{eff}}/c$ & centroid & arc 40 & arc 80 & V3 40 & V3 80\\
+\midrule
+flat plate, thin airfoil (implemented) & 0.158 & 0.250 & 0.999 & 0.999 & 1.007 & 1.008\\
+V3 centre section, $5^\circ$ & 0.138 & 0.311 & 1.003 & 1.002 & 1.020 & 1.022\\
+V3 centre section, $10^\circ$ & 0.127 & 0.287 & 0.999 & 0.998 & 1.013 & 1.015\\
+V3 centre section, $15^\circ$ & 0.133 & 0.288 & 1.000 & 0.999 & 1.013 & 1.014\\
+NACA 4412, $10^\circ$ & 0.141 & 0.300 & 1.003 & 1.002 & 1.022 & 1.024\\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{table}[h]\centering\small
 \caption{Why the three-quarter chord needs no sheet. Arc wing, mid-span panel, unit circulation on every other panel, bound segments as single filaments: the normal component at the control point converges (the neighbours build up the infinite-line value $1/(2\pi\cdot c/2)=0.318$ that TAT1 subtracts); the chordwise component at the quarter-chord point adds a constant per doubling.}
 \label{tab:cpconv}
