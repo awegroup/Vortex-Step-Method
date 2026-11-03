@@ -4,6 +4,110 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.3.0] - 03/11/2026
+
+**Default results change.** The lifting-line coupling now follows the consistent
+formulation of Gaunaa, Li & Pirrung (TORQUE 2026): circulation from the inner
+velocity, span-perpendicular sections, quarter-chord force directions,
+attached-trailed-vortex forces and a chord-regularised curved bound vortex.
+Forces, moments and coefficients computed with the defaults differ from 2.2.0,
+most on swept and curved wings (kites). Each new default can be switched back
+individually where an option exists (listed below). See
+`docs/aerodynamic_model` for the formulation and its validation.
+
+This release also contains everything shipped in 2.2.0. `v2.2.0` was tagged on
+the `improve_plotting` branch, which had not been merged into `develop`/`main`.
+
+### Changed (results)
+- Circulation target is `Gamma = 0.5 |V_inner| c Cl` with the inner
+  (span-perpendicular, own-2D-induction-removed) velocity, instead of
+  `0.5 Umag^2 / Umagw c Cl`. On the V3 kite the old map put the circulation
+  2-6 % low.
+- Panel frame and chord follow the Crossflow Principle: the chord direction is
+  perpendicular to the bound vortex, the normal is chord x span, and the panel
+  chord is the perpendicular one. Unswept panels are unchanged; on swept panels
+  the chord shrinks (V3 tip panels by 56 % and 19 %).
+- `is_aoa_corrected=True` by default: lift and drag directions come from the
+  flow at the quarter chord (TAT3), with magnitudes from the 3/4-chord angle.
+  `is_aoa_corrected=False` restores the 3/4-chord directions.
+- The quarter-chord flow includes the influence of a curved or swept bound
+  vortex through a chord-regularised correction (the actual minus a locally
+  unrolled vortex system). On-blade induced drag matches the Trefftz plane
+  within about 1 % on arc, swept and kite geometries, independently of the
+  panel count. It is computed once per shape and rotated under rigid motion.
+- Drag acts along the local inner flow, not the global span axis.
+- `is_with_attached_trailed_vortex_force=True` by default: Kutta-Joukowski force
+  on the chordwise attached trailed vortex segments (`F_attached_trailed_distribution`
+  in the results).
+- `relaxation_factor=None` by default: 0.8 x the fixed-point stability limit of
+  Li et al. (2026), evaluated per solve (`Solver.compute_relaxation_factor_limit`).
+  2.2.0 used a fixed 0.01; pass a number to keep a fixed value.
+- Each wake ring follows its own panel's apparent velocity. Results in uniform
+  translating inflow are unchanged to round-off; they change under body rates or
+  distributed inflow.
+- Bridle line segments are charged at their own inflow, not the wing's mean.
+- With `is_with_viscous_drag_correction=True`, the Gaunaa 2024 correction receives
+  the full 3D relative velocity (the spanwise flow it models).
+- With `is_with_artificial_viscosity=True`, the regularization is also gated on
+  negative stall.
+- `Wing.preserve_section_order` (default False): skip the section re-sorting;
+  `update_wing_from_points` sets it, since its arrays already define the arc order.
+
+### Removed / breaking
+- `Solver` options `is_smooth_circulation`, `smoothness_factor`,
+  `is_artificial_damping`, `artificial_damping`,
+  `is_with_simonet_artificial_viscosity`, `simonet_artificial_viscosity_fva`
+  (stored, never read) and the `gamma_loop_type` values `simonet_stall`,
+  `non_linear_simonet_stall`, `non_linear_simonet_stall_newton_raphson` (they
+  raised `ImportError`). An unknown `gamma_loop_type` now raises `ValueError`.
+- `Solver.compute_aerodynamic_quantities` no longer returns `Umagw`; the relative
+  velocity is available from `Solver.compute_relative_velocity(gamma)`.
+- The Anderson loop no longer falls back to the base loop by default
+  (`anderson_fallback_to_base=True` restores it).
+
+### Added
+- `gamma_loop_type="casadi_newton"`: Newton solve of the circulation residual
+  with an exact CasADi Jacobian, globalised by pseudo-transient continuation,
+  with fallback to the base loop (`newton_max_iterations`,
+  `newton_pseudo_time_step`, `newton_fallback_to_base`, `polar_interpolation`).
+  Requires the optional `casadi` package.
+- `stagnation_patience` / `stagnation_rtol`: optional early stop of stagnating
+  circulation loops.
+- `BodyAerodynamics(..., leg_direction="rib" | "streamwise" | "perpendicular")`
+  for the attached-trailed legs (default `"rib"`, unchanged).
+- `results["drag_induced_trefftz"]`: Trefftz-plane induced drag as a far-wake
+  reference (uniform inflow only).
+- `VSM.core.panel_kernels`: the section force law as functions over an `xp`
+  namespace (`numpy` or `casadi`): `relative_flow`, `quarter_chord_velocity`,
+  `direction_angle`, `panel_forces`, `attached_trailed_forces` and row helpers.
+  `compute_results` uses them itself.
+- `BodyAerodynamics.compute_quarter_chord_AIC_matrices`: the induction of the
+  force-direction flow at the quarter chords, for callers that freeze it.
+- `Solver.casadi_panel_force_function()`: per-panel forces as a CasADi function.
+  With `table_inputs=True` (also on the residual function) the polar tables are
+  inputs, so one graph serves every deformed shape;
+  `Solver.casadi_polar_table_inputs()` and `casadi_stall_angle_inputs()` return
+  them in the input layout.
+- Documentation: aerodynamic model document (formulation, conventions,
+  validation) and the curved bound-vortex validation report.
+
+### Fixed
+- Circulation loops stop on non-finite circulation instead of running on.
+- `Solver`: SyntaxError in the pseudo-transient reject condition (hotfix on `main`
+  after 2.2.0, now also here).
+- `Wing.compute_projected_area` no longer normalises the caller's
+  `z_plane_vector` in place.
+
+### Performance
+- AIC assembly JIT-compiled with numba, then made allocation-free (vectors as
+  tuples): about 1 us -> 20 ns per filament evaluation, 7.3 -> 0.1 ms for a
+  36-panel AIC.
+- Curved bound-vortex correction computed once per shape and rotated under
+  rigid motion.
+- Faster Li/Gaunaa artificial viscosity, vectorised force law, Trefftz drag and
+  projected area, cheaper `casadi_newton` residual calls. A 36-panel V3
+  `casadi_newton` solve takes about 17 ms (about 50 ms before these changes).
+
 ## [2.2.0] - 02/09/2026
 
 Release cut from the `improve_plotting` branch. This is the version used to
