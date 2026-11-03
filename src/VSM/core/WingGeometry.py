@@ -627,22 +627,18 @@ class Wing:
         """
         sections = self.sections
         n = np.asarray(z_plane_vector, dtype=float)
-        n /= np.linalg.norm(n)
+        n = n / np.linalg.norm(n)  # not in place: never modify the caller's array
 
-        def proj(P):
-            # orthogonal projection onto plane with normal n
-            return P - np.dot(P, n) * n
-
-        S = 0.0
-        for i in range(len(sections) - 1):
-            A = proj(sections[i].LE_point)
-            B = proj(sections[i].TE_point)
-            C = proj(sections[i + 1].TE_point)
-            D = proj(sections[i + 1].LE_point)
-            # two triangles: (A,B,C) and (A,C,D)
-            S += 0.5 * np.linalg.norm(np.cross(B - A, C - A))
-            S += 0.5 * np.linalg.norm(np.cross(C - A, D - A))
-        return S
+        LE = np.array([section.LE_point for section in sections], dtype=float)
+        TE = np.array([section.TE_point for section in sections], dtype=float)
+        # orthogonal projection onto the plane with normal n
+        LE = LE - np.outer(LE @ n, n)
+        TE = TE - np.outer(TE @ n, n)
+        A, B, C, D = LE[:-1], TE[:-1], TE[1:], LE[1:]
+        # two triangles per strip: (A,B,C) and (A,C,D)
+        area_ABC = 0.5 * np.linalg.norm(np.cross(B - A, C - A), axis=1)
+        area_ACD = 0.5 * np.linalg.norm(np.cross(C - A, D - A), axis=1)
+        return float(np.sum(np.column_stack([area_ABC, area_ACD])))
 
     def compute_flat_area(self) -> float:
         """Calculate the total flat (undeformed) wing area in 3D space.

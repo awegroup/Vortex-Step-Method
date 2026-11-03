@@ -202,6 +202,7 @@ class Solver:
         # rejected and the step quartered (0.5 = residual may at most double).
         self._newton_reject_ratio = 0.5
         self._casadi_newton_cache: dict = {}
+        self._casadi_newton_loop_cache: dict = {}
         #: Diagnostic: did the last casadi_newton solve fall back to base?
         self.last_fallback = False
         #: Diagnostic: residual evaluations used by the last casadi_newton solve.
@@ -1359,6 +1360,31 @@ class Solver:
             self._casadi_newton_cache[key] = fn
         return fn
 
+    def _casadi_newton_loop_function(self):
+        """The residual function restricted to the six outputs the Newton loop
+        reads (``h, dh_dvrel, mu, alpha, umag, gate``): the same graph, minus
+        the force-side lookups it would otherwise evaluate on every call.
+        Cached per polar set alongside the full function."""
+        import casadi as ca
+
+        alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
+        key = self._casadi_newton_key(alpha_tables, cl_tables, cd_tables, cm_tables)
+        loop_fn = self._casadi_newton_loop_cache.get(key)
+        if loop_fn is None:
+            fn = self._casadi_newton_function()
+            inputs = fn.mx_in()
+            loop_fn = ca.Function(
+                "vsm_panel_residual_loop",
+                inputs,
+                fn.call(inputs)[:6],
+                fn.name_in(),
+                fn.name_out()[:6],
+            )
+            if len(self._casadi_newton_loop_cache) >= 32:
+                self._casadi_newton_loop_cache.pop(next(iter(self._casadi_newton_loop_cache)))
+            self._casadi_newton_loop_cache[key] = loop_fn
+        return loop_fn
+
     def gamma_loop_casadi_newton(self, gamma_initial: np.ndarray) -> tuple:
         """Newton solve of the circulation residual with an exact CasADi
         Jacobian, globalised by pseudo-transient continuation
@@ -1407,7 +1433,9 @@ class Solver:
         fallback to decide.
         """
         try:
-            fn = self._casadi_newton_function()
+            import casadi as ca
+
+            fn = self._casadi_newton_loop_function()
         except ImportError as exc:  # pragma: no cover - depends on optional dep
             raise ImportError(
                 "gamma_loop_type='casadi_newton' requires the optional 'casadi' "
@@ -1424,14 +1452,19 @@ class Solver:
             stall_angles = np.full(n, np.inf)
             stall_angles_neg = np.full(n, -np.inf)
             laplacian = np.zeros((n, n))
-        params = (
-            self.x_airf_array,
-            self.y_airf_array,
-            self.z_airf_array,
-            self.chord_array,
-            self.width_array,
-            stall_angles,
-            stall_angles_neg,
+        # Constant within the solve: converted to CasADi matrices once, which
+        # halves the cost of each residual evaluation.
+        params = tuple(
+            ca.DM(np.asarray(value, dtype=float))
+            for value in (
+                self.x_airf_array,
+                self.y_airf_array,
+                self.z_airf_array,
+                self.chord_array,
+                self.width_array,
+                stall_angles,
+                stall_angles_neg,
+            )
         )
         aic = (self.AIC_x, self.AIC_y, self.AIC_z)
 
@@ -1440,7 +1473,7 @@ class Solver:
             # v_rel = va + AIC gamma (see _build_casadi_newton_function).
             v_rel = self.va_array + np.column_stack([a @ x for a in aic])
             l_gamma = laplacian @ x
-            h, dh_dvrel, mu, alpha, umag, gate = fn(v_rel, *params, l_gamma)[:6]
+            h, dh_dvrel, mu, alpha, umag, gate = fn(v_rel, *params, l_gamma)
             h = np.asarray(h, dtype=float).ravel()
             dh_dvrel = np.asarray(dh_dvrel, dtype=float)
             mu = np.asarray(mu, dtype=float).ravel()

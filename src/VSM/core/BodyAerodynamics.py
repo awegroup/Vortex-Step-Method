@@ -1299,17 +1299,17 @@ class BodyAerodynamics:
         ).astype(float)
         d_gamma = np.concatenate(([gamma[0]], gamma[1:] - gamma[:-1], [-gamma[-1]]))
         q = origins - np.outer(origins @ e_inf, e_inf)  # projected onto the plane
-        drag = 0.0
-        for i in range(n):
-            mid = 0.5 * (q[i] + q[i + 1])
-            d = mid - q
-            r2 = np.sum(d * d, axis=1)
-            v_t = np.sum(
-                (d_gamma / (2.0 * np.pi * r2))[:, None] * np.cross(e_inf, d), axis=0
-            )
-            # trace segment in the sense of the bound vortex (section i+1 -> i)
-            drag += gamma[i] * np.dot(np.cross(v_t, q[i] - q[i + 1]), e_inf)
-        return 0.5 * rho * drag
+        # velocity of all wake vortices k at every trace-segment midpoint i
+        mid = 0.5 * (q[:-1] + q[1:])  # (n, 3)
+        d = mid[:, None, :] - q[None, :, :]  # (n, n+1, 3)
+        r2 = np.sum(d * d, axis=2)
+        v_t = np.sum(
+            (d_gamma[None, :] / (2.0 * np.pi * r2))[:, :, None] * np.cross(e_inf, d),
+            axis=1,
+        )
+        # trace segment in the sense of the bound vortex (section i+1 -> i)
+        drag = np.sum(gamma[:n] * (np.cross(v_t, q[:-1] - q[1:]) @ e_inf))
+        return 0.5 * rho * float(drag)
 
     def compute_attached_trailed_vortex_forces(
         self, gamma, rho, core_radius_fraction, va_array
