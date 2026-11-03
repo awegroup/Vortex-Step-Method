@@ -30,156 +30,210 @@ def jit_dot(a, b):
 # round-off; Filament.py remains the readable reference implementation.
 # The only intentional difference: the bound-vortex in-core branch cannot
 # emit the logging.info diagnostic from compiled code.
+#
+# Vectors are carried as 3-tuples of floats, not length-3 arrays: numba
+# keeps tuples on the stack, whereas every small-array temporary (np.cross,
+# r1 - r0, np.zeros(3)) is a heap allocation, and those allocations were
+# ~95% of the kernel cost (~1.1 us -> ~25 ns per filament evaluation).
+# error_model="numpy" keeps NumPy's inf/nan semantics for a zero
+# denominator (numba's default would raise ZeroDivisionError on scalars),
+# so degenerate geometry behaves as it did with the array kernels.
 # =====================================================================
 
 _ALPHA0_OSEEN = 1.25643  # Oseen parameter (Filament._alpha0)
 _NU_AIR = 1.48e-5  # kinematic viscosity of air [m^2/s] (Filament._nu)
 
+_ZERO3 = (0.0, 0.0, 0.0)
 
-@jit(nopython=True, cache=True)
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _row(a, i):
+    """Row ``i`` of an (n, 3) array as a 3-tuple."""
+    return (a[i, 0], a[i, 1], a[i, 2])
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _add(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _scale(s, a):
+    return (s * a[0], s * a[1], s * a[2])
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _div(a, s):
+    return (a[0] / s, a[1] / s, a[2] / s)
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
+def _norm(a):
+    return np.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+
+
+@jit(nopython=True, cache=True, error_model="numpy")
 def _vel_bound_vortex(XV1, XV2, XVP, gamma, core_radius_fraction):
     """Bound-filament induced velocity (Vatistas core), as in
     Filament.velocity_3D_bound_vortex."""
-    r0 = XV2 - XV1
-    r1 = XVP - XV1
-    r2 = XVP - XV2
+    r0 = _sub(XV2, XV1)
+    r1 = _sub(XVP, XV1)
+    r2 = _sub(XVP, XV2)
 
-    r1Xr0 = np.cross(r1, r0)
-    epsilon = core_radius_fraction * np.linalg.norm(r0)
-    dist = np.linalg.norm(r1Xr0) / np.linalg.norm(r0)
+    r1Xr0 = _cross(r1, r0)
+    epsilon = core_radius_fraction * _norm(r0)
+    dist = _norm(r1Xr0) / _norm(r0)
     if dist > epsilon:
-        r1Xr2 = np.cross(r1, r2)
-        return (
+        r1Xr2 = _cross(r1, r2)
+        return _scale(
             gamma
             / (4 * np.pi)
-            * r1Xr2
-            / (np.linalg.norm(r1Xr2) ** 2)
-            * np.dot(r0, r1 / np.linalg.norm(r1) - r2 / np.linalg.norm(r2))
+            / (_norm(r1Xr2) ** 2)
+            * _dot(r0, _sub(_div(r1, _norm(r1)), _div(r2, _norm(r2)))),
+            r1Xr2,
         )
     elif dist < 1e-12 * epsilon:
-        return np.zeros(3)
+        return _ZERO3
     else:
-        r1_radial = r1 - np.dot(r1, r0) * r0 / (np.linalg.norm(r0) ** 2)
-        r2_radial = r2 - np.dot(r2, r0) * r0 / (np.linalg.norm(r0) ** 2)
-        r1_proj = np.dot(r1, r0) * r0 / (
-            np.linalg.norm(r0) ** 2
-        ) + epsilon * r1_radial / np.linalg.norm(r1_radial)
-        r2_proj = np.dot(r2, r0) * r0 / (
-            np.linalg.norm(r0) ** 2
-        ) + epsilon * r2_radial / np.linalg.norm(r2_radial)
-        r1Xr2_proj = np.cross(r1_proj, r2_proj)
-        vel_ind_proj = (
+        r0_sq = _norm(r0) ** 2
+        r1_axial = _div(_scale(_dot(r1, r0), r0), r0_sq)
+        r2_axial = _div(_scale(_dot(r2, r0), r0), r0_sq)
+        r1_radial = _sub(r1, r1_axial)
+        r2_radial = _sub(r2, r2_axial)
+        r1_proj = _add(r1_axial, _div(_scale(epsilon, r1_radial), _norm(r1_radial)))
+        r2_proj = _add(r2_axial, _div(_scale(epsilon, r2_radial), _norm(r2_radial)))
+        r1Xr2_proj = _cross(r1_proj, r2_proj)
+        vel_ind_proj = _scale(
             gamma
             / (4 * np.pi)
-            * r1Xr2_proj
-            / (np.linalg.norm(r1Xr2_proj) ** 2)
-            * np.dot(
+            / (_norm(r1Xr2_proj) ** 2)
+            * _dot(
                 r0,
-                r1_proj / np.linalg.norm(r1_proj) - r2_proj / np.linalg.norm(r2_proj),
-            )
+                _sub(_div(r1_proj, _norm(r1_proj)), _div(r2_proj, _norm(r2_proj))),
+            ),
+            r1Xr2_proj,
         )
-        return dist / epsilon * vel_ind_proj
+        return _scale(dist / epsilon, vel_ind_proj)
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def _vel_trailing_vortex(XV1, XV2, XVP, gamma, Uinf):
     """Finite trailing-leg induced velocity (viscous core), as in
     Filament.velocity_3D_trailing_vortex."""
-    r0 = XV2 - XV1
-    r1 = XVP - XV1
-    r2 = XVP - XV2
+    r0 = _sub(XV2, XV1)
+    r1 = _sub(XVP, XV1)
+    r2 = _sub(XVP, XV2)
 
-    r_perp = r1 - np.dot(r1, r0) * r0 / (np.linalg.norm(r0) ** 2)
-    epsilon = np.sqrt(4 * _ALPHA0_OSEEN * _NU_AIR * np.linalg.norm(r_perp) / Uinf)
+    r0_sq = _norm(r0) ** 2
+    r_perp = _sub(r1, _div(_scale(_dot(r1, r0), r0), r0_sq))
+    epsilon = np.sqrt(4 * _ALPHA0_OSEEN * _NU_AIR * _norm(r_perp) / Uinf)
 
-    r1Xr0 = np.cross(r1, r0)
-    dist = np.linalg.norm(r1Xr0) / np.linalg.norm(r0)
+    r1Xr0 = _cross(r1, r0)
+    dist = _norm(r1Xr0) / _norm(r0)
     if dist > epsilon:
-        r1Xr2 = np.cross(r1, r2)
-        return (
+        r1Xr2 = _cross(r1, r2)
+        return _scale(
             gamma
             / (4 * np.pi)
-            * r1Xr2
-            / (np.linalg.norm(r1Xr2) ** 2)
-            * np.dot(r0, r1 / np.linalg.norm(r1) - r2 / np.linalg.norm(r2))
+            / (_norm(r1Xr2) ** 2)
+            * _dot(r0, _sub(_div(r1, _norm(r1)), _div(r2, _norm(r2)))),
+            r1Xr2,
         )
     elif dist < 1e-12 * epsilon:
-        return np.zeros(3)
+        return _ZERO3
     else:
-        r1_radial = r1 - np.dot(r1, r0) * r0 / (np.linalg.norm(r0) ** 2)
-        r2_radial = r2 - np.dot(r2, r0) * r0 / (np.linalg.norm(r0) ** 2)
-        r1_proj = np.dot(r1, r0) * r0 / (
-            np.linalg.norm(r0) ** 2
-        ) + epsilon * r1_radial / np.linalg.norm(r1_radial)
-        r2_proj = np.dot(r2, r0) * r0 / (
-            np.linalg.norm(r0) ** 2
-        ) + epsilon * r2_radial / np.linalg.norm(r2_radial)
-        r1Xr2_proj = np.cross(r1_proj, r2_proj)
-        vel_ind_proj = (
+        r1_axial = _div(_scale(_dot(r1, r0), r0), r0_sq)
+        r2_axial = _div(_scale(_dot(r2, r0), r0), r0_sq)
+        r1_radial = _sub(r1, r1_axial)
+        r2_radial = _sub(r2, r2_axial)
+        r1_proj = _add(r1_axial, _div(_scale(epsilon, r1_radial), _norm(r1_radial)))
+        r2_proj = _add(r2_axial, _div(_scale(epsilon, r2_radial), _norm(r2_radial)))
+        r1Xr2_proj = _cross(r1_proj, r2_proj)
+        vel_ind_proj = _scale(
             gamma
             / (4 * np.pi)
-            * r1Xr2_proj
-            / (np.linalg.norm(r1Xr2_proj) ** 2)
-            * np.dot(
+            / (_norm(r1Xr2_proj) ** 2)
+            * _dot(
                 r0,
-                r1_proj / np.linalg.norm(r1_proj) - r2_proj / np.linalg.norm(r2_proj),
-            )
+                _sub(_div(r1_proj, _norm(r1_proj)), _div(r2_proj, _norm(r2_proj))),
+            ),
+            r1Xr2_proj,
         )
-        return dist / epsilon * vel_ind_proj
+        return _scale(dist / epsilon, vel_ind_proj)
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def _vel_semiinfinite(XV1, Vf, XVP, gamma, Uinf, filament_direction):
     """Semi-infinite trailing-vortex induced velocity, as in
     Filament.velocity_3D_trailing_vortex_semiinfinite."""
     GAMMA = -gamma * filament_direction
 
-    r1 = XVP - XV1
-    r1XVf = np.cross(r1, Vf)
-    r_perp = r1 - np.dot(r1, Vf) * Vf
+    r1 = _sub(XVP, XV1)
+    r1XVf = _cross(r1, Vf)
+    r1_axial = _scale(_dot(r1, Vf), Vf)
+    r_perp = _sub(r1, r1_axial)
 
-    if np.linalg.norm(r_perp) < 1e-16:
-        return np.zeros(3)
+    if _norm(r_perp) < 1e-16:
+        return _ZERO3
 
-    epsilon = np.sqrt(4 * _ALPHA0_OSEEN * _NU_AIR * np.linalg.norm(r_perp) / Uinf)
+    epsilon = np.sqrt(4 * _ALPHA0_OSEEN * _NU_AIR * _norm(r_perp) / Uinf)
 
-    dist = np.linalg.norm(r1XVf) / np.linalg.norm(Vf)
+    dist = _norm(r1XVf) / _norm(Vf)
     if dist > epsilon:
         K = (
             GAMMA
             / 4
             / np.pi
-            / np.linalg.norm(r1XVf) ** 2
-            * (1 + np.dot(r1, Vf) / np.linalg.norm(r1))
+            / _norm(r1XVf) ** 2
+            * (1 + _dot(r1, Vf) / _norm(r1))
         )
-        return K * r1XVf
+        return _scale(K, r1XVf)
     elif dist < 1e-12 * epsilon:
-        return np.zeros(3)
+        return _ZERO3
     else:
-        r1_radial = r1 - np.dot(r1, Vf) * Vf
-        r1_proj = np.dot(r1, Vf) * Vf + epsilon * r1_radial / np.linalg.norm(r1_radial)
-        r1XVf_proj = np.cross(r1_proj, Vf)
+        r1_radial = r_perp
+        r1_proj = _add(r1_axial, _div(_scale(epsilon, r1_radial), _norm(r1_radial)))
+        r1XVf_proj = _cross(r1_proj, Vf)
         K = (
             GAMMA
             / 4
             / np.pi
-            / np.linalg.norm(r1XVf_proj) ** 2
-            * (1 + np.dot(r1_proj, Vf) / np.linalg.norm(r1_proj))
+            / _norm(r1XVf_proj) ** 2
+            * (1 + _dot(r1_proj, Vf) / _norm(r1_proj))
         )
-        return K * r1XVf_proj
+        return _scale(K, r1XVf_proj)
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def _vel_bound_2D(XVP, bound_point_1, bound_point_2):
     """2D bound-vortex correction at the evaluation point, as in
     Panel.compute_velocity_induced_bound_2D (gamma = 1)."""
-    r3 = XVP - (bound_point_1 + bound_point_2) / 2
-    r0 = bound_point_1 - bound_point_2
-    r0_unit_X_r3 = np.cross(r0 / np.linalg.norm(r0), r3)
-    return (1 / (2 * np.pi)) * (r0_unit_X_r3 / (np.linalg.norm(r0_unit_X_r3) ** 2))
+    r3 = _sub(XVP, _div(_add(bound_point_1, bound_point_2), 2.0))
+    r0 = _sub(bound_point_1, bound_point_2)
+    r0_unit_X_r3 = _cross(_div(r0, _norm(r0)), r3)
+    return _scale(1 / (2 * np.pi), _div(r0_unit_X_r3, _norm(r0_unit_X_r3) ** 2))
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def assemble_AIC_matrices(
     eval_points,
     bound_point_1,
@@ -212,43 +266,43 @@ def assemble_AIC_matrices(
     n = eval_points.shape[0]
     AIC = np.empty((3, n, n))
     for icp in range(n):
-        ep = eval_points[icp]
+        ep = _row(eval_points, icp)
         for jring in range(n):
+            bp1 = _row(bound_point_1, jring)
+            bp2 = _row(bound_point_2, jring)
+            te1 = _row(TE_point_1, jring)
+            te2 = _row(TE_point_2, jring)
             if evaluation_point_on_bound:
-                velocity_induced = np.zeros(3)
+                velocity_induced = _ZERO3
             else:
                 velocity_induced = _vel_bound_vortex(
-                    bound_point_2[jring],
-                    bound_point_1[jring],
-                    ep,
-                    1.0,
-                    core_radius_fraction,
+                    bp2, bp1, ep, 1.0, core_radius_fraction
                 )
-            wake_unit = wake_units[jring]
+            wake_unit = _row(wake_units, jring)
             wake_speed = wake_speeds[jring]
-            velocity_induced = velocity_induced + _vel_trailing_vortex(
-                bound_point_1[jring], TE_point_1[jring], ep, 1.0, wake_speed
+            velocity_induced = _add(
+                velocity_induced, _vel_trailing_vortex(bp1, te1, ep, 1.0, wake_speed)
             )
-            velocity_induced = velocity_induced + _vel_trailing_vortex(
-                TE_point_2[jring], bound_point_2[jring], ep, 1.0, wake_speed
+            velocity_induced = _add(
+                velocity_induced, _vel_trailing_vortex(te2, bp2, ep, 1.0, wake_speed)
             )
-            velocity_induced = velocity_induced + _vel_semiinfinite(
-                TE_point_1[jring], wake_unit, ep, 1.0, wake_speed, 1.0
+            velocity_induced = _add(
+                velocity_induced,
+                _vel_semiinfinite(te1, wake_unit, ep, 1.0, wake_speed, 1.0),
             )
-            velocity_induced = velocity_induced + _vel_semiinfinite(
-                TE_point_2[jring], wake_unit, ep, 1.0, wake_speed, -1.0
+            velocity_induced = _add(
+                velocity_induced,
+                _vel_semiinfinite(te2, wake_unit, ep, 1.0, wake_speed, -1.0),
             )
             if subtract_bound_2D and icp == jring:
-                velocity_induced = velocity_induced - _vel_bound_2D(
-                    ep, bound_point_1[jring], bound_point_2[jring]
-                )
+                velocity_induced = _sub(velocity_induced, _vel_bound_2D(ep, bp1, bp2))
             AIC[0, icp, jring] = velocity_induced[0]
             AIC[1, icp, jring] = velocity_induced[1]
             AIC[2, icp, jring] = velocity_induced[2]
     return AIC
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def assemble_curved_bound_correction_AIC(
     eval_points,
     bound_point_1,
@@ -315,50 +369,53 @@ def assemble_curved_bound_correction_AIC(
     for j in range(n):
         s_node[j + 1] = s_node[j] + L[j]
     for i in range(n):
-        ep = eval_points[i]
-        t = seg[i] / L[i]
-        c_i = chord_dir[i]
+        ep = _row(eval_points, i)
+        t = _div(_row(seg, i), L[i])
+        c_i = _row(chord_dir, i)
         s_P = 0.5 * (s_node[i] + s_node[i + 1])
         U = va_norm[i]
         for j in range(n):
-            ra = ep + sgn * (s_node[j] - s_P) * t
-            rb = ep + sgn * (s_node[j + 1] - s_P) * t
+            ra = _add(ep, _scale(sgn * (s_node[j] - s_P), t))
+            rb = _add(ep, _scale(sgn * (s_node[j + 1] - s_P), t))
             if fwd:
                 rb2 = ra
                 rb1 = rb
             else:
                 rb2 = rb
                 rb1 = ra
-            leg = (1.0 - ac_fraction) * chords[j] * c_i
-            rte1 = rb1 + leg
-            rte2 = rb2 + leg
-            bp1 = bound_point_1[j]
-            bp2 = bound_point_2[j]
-            te1 = TE_point_1[j]
-            te2 = TE_point_2[j]
+            leg = _scale((1.0 - ac_fraction) * chords[j], c_i)
+            rte1 = _add(rb1, leg)
+            rte2 = _add(rb2, leg)
+            bp1 = _row(bound_point_1, j)
+            bp2 = _row(bound_point_2, j)
+            te1 = _row(TE_point_1, j)
+            te2 = _row(TE_point_2, j)
             # unrolled legs (single filaments) minus actual legs (single filaments)
-            v = _vel_trailing_vortex(rb1, rte1, ep, 1.0, U) + _vel_trailing_vortex(
-                rte2, rb2, ep, 1.0, U
+            v = _add(
+                _vel_trailing_vortex(rb1, rte1, ep, 1.0, U),
+                _vel_trailing_vortex(rte2, rb2, ep, 1.0, U),
             )
-            v = v - _vel_trailing_vortex(bp1, te1, ep, 1.0, U) - _vel_trailing_vortex(
-                te2, bp2, ep, 1.0, U
+            v = _sub(
+                _sub(v, _vel_trailing_vortex(bp1, te1, ep, 1.0, U)),
+                _vel_trailing_vortex(te2, bp2, ep, 1.0, U),
             )
             # chordwise-spread actual system minus chordwise-spread unrolled system
             for q in range(n_strips):
                 f = (strip_x[q] - ac_fraction) / (1.0 - ac_fraction)
                 w = strip_w[q]
-                n1 = bp1 + f * (te1 - bp1)
-                n2 = bp2 + f * (te2 - bp2)
-                u1 = rb1 + f * (rte1 - rb1)
-                u2 = rb2 + f * (rte2 - rb2)
-                v = v + w * (
-                    _vel_bound_vortex(n2, n1, ep, 1.0, core_radius_fraction)
-                    - _vel_bound_vortex(u2, u1, ep, 1.0, core_radius_fraction)
-                    + _vel_trailing_vortex(n1, te1, ep, 1.0, U)
-                    + _vel_trailing_vortex(te2, n2, ep, 1.0, U)
-                    - _vel_trailing_vortex(u1, rte1, ep, 1.0, U)
-                    - _vel_trailing_vortex(rte2, u2, ep, 1.0, U)
+                n1 = _add(bp1, _scale(f, _sub(te1, bp1)))
+                n2 = _add(bp2, _scale(f, _sub(te2, bp2)))
+                u1 = _add(rb1, _scale(f, _sub(rte1, rb1)))
+                u2 = _add(rb2, _scale(f, _sub(rte2, rb2)))
+                strip = _sub(
+                    _vel_bound_vortex(n2, n1, ep, 1.0, core_radius_fraction),
+                    _vel_bound_vortex(u2, u1, ep, 1.0, core_radius_fraction),
                 )
+                strip = _add(strip, _vel_trailing_vortex(n1, te1, ep, 1.0, U))
+                strip = _add(strip, _vel_trailing_vortex(te2, n2, ep, 1.0, U))
+                strip = _sub(strip, _vel_trailing_vortex(u1, rte1, ep, 1.0, U))
+                strip = _sub(strip, _vel_trailing_vortex(rte2, u2, ep, 1.0, U))
+                v = _add(v, _scale(w, strip))
             A[0, i, j] = v[0]
             A[1, i, j] = v[1]
             A[2, i, j] = v[2]
@@ -378,18 +435,18 @@ def thin_airfoil_strips(n_strips=24):
     return np.ascontiguousarray(x, dtype=float), np.ascontiguousarray(w / w.sum(), dtype=float)
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def _on_segment_line(XV1, XV2, XVP):
     """True if XVP lies on the line through XV1 and XV2 (to round-off)."""
-    r0 = XV2 - XV1
-    r1 = XVP - XV1
-    len0 = np.linalg.norm(r0)
+    r0 = _sub(XV2, XV1)
+    r1 = _sub(XVP, XV1)
+    len0 = _norm(r0)
     if len0 == 0.0:
         return True
-    return np.linalg.norm(np.cross(r1, r0)) <= 1e-10 * len0 * max(np.linalg.norm(r1), len0)
+    return _norm(_cross(r1, r0)) <= 1e-10 * len0 * max(_norm(r1), len0)
 
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True, error_model="numpy")
 def induced_velocity_at_points(
     points,
     bound_point_1,
@@ -413,31 +470,25 @@ def induced_velocity_at_points(
     n = bound_point_1.shape[0]
     out = np.zeros((m, 3))
     for ip in range(m):
-        ep = points[ip]
-        vel = np.zeros(3)
+        ep = _row(points, ip)
+        vel = _ZERO3
         for j in range(n):
             g = gamma[j]
-            wake_unit = wake_units[j]
+            bp1 = _row(bound_point_1, j)
+            bp2 = _row(bound_point_2, j)
+            te1 = _row(TE_point_1, j)
+            te2 = _row(TE_point_2, j)
+            wake_unit = _row(wake_units, j)
             wake_speed = wake_speeds[j]
-            vel = vel + _vel_bound_vortex(
-                bound_point_2[j], bound_point_1[j], ep, g, core_radius_fraction
-            )
+            vel = _add(vel, _vel_bound_vortex(bp2, bp1, ep, g, core_radius_fraction))
             # a straight filament induces nothing on its own line; skip the
             # legs the point lies on (the kernel would divide by zero there)
-            if not _on_segment_line(bound_point_1[j], TE_point_1[j], ep):
-                vel = vel + _vel_trailing_vortex(
-                    bound_point_1[j], TE_point_1[j], ep, g, wake_speed
-                )
-            if not _on_segment_line(TE_point_2[j], bound_point_2[j], ep):
-                vel = vel + _vel_trailing_vortex(
-                    TE_point_2[j], bound_point_2[j], ep, g, wake_speed
-                )
-            vel = vel + _vel_semiinfinite(
-                TE_point_1[j], wake_unit, ep, g, wake_speed, 1.0
-            )
-            vel = vel + _vel_semiinfinite(
-                TE_point_2[j], wake_unit, ep, g, wake_speed, -1.0
-            )
+            if not _on_segment_line(bp1, te1, ep):
+                vel = _add(vel, _vel_trailing_vortex(bp1, te1, ep, g, wake_speed))
+            if not _on_segment_line(te2, bp2, ep):
+                vel = _add(vel, _vel_trailing_vortex(te2, bp2, ep, g, wake_speed))
+            vel = _add(vel, _vel_semiinfinite(te1, wake_unit, ep, g, wake_speed, 1.0))
+            vel = _add(vel, _vel_semiinfinite(te2, wake_unit, ep, g, wake_speed, -1.0))
         out[ip, 0] = vel[0]
         out[ip, 1] = vel[1]
         out[ip, 2] = vel[2]

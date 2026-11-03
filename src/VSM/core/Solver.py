@@ -3,6 +3,7 @@ import numpy as np
 import logging
 from scipy.linalg import solve_banded
 from . import jit_cross
+from VSM.core import panel_kernels
 
 
 class Solver:
@@ -201,6 +202,7 @@ class Solver:
         # rejected and the step quartered (0.5 = residual may at most double).
         self._newton_reject_ratio = 0.5
         self._casadi_newton_cache: dict = {}
+        self._casadi_newton_loop_cache: dict = {}
         #: Diagnostic: did the last casadi_newton solve fall back to base?
         self.last_fallback = False
         #: Diagnostic: residual evaluations used by the last casadi_newton solve.
@@ -1028,56 +1030,12 @@ class Solver:
             digest.hexdigest(),
         )
 
-    def _build_casadi_newton_function(self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None):
-        """Build the CasADi function of the PER-PANEL section physics that
-        :meth:`gamma_loop_casadi_newton` assembles its residual and exact
-        Jacobian from.
-
-        The circulation residual whose root the Newton loop finds is
-
-            R(gamma) = (I - diag(mu(alpha)) L) gamma - G_raw(gamma),
-
-        exactly the fixed point the ``base`` and ``anderson`` loops iterate
-        towards (``gamma = (I - diag(mu) L)^-1 G_raw(gamma)``, see
-        :meth:`_regularize_gamma_target`), including the Li/Gaunaa viscosity
-        ``mu_i = max(0, -k S Cl'_i / dz_i^2)`` gated on any panel being past
-        its stall onset (``mu = 0`` without artificial viscosity). Everything
-        that is not the dense induction ``v_ind = AIC gamma`` is local to a
-        panel: ``G_raw_i``, ``mu_i`` and ``alpha_i`` depend on ``gamma`` only
-        through the panel's own relative velocity ``v_rel_i``. So the symbolic
-        function takes ``v_rel`` (and ``L gamma``) as INPUTS and returns
-
-            h_i = G_raw_i + mu_i (L gamma)_i,   c_i = dh_i / dv_rel_i  (3 values)
-
-        plus ``mu``, ``alpha`` and ``|v_rel x z|``; the Newton loop then forms
-        ``R = gamma - h`` and, by the chain rule through ``v_rel = va + AIC
-        gamma`` (with ``dh_i/d(L gamma)_i = mu_i``),
-
-            J = I - diag(mu) L - sum_k diag(c_k) AIC_k
-
-        in NumPy. This keeps the CasADi graph O(n) -- independent of the
-        n x n induction matrices -- so it costs ~0.1 ms per evaluation and
-        builds in tens of milliseconds, while the dense algebra runs in BLAS.
-
-        The 2-D polars are ``ca.interpolant`` tables. Queries are clamped to
-        the table range first, so the lookup reproduces ``np.interp`` (constant
-        beyond both ends) and the lift slope is the same central difference of
-        the same piecewise-linear table that :meth:`_lift_slope_from_ctx`
-        evaluates. When every panel shares one alpha grid (the normal outcome
-        of batch polar generation) the lookup is a single 2-D interpolant over
-        (alpha, panel index) evaluated exactly at the integer panel nodes;
-        otherwise one 1-D interpolant per panel. ``polar_interpolation =
-        "bspline"`` swaps the piecewise-linear table for a cubic spline
-        through the same nodes (degree 1 along the panel-index axis, so panel
-        rows never mix).
-
-        Outputs, in order: ``h``, ``dh/dv_rel`` (n x 3, from the corner-
-        averaged polar), ``mu``, ``alpha``, ``umag``, ``gate``, then for
-        callers that build FORCES from the same lookups: ``h_avg`` (h with the
-        corner-averaged Cl -- differentiate this for a kink-tolerant
-        Jacobian), ``cl``, ``cd``, ``cm`` at ``alpha`` and their corner-
-        averaged counterparts ``cl_avg``, ``cd_avg``, ``cm_avg``. With
-        "bspline" polars the averaged outputs equal the exact ones.
+    def _casadi_polar_lookups(self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None):
+        """Clamped CasADi lookups ``alpha (n) -> cl, cd, cm (n)`` of the
+        per-panel polars, shared by :meth:`_build_casadi_newton_function` and
+        :meth:`_build_casadi_panel_force_function` (see the former for the
+        interpolation). Returns ``(cl_of, cd_of, cm_of, smooth)``, ``smooth``
+        True for "bspline" polars.
         """
         import casadi as ca
 
@@ -1088,16 +1046,6 @@ class Solver:
                     "casadi_newton needs a strictly increasing polar alpha grid "
                     f"(panel {i} violates this)."
                 )
-
-        v_rel = ca.MX.sym("v_rel", n, 3)
-        x_airf = ca.MX.sym("x_airf", n, 3)
-        y_airf = ca.MX.sym("y_airf", n, 3)
-        z_airf = ca.MX.sym("z_airf", n, 3)
-        chord = ca.MX.sym("chord", n)
-        width = ca.MX.sym("width", n)
-        stall_angles = ca.MX.sym("stall_angles", n)
-        stall_angles_neg = ca.MX.sym("stall_angles_neg", n)
-        l_gamma = ca.MX.sym("l_gamma", n)  # (L gamma), a parameter here
 
         shared_grid = all(
             table.shape == alpha_tables[0].shape
@@ -1154,6 +1102,75 @@ class Solver:
         cl_of = make_lookup("cl", cl_tables)
         cd_of = make_lookup("cd", cd_tables)
         cm_of = make_lookup("cm", cm_tables)
+        return cl_of, cd_of, cm_of, smooth
+
+    def _build_casadi_newton_function(self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None):
+        """Build the CasADi function of the PER-PANEL section physics that
+        :meth:`gamma_loop_casadi_newton` assembles its residual and exact
+        Jacobian from.
+
+        The circulation residual whose root the Newton loop finds is
+
+            R(gamma) = (I - diag(mu(alpha)) L) gamma - G_raw(gamma),
+
+        exactly the fixed point the ``base`` and ``anderson`` loops iterate
+        towards (``gamma = (I - diag(mu) L)^-1 G_raw(gamma)``, see
+        :meth:`_regularize_gamma_target`), including the Li/Gaunaa viscosity
+        ``mu_i = max(0, -k S Cl'_i / dz_i^2)`` gated on any panel being past
+        its stall onset (``mu = 0`` without artificial viscosity). Everything
+        that is not the dense induction ``v_ind = AIC gamma`` is local to a
+        panel: ``G_raw_i``, ``mu_i`` and ``alpha_i`` depend on ``gamma`` only
+        through the panel's own relative velocity ``v_rel_i``. So the symbolic
+        function takes ``v_rel`` (and ``L gamma``) as INPUTS and returns
+
+            h_i = G_raw_i + mu_i (L gamma)_i,   c_i = dh_i / dv_rel_i  (3 values)
+
+        plus ``mu``, ``alpha`` and ``|v_rel x z|``; the Newton loop then forms
+        ``R = gamma - h`` and, by the chain rule through ``v_rel = va + AIC
+        gamma`` (with ``dh_i/d(L gamma)_i = mu_i``),
+
+            J = I - diag(mu) L - sum_k diag(c_k) AIC_k
+
+        in NumPy. This keeps the CasADi graph O(n) -- independent of the
+        n x n induction matrices -- so it costs ~0.1 ms per evaluation and
+        builds in tens of milliseconds, while the dense algebra runs in BLAS.
+
+        The 2-D polars are ``ca.interpolant`` tables. Queries are clamped to
+        the table range first, so the lookup reproduces ``np.interp`` (constant
+        beyond both ends) and the lift slope is the same central difference of
+        the same piecewise-linear table that :meth:`_lift_slope_from_ctx`
+        evaluates. When every panel shares one alpha grid (the normal outcome
+        of batch polar generation) the lookup is a single 2-D interpolant over
+        (alpha, panel index) evaluated exactly at the integer panel nodes;
+        otherwise one 1-D interpolant per panel. ``polar_interpolation =
+        "bspline"`` swaps the piecewise-linear table for a cubic spline
+        through the same nodes (degree 1 along the panel-index axis, so panel
+        rows never mix).
+
+        Outputs, in order: ``h``, ``dh/dv_rel`` (n x 3, from the corner-
+        averaged polar), ``mu``, ``alpha``, ``umag``, ``gate``, then for
+        callers that build FORCES from the same lookups: ``h_avg`` (h with the
+        corner-averaged Cl -- differentiate this for a kink-tolerant
+        Jacobian), ``cl``, ``cd``, ``cm`` at ``alpha`` and their corner-
+        averaged counterparts ``cl_avg``, ``cd_avg``, ``cm_avg``. With
+        "bspline" polars the averaged outputs equal the exact ones.
+        """
+        import casadi as ca
+
+        n = self.n_panels
+        cl_of, cd_of, cm_of, smooth = self._casadi_polar_lookups(
+            alpha_tables, cl_tables, cd_tables, cm_tables
+        )
+
+        v_rel = ca.MX.sym("v_rel", n, 3)
+        x_airf = ca.MX.sym("x_airf", n, 3)
+        y_airf = ca.MX.sym("y_airf", n, 3)
+        z_airf = ca.MX.sym("z_airf", n, 3)
+        chord = ca.MX.sym("chord", n)
+        width = ca.MX.sym("width", n)
+        stall_angles = ca.MX.sym("stall_angles", n)
+        stall_angles_neg = ca.MX.sym("stall_angles_neg", n)
+        l_gamma = ca.MX.sym("l_gamma", n)  # (L gamma), a parameter here
 
         def cross_rows(a, b):
             return ca.horzcat(
@@ -1264,6 +1281,110 @@ class Solver:
             self._casadi_newton_cache[key] = fn
         return fn
 
+    def _build_casadi_panel_force_function(
+        self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None
+    ):
+        """CasADi function of the per-panel section forces, the force law of
+        ``compute_results`` (``VSM.core.panel_kernels.panel_forces``) on the
+        polar lookups of the circulation solve. See
+        :meth:`casadi_panel_force_function`."""
+        import casadi as ca
+
+        n = self.n_panels
+        cl_of, cd_of, cm_of, _ = self._casadi_polar_lookups(
+            alpha_tables, cl_tables, cd_tables, cm_tables
+        )
+        v_rel = ca.MX.sym("v_rel", n, 3)
+        v_qc = ca.MX.sym("v_qc", n, 3)
+        x_airf = ca.MX.sym("x_airf", n, 3)
+        y_airf = ca.MX.sym("y_airf", n, 3)
+        z_airf = ca.MX.sym("z_airf", n, 3)
+        chord = ca.MX.sym("chord", n)
+        width = ca.MX.sym("width", n)
+        rho = ca.MX.sym("rho")
+
+        alpha, umag = panel_kernels.relative_flow(v_rel, x_airf, y_airf, z_airf, xp=ca)
+        alpha_dir = panel_kernels.direction_angle(v_qc, x_airf, y_airf, xp=ca)
+        cl, cd, cm = cl_of(alpha), cd_of(alpha), cm_of(alpha)
+        force, moment_local = panel_kernels.panel_forces(
+            alpha, umag, cl, cd, cm, chord, width, x_airf, y_airf, z_airf, rho,
+            alpha_dir=alpha_dir, xp=ca,
+        )
+        return ca.Function(
+            "vsm_panel_forces",
+            [v_rel, v_qc, x_airf, y_airf, z_airf, chord, width, rho],
+            [force, moment_local, alpha, alpha_dir, umag, cl, cd, cm],
+            ["v_rel", "v_qc", "x_airf", "y_airf", "z_airf", "chord", "width", "rho"],
+            ["force", "moment_local", "alpha", "alpha_dir", "umag", "cl", "cd", "cm"],
+        )
+
+    def casadi_panel_force_function(self):
+        """CasADi function of the per-panel section forces of the current
+        panels (the ones of the last :meth:`solve`), cached per polar set like
+        the ``casadi_newton`` residual function.
+
+        Inputs (numeric or symbolic), ``n = n_panels``:
+
+        * ``v_rel`` (n, 3): relative velocity at the 3/4-chord control points,
+          ``va + AIC gamma`` -- sets ``alpha``, ``umag`` and so the polar
+          magnitudes ``cl, cd, cm``;
+        * ``v_qc`` (n, 3): the force-direction flow. For the quarter-chord law
+          (``is_aoa_corrected=True``) ``va + AIC_qc gamma`` with
+          ``BodyAerodynamics.compute_quarter_chord_AIC_matrices`` (or
+          ``panel_kernels.quarter_chord_velocity``); for ``False`` pass
+          ``v_rel`` again;
+        * ``x_airf, y_airf, z_airf`` (n, 3), ``chord, width`` (n), ``rho``.
+
+        Outputs: ``force`` (n, 3) [N], ``moment_local`` (n, 3) [Nm] (the
+        quarter-chord pitching moment along ``z_airf``), ``alpha``,
+        ``alpha_dir`` [rad], ``umag`` [m/s], ``cl, cd, cm`` (n).
+
+        Same as ``compute_results`` per panel WITHOUT the attached-trailed
+        vortex force (``panel_kernels.attached_trailed_forces``) and the
+        viscous drag correction. Taking ``v_qc`` rather than the matrices keeps
+        the graph O(n); the caller forms the dense product.
+        """
+        import casadi  # noqa: F401  (clear error when the optional dep is missing)
+
+        alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
+        key = ("panel_forces",) + self._casadi_newton_key(
+            alpha_tables, cl_tables, cd_tables, cm_tables
+        )
+        fn = self._casadi_newton_cache.get(key)
+        if fn is None:
+            fn = self._build_casadi_panel_force_function(
+                alpha_tables, cl_tables, cd_tables, cm_tables
+            )
+            if len(self._casadi_newton_cache) >= 32:
+                self._casadi_newton_cache.pop(next(iter(self._casadi_newton_cache)))
+            self._casadi_newton_cache[key] = fn
+        return fn
+
+    def _casadi_newton_loop_function(self):
+        """The residual function restricted to the six outputs the Newton loop
+        reads (``h, dh_dvrel, mu, alpha, umag, gate``): the same graph, minus
+        the force-side lookups it would otherwise evaluate on every call.
+        Cached per polar set alongside the full function."""
+        import casadi as ca
+
+        alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
+        key = self._casadi_newton_key(alpha_tables, cl_tables, cd_tables, cm_tables)
+        loop_fn = self._casadi_newton_loop_cache.get(key)
+        if loop_fn is None:
+            fn = self._casadi_newton_function()
+            inputs = fn.mx_in()
+            loop_fn = ca.Function(
+                "vsm_panel_residual_loop",
+                inputs,
+                fn.call(inputs)[:6],
+                fn.name_in(),
+                fn.name_out()[:6],
+            )
+            if len(self._casadi_newton_loop_cache) >= 32:
+                self._casadi_newton_loop_cache.pop(next(iter(self._casadi_newton_loop_cache)))
+            self._casadi_newton_loop_cache[key] = loop_fn
+        return loop_fn
+
     def gamma_loop_casadi_newton(self, gamma_initial: np.ndarray) -> tuple:
         """Newton solve of the circulation residual with an exact CasADi
         Jacobian, globalised by pseudo-transient continuation
@@ -1312,7 +1433,9 @@ class Solver:
         fallback to decide.
         """
         try:
-            fn = self._casadi_newton_function()
+            import casadi as ca
+
+            fn = self._casadi_newton_loop_function()
         except ImportError as exc:  # pragma: no cover - depends on optional dep
             raise ImportError(
                 "gamma_loop_type='casadi_newton' requires the optional 'casadi' "
@@ -1329,14 +1452,19 @@ class Solver:
             stall_angles = np.full(n, np.inf)
             stall_angles_neg = np.full(n, -np.inf)
             laplacian = np.zeros((n, n))
-        params = (
-            self.x_airf_array,
-            self.y_airf_array,
-            self.z_airf_array,
-            self.chord_array,
-            self.width_array,
-            stall_angles,
-            stall_angles_neg,
+        # Constant within the solve: converted to CasADi matrices once, which
+        # halves the cost of each residual evaluation.
+        params = tuple(
+            ca.DM(np.asarray(value, dtype=float))
+            for value in (
+                self.x_airf_array,
+                self.y_airf_array,
+                self.z_airf_array,
+                self.chord_array,
+                self.width_array,
+                stall_angles,
+                stall_angles_neg,
+            )
         )
         aic = (self.AIC_x, self.AIC_y, self.AIC_z)
 
@@ -1345,7 +1473,7 @@ class Solver:
             # v_rel = va + AIC gamma (see _build_casadi_newton_function).
             v_rel = self.va_array + np.column_stack([a @ x for a in aic])
             l_gamma = laplacian @ x
-            h, dh_dvrel, mu, alpha, umag, gate = fn(v_rel, *params, l_gamma)[:6]
+            h, dh_dvrel, mu, alpha, umag, gate = fn(v_rel, *params, l_gamma)
             h = np.asarray(h, dtype=float).ravel()
             dh_dvrel = np.asarray(dh_dvrel, dtype=float)
             mu = np.asarray(mu, dtype=float).ravel()
