@@ -6,6 +6,26 @@ from . import jit_cross
 from VSM.core import panel_kernels
 
 
+
+def _table_symbols(n_panels: int, alpha_tables) -> dict:
+    """Symbolic ``(n_panels, n_alpha)`` polar tables for ``table_inputs``."""
+    import casadi as ca
+
+    n_alpha = int(np.asarray(alpha_tables[0]).size)
+    return {name: ca.MX.sym(f"{name}_table", n_panels, n_alpha) for name in ("cl", "cd", "cm")}
+
+
+def _with_table_inputs(inputs: list, input_names: list, table_syms):
+    """Append the table inputs (if any) and default them to NaN, so a call
+    that omits them (CasADi fills omitted inputs with 0 by default) gives NaN
+    rather than a silently zero polar."""
+    if table_syms is None:
+        return inputs, input_names, {}
+    inputs = inputs + [table_syms[k] for k in ("cl", "cd", "cm")]
+    input_names = input_names + ["cl_table", "cd_table", "cm_table"]
+    defaults = [0.0] * (len(inputs) - 3) + [float("nan")] * 3
+    return inputs, input_names, {"default_in": defaults}
+
 class Solver:
     """Solver for aerodynamic circulation distribution and force computation.
 
@@ -203,6 +223,7 @@ class Solver:
         self._newton_reject_ratio = 0.5
         self._casadi_newton_cache: dict = {}
         self._casadi_newton_loop_cache: dict = {}
+        self._casadi_table_input_cache: dict = {}  # polar tables as inputs
         #: Diagnostic: did the last casadi_newton solve fall back to base?
         self.last_fallback = False
         #: Diagnostic: residual evaluations used by the last casadi_newton solve.
@@ -1030,12 +1051,91 @@ class Solver:
             digest.hexdigest(),
         )
 
-    def _casadi_polar_lookups(self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None):
+    def _casadi_table_input_key(self, alpha_tables) -> tuple:
+        """Cache key of the functions that take the polar tables as INPUTS
+        (``table_inputs=True``): the graph depends on the panel count, the
+        shared alpha grid, the interpolation and the regularization settings,
+        not on the table values, so one function serves every shape whose
+        blended polars change but keep the grid."""
+        self._check_table_inputs_supported(alpha_tables)
+        grid = np.ascontiguousarray(alpha_tables[0], dtype=float)
+        return (
+            "table_inputs",
+            self.n_panels,
+            bool(self.is_with_artificial_viscosity),
+            float(self.artificial_viscosity_factor),
+            self.polar_interpolation,
+            hashlib.blake2b(grid.tobytes(), digest_size=16).hexdigest(),
+        )
+
+    def _check_table_inputs_supported(self, alpha_tables) -> None:
+        if self.polar_interpolation != "linear":
+            # A parametric cubic spline refits its coefficients on every call
+            # (~0.1 s per evaluation), which defeats the purpose.
+            raise ValueError(
+                "Polar tables as CasADi inputs need polar_interpolation='linear' "
+                f"(got {self.polar_interpolation!r})."
+            )
+        if not all(
+            table.shape == alpha_tables[0].shape and np.array_equal(table, alpha_tables[0])
+            for table in alpha_tables[1:]
+        ):
+            raise ValueError(
+                "Polar tables as CasADi inputs need every panel polar on one "
+                "shared alpha grid."
+            )
+
+    def casadi_polar_table_inputs(self) -> dict:
+        """The current panels' polar tables in the layout of the ``table_inputs``
+        CasADi functions (:meth:`_casadi_newton_function` and
+        :meth:`casadi_panel_force_function` with ``table_inputs=True``):
+        ``{"cl_table", "cd_table", "cm_table"}``, each ``(n_panels, n_alpha)``,
+        row ``i`` = panel ``i``'s coefficients on the shared alpha grid
+        (``panel.panel_polar_data[:, 0]``, radians).
+
+        Pass them on every call, next to the geometry: a deformed shape blends
+        its section polars with new weights, so the values change while the
+        grid, and with it the function, stays the same.
+        """
+        alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
+        self._check_table_inputs_supported(alpha_tables)
+        return {
+            "cl_table": np.vstack(cl_tables),
+            "cd_table": np.vstack(cd_tables),
+            "cm_table": np.vstack(cm_tables),
+        }
+
+    def casadi_stall_angle_inputs(self) -> dict:
+        """``{"stall_angles", "stall_angles_neg"}`` [rad] of the current panel
+        polars, the gate inputs of the residual function as
+        :meth:`gamma_loop_casadi_newton` passes them (plus / minus infinity
+        without artificial viscosity). They are derived from the tables, so a
+        caller passing new tables passes these new values with them."""
+        if self.is_with_artificial_viscosity:
+            return {
+                "stall_angles": self._panel_stall_angles(),
+                "stall_angles_neg": self._panel_negative_stall_angles(),
+            }
+        return {
+            "stall_angles": np.full(self.n_panels, np.inf),
+            "stall_angles_neg": np.full(self.n_panels, -np.inf),
+        }
+
+    def _casadi_polar_lookups(
+        self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None, table_symbols=None
+    ):
         """Clamped CasADi lookups ``alpha (n) -> cl, cd, cm (n)`` of the
         per-panel polars, shared by :meth:`_build_casadi_newton_function` and
         :meth:`_build_casadi_panel_force_function` (see the former for the
         interpolation). Returns ``(cl_of, cd_of, cm_of, smooth)``, ``smooth``
         True for "bspline" polars.
+
+        ``table_symbols`` (``{"cl": MX, "cd": MX, "cm": MX}``, each
+        ``(n, n_alpha)``) makes the table VALUES symbolic inputs instead of
+        constants: one 1-D parametric linear interpolant on the shared grid,
+        mapped over the panels. It reproduces the constant table exactly
+        (same nodes, same clamping); only the shared-grid linear case is
+        supported (see :meth:`_check_table_inputs_supported`).
         """
         import casadi as ca
 
@@ -1058,6 +1158,33 @@ class Solver:
             cm_tables = [np.zeros_like(t) for t in alpha_tables]
         kind = self.polar_interpolation
         smooth = kind == "bspline"
+
+        if table_symbols is not None:
+            self._check_table_inputs_supported(alpha_tables)
+            grid = np.asarray(alpha_tables[0], dtype=float)
+            lo, hi = float(grid[0]), float(grid[-1])
+            row_interpolant = ca.interpolant("polar_row", "linear", [grid], 1)
+            alpha_row = ca.MX.sym("alpha_row")
+            values_row = ca.MX.sym("values_row", grid.size)
+            # One panel's lookup; .map(n) evaluates it column-wise over panels.
+            row_lookup = ca.Function(
+                "polar_row_lookup",
+                [alpha_row, values_row],
+                [row_interpolant(ca.fmin(ca.fmax(alpha_row, lo), hi), values_row)],
+            ).map(n)
+
+            def make_parametric_lookup(table):
+                def lookup(alpha_vec):
+                    return row_lookup(alpha_vec.T, table.T).T
+
+                return lookup
+
+            return (
+                make_parametric_lookup(table_symbols["cl"]),
+                make_parametric_lookup(table_symbols["cd"]),
+                make_parametric_lookup(table_symbols["cm"]),
+                smooth,
+            )
 
         def make_lookup(name, value_tables):
             """Clamped lookup ``alpha_vec (n) -> values (n)`` of one polar column."""
@@ -1104,7 +1231,9 @@ class Solver:
         cm_of = make_lookup("cm", cm_tables)
         return cl_of, cd_of, cm_of, smooth
 
-    def _build_casadi_newton_function(self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None):
+    def _build_casadi_newton_function(
+        self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None, table_inputs=False
+    ):
         """Build the CasADi function of the PER-PANEL section physics that
         :meth:`gamma_loop_casadi_newton` assembles its residual and exact
         Jacobian from.
@@ -1154,12 +1283,18 @@ class Solver:
         Jacobian), ``cl``, ``cd``, ``cm`` at ``alpha`` and their corner-
         averaged counterparts ``cl_avg``, ``cd_avg``, ``cm_avg``. With
         "bspline" polars the averaged outputs equal the exact ones.
+
+        ``table_inputs=True`` appends the inputs ``cl_table``, ``cd_table``,
+        ``cm_table`` (each ``(n, n_alpha)``, :meth:`casadi_polar_table_inputs`)
+        and takes the table values from them instead of embedding them; see
+        :meth:`_casadi_newton_function`.
         """
         import casadi as ca
 
         n = self.n_panels
+        table_syms = _table_symbols(n, alpha_tables) if table_inputs else None
         cl_of, cd_of, cm_of, smooth = self._casadi_polar_lookups(
-            alpha_tables, cl_tables, cd_tables, cm_tables
+            alpha_tables, cl_tables, cd_tables, cm_tables, table_symbols=table_syms
         )
 
         v_rel = ca.MX.sym("v_rel", n, 3)
@@ -1244,9 +1379,12 @@ class Solver:
         seeds = [ca.DM(np.eye(3)[k][None, :].repeat(n, axis=0)) for k in range(3)]
         dh_dvrel = ca.horzcat(*[ca.jtimes(h_for_jacobian, v_rel, seed) for seed in seeds])
 
+        inputs = [v_rel, x_airf, y_airf, z_airf, chord, width, stall_angles, stall_angles_neg, l_gamma]
+        input_names = ["v_rel", "x_airf", "y_airf", "z_airf", "chord", "width", "stall_angles", "stall_angles_neg", "l_gamma"]
+        inputs, input_names, options = _with_table_inputs(inputs, input_names, table_syms)
         return ca.Function(
-            "vsm_panel_residual",
-            [v_rel, x_airf, y_airf, z_airf, chord, width, stall_angles, stall_angles_neg, l_gamma],
+            "vsm_panel_residual_tables" if table_inputs else "vsm_panel_residual",
+            inputs,
             [
                 h,
                 dh_dvrel,
@@ -1262,11 +1400,29 @@ class Solver:
                 averaged(cd_of),
                 averaged(cm_of),
             ],
-            ["v_rel", "x_airf", "y_airf", "z_airf", "chord", "width", "stall_angles", "stall_angles_neg", "l_gamma"],
+            input_names,
             ["h", "dh_dvrel", "mu", "alpha", "umag", "gate", "h_avg", "cl", "cd", "cm", "cl_avg", "cd_avg", "cm_avg"],
+            options,
         )
 
-    def _casadi_newton_function(self):
+    def _casadi_newton_function(self, table_inputs: bool = False):
+        """The per-panel residual function (:meth:`_build_casadi_newton_function`)
+        of the current panels, cached.
+
+        ``table_inputs=False`` (default, what :meth:`gamma_loop_casadi_newton`
+        uses): the polar tables are constants of the graph, cached per table
+        set. ``table_inputs=True``: the tables are the extra inputs
+        ``cl_table, cd_table, cm_table``, cached per alpha grid, so a caller
+        that re-trims deformed shapes builds the function once and passes
+        :meth:`casadi_polar_table_inputs` (and :meth:`casadi_stall_angle_inputs`)
+        per shape. Same outputs to round-off; needs ``polar_interpolation=
+        "linear"`` and one shared alpha grid. Omitted table inputs default to
+        NaN, so a call that forgets them fails loudly instead of using zeros.
+        """
+        if table_inputs:
+            return self._cached_table_input_function(
+                "newton", self._build_casadi_newton_function
+            )
         alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
         key = self._casadi_newton_key(alpha_tables, cl_tables, cd_tables, cm_tables)
         fn = self._casadi_newton_cache.get(key)
@@ -1282,7 +1438,7 @@ class Solver:
         return fn
 
     def _build_casadi_panel_force_function(
-        self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None
+        self, alpha_tables, cl_tables, cd_tables=None, cm_tables=None, table_inputs=False
     ):
         """CasADi function of the per-panel section forces, the force law of
         ``compute_results`` (``VSM.core.panel_kernels.panel_forces``) on the
@@ -1291,8 +1447,9 @@ class Solver:
         import casadi as ca
 
         n = self.n_panels
+        table_syms = _table_symbols(n, alpha_tables) if table_inputs else None
         cl_of, cd_of, cm_of, _ = self._casadi_polar_lookups(
-            alpha_tables, cl_tables, cd_tables, cm_tables
+            alpha_tables, cl_tables, cd_tables, cm_tables, table_symbols=table_syms
         )
         v_rel = ca.MX.sym("v_rel", n, 3)
         v_qc = ca.MX.sym("v_qc", n, 3)
@@ -1310,15 +1467,21 @@ class Solver:
             alpha, umag, cl, cd, cm, chord, width, x_airf, y_airf, z_airf, rho,
             alpha_dir=alpha_dir, xp=ca,
         )
-        return ca.Function(
-            "vsm_panel_forces",
+        inputs, input_names, options = _with_table_inputs(
             [v_rel, v_qc, x_airf, y_airf, z_airf, chord, width, rho],
-            [force, moment_local, alpha, alpha_dir, umag, cl, cd, cm],
             ["v_rel", "v_qc", "x_airf", "y_airf", "z_airf", "chord", "width", "rho"],
+            table_syms,
+        )
+        return ca.Function(
+            "vsm_panel_forces_tables" if table_inputs else "vsm_panel_forces",
+            inputs,
+            [force, moment_local, alpha, alpha_dir, umag, cl, cd, cm],
+            input_names,
             ["force", "moment_local", "alpha", "alpha_dir", "umag", "cl", "cd", "cm"],
+            options,
         )
 
-    def casadi_panel_force_function(self):
+    def casadi_panel_force_function(self, table_inputs: bool = False):
         """CasADi function of the per-panel section forces of the current
         panels (the ones of the last :meth:`solve`), cached per polar set like
         the ``casadi_newton`` residual function.
@@ -1343,9 +1506,16 @@ class Solver:
         vortex force (``panel_kernels.attached_trailed_forces``) and the
         viscous drag correction. Taking ``v_qc`` rather than the matrices keeps
         the graph O(n); the caller forms the dense product.
+
+        ``table_inputs=True`` appends ``cl_table, cd_table, cm_table`` as
+        inputs (see :meth:`_casadi_newton_function`).
         """
         import casadi  # noqa: F401  (clear error when the optional dep is missing)
 
+        if table_inputs:
+            return self._cached_table_input_function(
+                "panel_forces", self._build_casadi_panel_force_function
+            )
         alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
         key = ("panel_forces",) + self._casadi_newton_key(
             alpha_tables, cl_tables, cd_tables, cm_tables
@@ -1358,6 +1528,20 @@ class Solver:
             if len(self._casadi_newton_cache) >= 32:
                 self._casadi_newton_cache.pop(next(iter(self._casadi_newton_cache)))
             self._casadi_newton_cache[key] = fn
+        return fn
+
+    def _cached_table_input_function(self, kind: str, builder):
+        """Function of ``kind`` with the polar tables as inputs, built once
+        per (panel count, alpha grid, settings) and then reused for any
+        table values."""
+        alpha_tables, cl_tables, cd_tables, cm_tables = self._polar_tables()
+        key = (kind,) + self._casadi_table_input_key(alpha_tables)
+        fn = self._casadi_table_input_cache.get(key)
+        if fn is None:
+            fn = builder(alpha_tables, cl_tables, cd_tables, cm_tables, table_inputs=True)
+            if len(self._casadi_table_input_cache) >= 32:
+                self._casadi_table_input_cache.pop(next(iter(self._casadi_table_input_cache)))
+            self._casadi_table_input_cache[key] = fn
         return fn
 
     def _casadi_newton_loop_function(self):
