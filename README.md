@@ -4,6 +4,18 @@ The Vortex Step Method (VSM) is an enhanced lifting line method that improves up
 A Julia version of this project is available at [VortexStepMethod.jl](https://github.com/Albatross-Kite-Transport/VortexStepMethod.jl)
 
 
+## Key Features
+- **Accurate low-aspect-ratio wing modeling** with enhanced lifting line theory
+- **Viscous-inviscid coupling** using 2D airfoil polars (inviscid, CFD, ML-based)
+- **Complex geometry support**: sweep, dihedral, anhedral, leading-edge inflatable (LEI) kites
+- **Rigid-body stability derivatives**: automatic computation of dCx/dα, dCMy/dq, etc.
+- **Trim angle solver**: automatic determination of trimmed angle of attack
+- **Non-dimensional rate derivatives**: controls-friendly output (hat_p, hat_q, hat_r)
+- **Reference point flexibility**: correctly handles moment reference point for rotational velocities
+- **Interactive visualization**: Plotly and Matplotlib geometry and results plotting
+<!-- ![](docs/TUDELFT_V3_KITE_plotly.gif) -->
+![](docs/plotly_render.png)
+
 ## Reference Frame
 
 The VSM uses a body-fixed reference frame with the following conventions:
@@ -29,17 +41,6 @@ The reference frame is illustrated below for the open-source example kite, the [
 
 **Aircraft Frame Transformation:** For stability derivatives in standard aircraft coordinates (x-forward, y-right, z-down), use `map_derivatives_to_aircraft_frame()` from the `VSM.stability_derivatives` module. See `examples/TUDELFT_V3_KITE/evaluate_stability_derivatives.py` for usage.
 
-
-## Key Features
-
-- **Accurate low-aspect-ratio wing modeling** with enhanced lifting line theory
-- **Viscous-inviscid coupling** using 2D airfoil polars (inviscid, CFD, ML-based)
-- **Complex geometry support**: sweep, dihedral, anhedral, leading-edge inflatable (LEI) kites
-- **Rigid-body stability derivatives**: automatic computation of dCx/dα, dCMy/dq, etc.
-- **Trim angle solver**: automatic determination of trimmed angle of attack
-- **Non-dimensional rate derivatives**: controls-friendly output (hat_p, hat_q, hat_r)
-- **Reference point flexibility**: correctly handles moment reference point for rotational velocities
-- **Interactive visualization**: Plotly and Matplotlib geometry and results plotting
 
 ## Documentation
 For detailed documentation, please refer to the following resources.

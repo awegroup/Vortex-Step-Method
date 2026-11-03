@@ -183,6 +183,7 @@ def compute_rigid_body_stability_derivatives(
             angle_of_attack=alpha_deg,
             side_slip=beta_deg,
             body_rates=[rates["r"], rates["q"], rates["p"]],
+            body_axis=[[0, 0, 1], [0, 1, 0], [1, 0, 0]],
             reference_point=reference_point,
         )
         return _solve_and_extract()

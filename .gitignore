@@ -178,3 +178,6 @@ cython_debug/
 
 #Ignore old thesis
 Aerostructural_model_LEI
+
+# Generated cache from the fancy-plot SurfplanAdapter conversion
+vsm_processed/

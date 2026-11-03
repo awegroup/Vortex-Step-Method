@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.2.0] - 02/09/2026
+
+Release cut from the `improve_plotting` branch. This is the version used to
+generate the rigid-body stability derivatives (Table 8) of Poland et al. (2026),
+Wind Energ. Sci., "Computational aerodynamics for soft-wing kite design".
+
+### Fixed
+- `BodyAerodynamics.va` setter: the rotational inflow due to body rates is now
+  `va -= omega x (r - r0)` (apparent wind = freestream minus body-point velocity).
+  v2.1.2 used `+=`, i.e. the body rotating at `-omega`. **This flips the sign of
+  every rate derivative** (`d/dp_hat`, `d/dq_hat`, `d/dr_hat`) computed with
+  `stability_derivatives.py`; angle derivatives and trim angles are unaffected.
+  Roll, pitch and yaw damping derivatives are now negative, as physics requires.
+- `stability_derivatives.py::_evaluate_with_angles` now passes `body_axis`, so a
+  non-zero baseline roll/pitch rate is no longer silently applied about the z-axis.
+- `trim_angle.py`: removed leftover debug `matplotlib` plot/`plt.show()` from the
+  coarse sweep (blocked headless pipelines).
+- `Filament`: vortex-core regularization uses the radial projection of the
+  evaluation point onto the filament.
+- `WingGeometry`: section meshing is orientation-agnostic.
+- Elliptical-wing y-offset bug in tests fixed; bridle line index handling fixed.
+
+### Changed
+- **Breaking:** `BodyAerodynamics.va_initialize` / `va` setter no longer accept
+  `roll_rate`, `pitch_rate`, `yaw_rate`. Use `body_rates` (scalar or list of
+  magnitudes, rad/s), `body_axis` (matching axes, default +z) and
+  `rates_in_body_frame`. `compute_trim_angle` and
+  `compute_rigid_body_stability_derivatives` keep their `roll_rate/pitch_rate/yaw_rate`
+  keyword arguments.
+- **Breaking:** bridle-line dictionaries use header key `d` (line diameter)
+  instead of `diameter`, matching the SurfPlanAdapter export.
+- `BodyAerodynamics.instantiate` accepts `aerodynamic_center_location` and
+  `control_point_location` (chord fractions, defaults 0.25 / 0.75); AC and CP
+  chord weights are decoupled.
+- `Solver`: opt-in Anderson-accelerated inner circulation loop; opt-in
+  Li/Gaunaa spanwise artificial viscosity for post-stall stabilization;
+  `relaxation_factor` default restored to 0.01.
+- `Solver.solve` results include `q_ref` (reference dynamic pressure); coefficients
+  are normalised with an area-weighted reference velocity for distributed inflow.
+- Quasi-steady-state solver API and examples added and subsequently removed.
+
+### Added
+- `BodyAerodynamics.rotate(angle_deg|angle_rad, axis, point)` to rotate the full
+  geometry; body rates follow the geometry unless `rates_in_body_frame=True`.
+- `BodyAerodynamics.compute_flat_area`.
+- `src/VSM/plotly/`: interactive Plotly geometry plots with inflatable tubes,
+  curved canopy, Cp-scaled force fields (`fancy_interactive_plot.py` example).
+- Examples: `compute_trim_angle.py`, `calculate_max_roll.py`,
+  `attitude_and_yaw_rate_optimize.py`, `cmz_sensitivity_default.py`,
+  `varying_spanwise_va.py`.
+- Tests for gamma initialization, tube geometry, updated filament/solver tests.
+
 ## [2.1.0] - 11/02/2026
 
 ### Added
