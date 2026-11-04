@@ -51,6 +51,7 @@ dependencies = [
   "numba",
   "screeninfo",
   "odfpy",
+  "SurfplanAdapter",
 ]
 [project.optional-dependencies]
 dev = [

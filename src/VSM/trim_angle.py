@@ -132,10 +132,6 @@ def compute_trim_angle(
         cmy_coarse.append(cmy_value)
 
     cmy_coarse_array = np.asarray(cmy_coarse)
-    import matplotlib.pyplot as plt
-
-    plt.plot(alpha_coarse, cmy_coarse_array, marker="o")
-    plt.show()
     valid_mask = ~np.isnan(cmy_coarse_array)
     valid_alphas = alpha_coarse[valid_mask]
     valid_cmy = cmy_coarse_array[valid_mask]

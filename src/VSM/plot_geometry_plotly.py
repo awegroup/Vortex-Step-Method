@@ -1,46 +1,62 @@
 import os
-from typing import List, Tuple, Dict, Any
+from pathlib import Path
+from typing import List, Tuple, Dict, Any, Optional
 import numpy as np
 import plotly.graph_objects as go
 from VSM.core.Solver import Solver
 import yaml
 
 
-def add_panel_edges(fig: go.Figure, panel: Any, is_first: bool, is_last: bool) -> None:
-    """Add panel edges to the figure with different thicknesses."""
-    leadinge_edge_line_color = "black"
-    leadinge_edge_line_width = 15
-    # Leading edge
-    if is_first:
-        # Include 1-side edge
-        fig.add_trace(
-            go.Scatter3d(
-                x=[panel.LE_point_1[0], panel.TE_point_1[0]],
-                y=[panel.LE_point_1[1], panel.TE_point_1[1]],
-                z=[panel.LE_point_1[2], panel.TE_point_1[2]],
-                mode="lines",
-                line=dict(
-                    color=leadinge_edge_line_color, width=leadinge_edge_line_width
-                ),
-                name="Leading Edge",
-                showlegend=False,
+def add_panel_edges(
+    fig: go.Figure,
+    panel: Any,
+    is_first: bool,
+    is_last: bool,
+    is_thin_outline: bool = False,
+) -> None:
+    """Add panel edges to the figure.
+
+    By default the leading edge is drawn as a thick black line. With
+    ``is_thin_outline`` (used by the fancy plot, where the inflatable leading-edge
+    tube already marks the leading edge) all panel edges are thin grey outlines
+    and the thick leading-edge line is omitted.
+    """
+    edge_color = "blue" if is_thin_outline else "black"
+    if is_thin_outline:
+        leadinge_edge_line_color = "blue"
+        leadinge_edge_line_width = 1.5
+    else:
+        leadinge_edge_line_color = "black"
+        leadinge_edge_line_width = 15
+        # Thick tip edges only make sense for the thick leading-edge style.
+        if is_first:
+            fig.add_trace(
+                go.Scatter3d(
+                    x=[panel.LE_point_1[0], panel.TE_point_1[0]],
+                    y=[panel.LE_point_1[1], panel.TE_point_1[1]],
+                    z=[panel.LE_point_1[2], panel.TE_point_1[2]],
+                    mode="lines",
+                    line=dict(
+                        color=leadinge_edge_line_color, width=leadinge_edge_line_width
+                    ),
+                    name="Leading Edge",
+                    showlegend=False,
+                )
             )
-        )
-    elif is_last:
-        # Include 1-side edge
-        fig.add_trace(
-            go.Scatter3d(
-                x=[panel.LE_point_2[0], panel.TE_point_2[0]],
-                y=[panel.LE_point_2[1], panel.TE_point_2[1]],
-                z=[panel.LE_point_2[2], panel.TE_point_2[2]],
-                mode="lines",
-                line=dict(
-                    color=leadinge_edge_line_color, width=leadinge_edge_line_width
-                ),
-                name="Leading Edge",
-                showlegend=False,
+        elif is_last:
+            fig.add_trace(
+                go.Scatter3d(
+                    x=[panel.LE_point_2[0], panel.TE_point_2[0]],
+                    y=[panel.LE_point_2[1], panel.TE_point_2[1]],
+                    z=[panel.LE_point_2[2], panel.TE_point_2[2]],
+                    mode="lines",
+                    line=dict(
+                        color=leadinge_edge_line_color, width=leadinge_edge_line_width
+                    ),
+                    name="Leading Edge",
+                    showlegend=False,
+                )
             )
-        )
     # Standard leading edge
     fig.add_trace(
         go.Scatter3d(
@@ -61,7 +77,7 @@ def add_panel_edges(fig: go.Figure, panel: Any, is_first: bool, is_last: bool) -
             y=[panel.TE_point_1[1], panel.TE_point_2[1]],
             z=[panel.TE_point_1[2], panel.TE_point_2[2]],
             mode="lines",
-            line=dict(color="black", width=2),
+            line=dict(color=edge_color, width=2),
             name="Trailing Edge",
             showlegend=is_first,
         )
@@ -77,7 +93,7 @@ def add_panel_edges(fig: go.Figure, panel: Any, is_first: bool, is_last: bool) -
                 y=[points[0][1], points[1][1]],
                 z=[points[0][2], points[1][2]],
                 mode="lines",
-                line=dict(color="black", width=0.8),
+                line=dict(color=edge_color, width=0.8),
                 name=(
                     "Side Edge" if is_first and i == 0 else None
                 ),  # Legend only for the first side edge
@@ -175,6 +191,7 @@ def add_aerodynamic_vectors(
     force_vector: np.ndarray,
     scale: float = 0.5,
     max_force: float = 1.0,
+    origin: np.ndarray = None,
 ):
     """
     Add aerodynamic force vectors to a given panel on the plot.
@@ -184,9 +201,12 @@ def add_aerodynamic_vectors(
         panel: Panel object
         force_of_panel: Aerodynamic force vector
         scale: Scaling factor for the force vector
+        origin: Optional vector origin. Defaults to the panel aerodynamic centre;
+            pass a point on the canopy surface to make the vectors emanate from
+            the surface when the panels are hidden.
     """
     # Compute vector endpoint
-    aerodynamic_center = panel.aerodynamic_center
+    aerodynamic_center = panel.aerodynamic_center if origin is None else origin
     vector = (force_vector / max_force) * scale * 0.5
     vector_endpoint = aerodynamic_center + vector
 
@@ -411,7 +431,7 @@ def add_bridle_system(fig: go.Figure, wing_aero: object, is_first: bool = True) 
     elif hasattr(wing_aero, "_bridle_line_system") and wing_aero._bridle_line_system:
         # Handle basic bridle line system (backward compatibility)
         for i, bridle_line in enumerate(wing_aero._bridle_line_system):
-            p1, p2, _, _, diameter, _ = bridle_line
+            p1, p2, diameter = bridle_line
 
             # Calculate thickness based on diameter (simple scaling)
             thickness = max(2, min(12, diameter * 1000))  # Assume diameter in meters
@@ -435,6 +455,11 @@ def create_3D_plot(
     forces_of_panels: List[np.ndarray],
     is_with_aerodynamic_details: bool,
     is_with_bridles: bool = False,
+    tube_data: Optional[Dict[str, Any]] = None,
+    canopy_grid: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+    is_with_tube_rings: bool = False,
+    is_with_panels: bool = True,
+    cp_magnitude_fn=None,
 ) -> go.Figure:
     """
     Creates an interactive 3D plot of wing geometry using Plotly.
@@ -444,10 +469,26 @@ def create_3D_plot(
         forces_of_panels: List of force vectors for each panel
         is_with_aerodynamic_details: Boolean to show/hide aerodynamic visualization details
         is_with_bridles: Boolean to show/hide bridle system visualization
+        tube_data: Optional inflatable-tube geometry from
+            ``VSM.plotly.build_tube_data``; when given, the leading-edge and strut
+            tubes are drawn as surfaces.
+        canopy_grid: Optional ``(X, Y, Z)`` curved-canopy surface from
+            ``VSM.plotly.build_canopy_grid``; when given, it replaces the flat
+            panel surfaces.
+        is_with_tube_rings: Also draw the tube construction rings (for inspection).
+        is_with_panels: Draw the panel outlines. When ``False`` and a canopy is
+            present, the force vectors are lifted onto the canopy surface instead
+            of starting at the flat panel aerodynamic centres.
 
     Returns:
         plotly.graph_objects.Figure
     """
+    from VSM.plotly.tube_geometry import (
+        add_strut_surfaces,
+        add_le_tube_surface,
+        add_tube_rings,
+    )
+
     panels = wing_aero.panels
 
     chord_average = np.max([panel.chord for panel in panels])
@@ -459,6 +500,14 @@ def create_3D_plot(
     # Add bridle system if requested
     if is_with_bridles:
         add_bridle_system(fig, wing_aero, is_first=True)
+
+    draw_flat_surface = canopy_grid is None
+    # In the fancy plot the inflatable LE tube marks the leading edge, so draw the
+    # panels as thin grey outlines instead of the thick black leading-edge line.
+    is_thin_outline = tube_data is not None
+    # On the canopy the per-panel force vectors are replaced by a set of equal,
+    # surface-normal vectors distributed across the span (see below).
+    use_distributed_vectors = canopy_grid is not None
 
     # Add geometric elements
     for i, panel in enumerate(panels):
@@ -472,18 +521,156 @@ def create_3D_plot(
         if is_with_aerodynamic_details:
             add_filaments(fig, panel, is_first)
 
-        add_panel_edges(fig, panel, is_first, is_last)
-        add_panel_surface(fig, panel, is_first)
-        add_aerodynamic_vectors(
+        if is_with_panels:
+            add_panel_edges(
+                fig, panel, is_first, is_last, is_thin_outline=is_thin_outline
+            )
+        if draw_flat_surface and is_with_panels:
+            add_panel_surface(fig, panel, is_first)
+
+        if not use_distributed_vectors:
+            add_aerodynamic_vectors(
+                fig,
+                panel,
+                is_first,
+                np.array(forces_of_panels[i]),
+                scale=chord_average,
+                max_force=max_force,
+            )
+
+    # Draw order (so the leading-edge tube ends up rendered on top): struts sit
+    # under the canopy, then the canopy, then the force vectors, and finally the
+    # leading-edge tube last so it is never occluded by the semi-transparent canopy.
+    if tube_data is not None:
+        add_strut_surfaces(fig, tube_data)
+
+    if canopy_grid is not None:
+        add_canopy_surface(fig, canopy_grid)
+
+    if use_distributed_vectors:
+        add_distributed_surface_vectors(
             fig,
-            panel,
-            is_first,
-            np.array(forces_of_panels[i]),
+            canopy_grid,
+            forces_of_panels,
             scale=chord_average,
-            max_force=max_force,
+            cp_magnitude_fn=cp_magnitude_fn,
         )
 
+    if tube_data is not None:
+        add_le_tube_surface(fig, tube_data)
+        if is_with_tube_rings:
+            add_tube_rings(fig, tube_data)
+
     return fig
+
+
+def add_canopy_surface(
+    fig: go.Figure, canopy_grid: Tuple[np.ndarray, np.ndarray, np.ndarray]
+) -> None:
+    """Add the curved single-skin canopy as a uniformly coloured surface."""
+    canopy_color = "lightgrey"
+    x, y, z = canopy_grid
+    fig.add_trace(
+        go.Surface(
+            x=x,
+            y=y,
+            z=z,
+            surfacecolor=np.zeros_like(z),
+            colorscale=[[0, canopy_color], [1, canopy_color]],
+            showscale=False,
+            opacity=0.85,
+            name="Canopy",
+            showlegend=True,
+            lighting=dict(ambient=0.75, diffuse=0.8, specular=0.05, roughness=0.9),
+        )
+    )
+
+
+def add_distributed_surface_vectors(
+    fig: go.Figure,
+    canopy_grid: Tuple[np.ndarray, np.ndarray, np.ndarray],
+    forces_of_panels: List[np.ndarray],
+    scale: float,
+    n_chord: int = 10,
+    n_span: int = None,
+    cp_magnitude_fn=None,
+) -> None:
+    """Draw a grid of chord-normal force vectors on the canopy.
+
+    One row of ``n_chord`` nodes is placed at each panel centre (uniformly over
+    the chord); every node carries one arrow oriented normal to the local chord
+    line (the flat-panel "up", perpendicular to chord and span), pointing to the
+    outward/suction side. This gives a regular ``n_span x n_chord`` grid of
+    vectors covering the whole canopy.
+
+    Each panel's VSM force is distributed over its chord nodes: the arrow lengths
+    reflect both the spanwise loading (the panel force from VSM) and the chordwise
+    shape (the ``|Cp|`` weighting, or an even split without a Cp distribution).
+    The node forces of a panel sum back to that panel's force.
+
+    Args:
+        fig: Plotly figure.
+        canopy_grid: ``(X, Y, Z)`` canopy surface arrays, each ``(S, P)`` with
+            ``S`` spanwise stations and ``P`` chordwise points.
+        forces_of_panels: Per-panel aerodynamic force vectors from VSM; their
+            magnitudes set the total per panel that is distributed chordwise.
+        scale: Length scale (typically the average chord).
+        n_chord: Nodes per row, distributed over the chord. Defaults to 10.
+        n_span: Number of spanwise rows. Defaults to one row per panel (the
+            midpoints between the ``S`` canopy stations, i.e. ``S - 1`` rows).
+        cp_magnitude_fn: Optional callable mapping chord fraction ``x/c`` to a
+            (positive) pressure-coefficient magnitude, used as the chordwise
+            weighting of each panel's force. Without it the force is spread evenly.
+    """
+    from VSM.plotly.canopy_geometry import distributed_surface_vector_field
+
+    origins, normals, lengths_1d = distributed_surface_vector_field(
+        canopy_grid,
+        forces_of_panels,
+        scale,
+        n_chord=n_chord,
+        n_span=n_span,
+        cp_magnitude_fn=cp_magnitude_fn,
+    )
+    if len(origins) == 0:
+        return
+    lengths = lengths_1d[:, None]
+    endpoints = origins + normals * lengths
+
+    # All stems as one trace (None-separated segments), all heads as one cone trace.
+    stem_x, stem_y, stem_z = [], [], []
+    for start, end in zip(origins, endpoints):
+        stem_x += [start[0], end[0], None]
+        stem_y += [start[1], end[1], None]
+        stem_z += [start[2], end[2], None]
+    fig.add_trace(
+        go.Scatter3d(
+            x=stem_x,
+            y=stem_y,
+            z=stem_z,
+            mode="lines",
+            line=dict(color="red", width=3.9),
+            name="Aerodynamic Vectors",
+            showlegend=True,
+        )
+    )
+    fig.add_trace(
+        go.Cone(
+            x=endpoints[:, 0],
+            y=endpoints[:, 1],
+            z=endpoints[:, 2],
+            u=normals[:, 0] * lengths[:, 0],
+            v=normals[:, 1] * lengths[:, 0],
+            w=normals[:, 2] * lengths[:, 0],
+            sizemode="absolute",
+            sizeref=0.048 * scale,
+            anchor="tip",
+            colorscale=[[0, "red"], [1, "red"]],
+            showscale=False,
+            name="Arrowheads",
+            showlegend=False,
+        )
+    )
 
 
 def compute_kite_geometry_ranges(panels: List[Any]) -> Tuple[Dict[str, float], float]:
@@ -507,14 +694,18 @@ def compute_axis_parameters_from_fig(
     fig: go.Figure,
 ) -> Tuple[Dict[str, float], float]:
     """Calculate axis ranges and tick spacing based on the figure's data."""
-    # Extract all data points from the figure traces
+    # Extract all data points from the figure traces, skipping gap separators
+    # (``None``/NaN) that traces may use to draw multiple segments at once.
     all_points = []
     for trace in fig.data:
         if isinstance(trace, go.Scatter3d):
-            all_points.extend(zip(trace.x, trace.y, trace.z))
+            for px, py, pz in zip(trace.x, trace.y, trace.z):
+                if px is None or py is None or pz is None:
+                    continue
+                all_points.append((px, py, pz))
 
     # Convert to numpy array for calculations
-    all_points = np.array(all_points)
+    all_points = np.array(all_points, dtype=float)
 
     # Calculate ranges for each axis
     ranges = {
@@ -598,12 +789,15 @@ def update_fig_layout(
                     f"{kite_geometry_ranges['z'][1]:.2f}",
                 ],  # Label for the ticks
             ),
-            aspectmode="data",  # Allow different axis lengths
-            aspectratio=dict(x=1, y=1, z=1),  # Keep aspect ratio 1:1:1
+            # "data" keeps the scene true-to-scale (equal units on every axis);
+            # do NOT force a cube aspectratio here, that squeezes the wide wing.
+            aspectmode="data",
             camera=dict(
                 up=dict(x=0, y=0, z=1),
                 center=dict(x=0, y=0, z=0),
-                eye=dict(x=1.5, y=1.5, z=1.5),
+                eye=dict(
+                    x=-1.92, y=-1.44, z=0.30
+                ),  # rotated ~180 deg, low and further out
             ),
             bgcolor="white",
         ),
@@ -754,6 +948,11 @@ def update_plot(
     is_with_aerodynamic_details: bool,
     is_with_bridles: bool,
     title: str,
+    tube_data: Optional[Dict[str, Any]] = None,
+    canopy_grid: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+    is_with_tube_rings: bool = False,
+    is_with_panels: bool = True,
+    cp_magnitude_fn=None,
 ):
     # Update AoA and rerun VSM
     results = running_VSM(
@@ -773,6 +972,11 @@ def update_plot(
         results["F_distribution"],
         is_with_aerodynamic_details,
         is_with_bridles,
+        tube_data=tube_data,
+        canopy_grid=canopy_grid,
+        is_with_tube_rings=is_with_tube_rings,
+        is_with_panels=is_with_panels,
+        cp_magnitude_fn=cp_magnitude_fn,
     )
     fig = add_case_information(
         fig,
@@ -804,6 +1008,11 @@ def interactive_plot(
     is_save: bool = False,
     filename="wing_geometry",
     is_show: bool = True,
+    surfplan_dir: Optional[Path] = None,
+    is_with_canopy: bool = True,
+    is_with_tube_rings: bool = False,
+    is_with_panels: Optional[bool] = None,
+    cp_distributions_dir: Optional[Path] = None,
 ):
     """
     Creates and optionally saves multiple views of the wing geometry with interactive AoA slider.
@@ -823,7 +1032,57 @@ def interactive_plot(
         is_save: Whether to save the plot
         filename: Base filename for saved files
         is_show: Whether to display the plot
+        surfplan_dir: Optional path to a raw Surfplan export (a ``<name>.txt`` plus
+            a ``profiles/`` directory). When given, the "fancy" plot is drawn: the
+            export is converted with SurfplanAdapter (cached) and the inflatable
+            leading-edge and strut tubes -- and, by default, the curved single-skin
+            canopy -- are rendered on the wing. Leaving it ``None`` keeps the plain
+            plot unchanged.
+        is_with_canopy: When a Surfplan export is given, draw the curved canopy
+            (lofted airfoil top-surfaces) in place of the flat panel surfaces.
+        is_with_tube_rings: Also draw the tube construction rings (for inspection).
+        is_with_panels: Draw the panel outlines. Defaults to ``False`` for the
+            fancy plot (a Surfplan export is given) and ``True`` otherwise. When
+            off, the force vectors are lifted onto the canopy surface.
+        cp_distributions_dir: Optional directory of ``cp_AOA_<deg>.dat`` chordwise
+            pressure-coefficient files. When given, the closest available angle of
+            attack is selected and its ``|Cp|(x/c)`` scales the chordwise force
+            vector magnitudes (the single mid-span distribution is applied at
+            every span station).
+
+    Returns:
+        plotly.graph_objects.Figure: The created figure.
     """
+    # Default: hide the panel outlines for the fancy plot, show them otherwise.
+    if is_with_panels is None:
+        is_with_panels = surfplan_dir is None
+
+    # Build the optional fancy-plot geometry once (reused on every slider update).
+    tube_data = None
+    canopy_grid = None
+    if surfplan_dir is not None:
+        from VSM.plotly.surfplan_runner import ensure_surfplan_processed
+        from VSM.plotly.tube_geometry import build_tube_data
+        from VSM.plotly.canopy_geometry import load_contour_table, build_canopy_grid
+
+        processed_dir = ensure_surfplan_processed(Path(surfplan_dir))
+        tube_data = build_tube_data(wing_aero.panels, processed_dir)
+        if is_with_canopy:
+            contour_table = load_contour_table(processed_dir)
+            canopy_grid = build_canopy_grid(wing_aero.panels, contour_table)
+
+    # Optional Cp-based scaling of the chordwise force vectors.
+    cp_magnitude_fn = None
+    if cp_distributions_dir is not None:
+        from VSM.plotly.cp_distributions import build_cp_magnitude_fn
+
+        cp_magnitude_fn, matched_aoa = build_cp_magnitude_fn(
+            Path(cp_distributions_dir), angle_of_attack
+        )
+        print(
+            f"Cp loading from closest available AoA = {matched_aoa:g} deg "
+            f"(operating AoA = {angle_of_attack:g} deg)"
+        )
 
     # Create the figure with a default orientation
     fig = go.Figure()
@@ -848,6 +1107,11 @@ def interactive_plot(
         is_with_aerodynamic_details,
         is_with_bridles,
         title,
+        tube_data=tube_data,
+        canopy_grid=canopy_grid,
+        is_with_tube_rings=is_with_tube_rings,
+        is_with_panels=is_with_panels,
+        cp_magnitude_fn=cp_magnitude_fn,
     )
 
     # Save or show the plot if requested
@@ -859,4 +1123,95 @@ def interactive_plot(
         fig.write_html(save_path)
 
     if is_show:
-        fig.show()
+        import tempfile
+        import webbrowser
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".html", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            tmp_path = f.name
+            fig.write_html(f, include_plotlyjs=True, full_html=True)
+        print(f"Interactive plot saved to: {tmp_path}")
+        webbrowser.open(f"file://{tmp_path}")
+
+    return fig
+
+
+def save_high_res_render(
+    fig: go.Figure,
+    save_path,
+    base_size: int = 2000,
+    scale: int = 4,
+    show_legend: bool = False,
+    show_axes: bool = False,
+    show_annotations: bool = False,
+    transparent_background: bool = False,
+    pad_frac: float = 0.02,
+) -> str:
+    """Export a clean, to-scale high-resolution PNG of the kite.
+
+    A Plotly 3D scene is only rendered undistorted on a **square** canvas (on a
+    non-square canvas Plotly stretches it, which squeezes the kite). So this
+    renders on a square canvas -- guaranteeing correct proportions -- then crops
+    tightly to the drawn content. The legend, axes and annotations are removed by
+    default for a clean figure.
+
+    Args:
+        fig: The Plotly figure (e.g. from :func:`interactive_plot`).
+        save_path: Output ``.png`` path; parent directories are created.
+        base_size: Square canvas size in pixels before supersampling.
+        scale: Supersampling factor (final render is ``base_size * scale`` square,
+            then cropped). Defaults to 4.
+        show_legend: Keep the trace legend. Defaults to False.
+        show_axes: Keep the 3D axes. Defaults to False.
+        show_annotations: Keep the corner case-info text. Defaults to False.
+        transparent_background: Transparent instead of white background.
+        pad_frac: Padding around the cropped content, as a fraction of its size.
+
+    Returns:
+        str: The path the PNG was written to.
+    """
+    import io
+    from PIL import Image
+
+    render_fig = go.Figure(fig)
+    render_fig.update_layout(showlegend=show_legend, margin=dict(l=0, r=0, t=0, b=0))
+    if not show_annotations:
+        render_fig.layout.annotations = ()
+        render_fig.layout.title = None
+    if not show_axes:
+        render_fig.update_scenes(
+            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False
+        )
+    bg = "rgba(0,0,0,0)" if transparent_background else "white"
+    render_fig.update_layout(paper_bgcolor=bg, plot_bgcolor=bg)
+
+    # Square canvas => Plotly does not distort the 3D scene.
+    png = render_fig.to_image(
+        format="png", width=base_size, height=base_size, scale=scale
+    )
+    image = Image.open(io.BytesIO(png)).convert("RGBA")
+
+    # Crop tightly to the drawn content (non-background pixels).
+    rgb = np.asarray(image)[:, :, :3].astype(int)
+    alpha = np.asarray(image)[:, :, 3]
+    if transparent_background:
+        content = alpha > 0
+    else:
+        content = rgb.sum(axis=2) < 3 * 250  # anything not near-white
+    ys, xs = np.where(content)
+    if len(xs):
+        pad = int(pad_frac * max(xs.max() - xs.min(), ys.max() - ys.min()))
+        left = max(xs.min() - pad, 0)
+        right = min(xs.max() + pad, image.width)
+        top = max(ys.min() - pad, 0)
+        bottom = min(ys.max() + pad, image.height)
+        image = image.crop((left, top, right, bottom))
+
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(str(save_path))
+    print(
+        f"High-resolution render saved to: {save_path} ({image.width} x {image.height} px)"
+    )
+    return str(save_path)
