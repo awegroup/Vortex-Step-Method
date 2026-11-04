@@ -6,6 +6,14 @@ import pytest
 from pathlib import Path
 from VSM.core.AirfoilAerodynamics import AirfoilAerodynamics
 
+# The regression models are git-ignored, so they are absent on a clean checkout (CI).
+pytestmark = pytest.mark.skipif(
+    not Path(__file__)
+    .parent.parent.parent.joinpath("data", "ml_models", "ET_re1e6.pkl")
+    .exists(),
+    reason="Real model files not available",
+)
+
 
 class TestMasureRegressionReal:
     """Test cases for masure_regression with real model file integration."""
@@ -196,12 +204,6 @@ class TestMasureRegressionReal:
             assert airfoil.CD is not None, f"CD should not be None for param set {i}"
             assert airfoil.CM is not None, f"CM should not be None for param set {i}"
 
-    @pytest.mark.skipif(
-        not Path(__file__)
-        .parent.parent.parent.joinpath("data", "models", "ET_re1e6.pkl")
-        .exists(),
-        reason="Real model files not available",
-    )
     def test_masure_regression_requires_model_files(
         self, masure_params, small_alpha_range, test_reynolds, masure_config_path
     ):
