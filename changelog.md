@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [2.3.0] - 04/11/2026
 
 **Default results change.** The lifting-line coupling now follows the consistent
-formulation of Gaunaa, Li & Pirrung (TORQUE 2026): circulation from the inner
-velocity, span-perpendicular sections, quarter-chord force directions,
+formulation of Gaunaa, Li & Pirrung (TORQUE 2026): circulation from the
+effective velocity including induction, span-perpendicular sections,
+quarter-chord force directions,
 attached-trailed-vortex forces and a chord-regularised curved bound vortex.
 Forces, moments and coefficients computed with the defaults differ from 2.2.0,
 most on swept and curved wings (kites). Each new default can be switched back
@@ -19,10 +20,11 @@ This release also contains everything shipped in 2.2.0. `v2.2.0` was tagged on
 the `improve_plotting` branch, which had not been merged into `develop`/`main`.
 
 ### Changed (results)
-- Circulation target is `Gamma = 0.5 |V_inner| c Cl` with the inner
-  (span-perpendicular, own-2D-induction-removed) velocity, instead of
-  `0.5 Umag^2 / Umagw c Cl`. On the V3 kite the old map put the circulation
-  2-6 % low.
+- Circulation target is `Gamma = 0.5 |V_eff| c Cl`, instead of
+  `0.5 |V_eff|^2 / |V_a| c Cl`. `V_eff` is the span-perpendicular effective
+  velocity: inflow plus induction, without the section's own 2D induction (the
+  inner velocity of Gaunaa et al.). `V_a` is the span-perpendicular inflow
+  without induction. On the V3 kite the old map put the circulation 2-6 % low.
 - Panel frame and chord follow the Crossflow Principle: the chord direction is
   perpendicular to the bound vortex, the normal is chord x span, and the panel
   chord is the perpendicular one. Unswept panels are unchanged; on swept panels
