@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [2.3.0] - 03/11/2026
+## [2.3.0] - 04/11/2026
 
 **Default results change.** The lifting-line coupling now follows the consistent
 formulation of Gaunaa, Li & Pirrung (TORQUE 2026): circulation from the inner
@@ -31,10 +31,14 @@ the `improve_plotting` branch, which had not been merged into `develop`/`main`.
   flow at the quarter chord (TAT3), with magnitudes from the 3/4-chord angle.
   `is_aoa_corrected=False` restores the 3/4-chord directions.
 - The quarter-chord flow includes the influence of a curved or swept bound
-  vortex through a chord-regularised correction (the actual minus a locally
-  unrolled vortex system). On-blade induced drag matches the Trefftz plane
-  within about 1 % on arc, swept and kite geometries, independently of the
-  panel count. It is computed once per shape and rotated under rigid motion.
+  vortex through a correction: the actual minus a locally unrolled vortex
+  system, with the bound vorticity and the leg starting points spread over the
+  chord using the flat-plate thin-airfoil loading `gamma(x) ~ sqrt((c - x)/x)`
+  (24 strips, effective cut-off 0.15 c, not a tuning parameter). This is a new
+  modelling assumption. The correction is zero on a straight wing with
+  perpendicular legs. On-blade induced drag matches the Trefftz plane within
+  about 1 % on arc, swept and kite geometries, independently of the panel
+  count. It is computed once per shape and rotated under rigid motion.
 - Drag acts along the local inner flow, not the global span axis.
 - `is_with_attached_trailed_vortex_force=True` by default: Kutta-Joukowski force
   on the chordwise attached trailed vortex segments (`F_attached_trailed_distribution`
@@ -50,6 +54,7 @@ the `improve_plotting` branch, which had not been merged into `develop`/`main`.
   the full 3D relative velocity (the spanwise flow it models).
 - With `is_with_artificial_viscosity=True`, the regularization is also gated on
   negative stall.
+- `anderson_max_iterations` default raised from 100 to 1000.
 - `Wing.preserve_section_order` (default False): skip the section re-sorting;
   `update_wing_from_points` sets it, since its arrays already define the arc order.
 
@@ -64,6 +69,7 @@ the `improve_plotting` branch, which had not been merged into `develop`/`main`.
   velocity is available from `Solver.compute_relative_velocity(gamma)`.
 - The Anderson loop no longer falls back to the base loop by default
   (`anderson_fallback_to_base=True` restores it).
+- `SurfplanAdapter` is now a required dependency.
 
 ### Added
 - `gamma_loop_type="casadi_newton"`: Newton solve of the circulation residual
@@ -75,6 +81,7 @@ the `improve_plotting` branch, which had not been merged into `develop`/`main`.
   circulation loops.
 - `BodyAerodynamics(..., leg_direction="rib" | "streamwise" | "perpendicular")`
   for the attached-trailed legs (default `"rib"`, unchanged).
+- `Panel.set_leg_end_points` and `Panel.reset_legs_to_ribs`.
 - `results["drag_induced_trefftz"]`: Trefftz-plane induced drag as a far-wake
   reference (uniform inflow only).
 - `VSM.core.panel_kernels`: the section force law as functions over an `xp`
