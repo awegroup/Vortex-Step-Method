@@ -244,22 +244,78 @@ non-uniform grid (the paper derives it for uniform rectangular wings).
   drag directions come from the flow at the quarter chord (TAT3, the paper's
   LL-Gaunaa), **`is_aoa_corrected=True`**, now the default. False keeps the
   3/4-chord directions (the paper's LL-3/4): those overestimate the induced
-  drag by 20-40% against the Trefftz plane (figure 03), but historically gave
-  a better match to the V3 wind-tunnel drag, for reasons not yet understood,
-  which is why it used to be the default.
+  drag by 20-40% against the Trefftz plane (figure 03). They historically
+  matched the V3 wind-tunnel drag better, but only because that overshoot has
+  the same lift-dependent shape as the drag the wind tunnel measures beyond
+  every simulation, RANS included (Poland et al. 2026 attribute it to the
+  model's thick canopy and the flow behind the leading-edge tube); a
+  compensating error, not a physical effect.
+- **Curved bound vortex at the quarter chord.** The quarter-chord flow is the
+  trailed system (Prandtl's downwash, exact on straight wings) plus the
+  influence of the curved or swept bound vortex. Evaluating the other panels'
+  bound segments on the line itself is logarithmically singular (Li, Gaunaa,
+  Pirrung, Ramos-Garcia & Horcas 2020), which showed up as an on-blade induced
+  drag that kept falling with the panel count on the V3 (0.93, 0.90, 0.86 of
+  the Trefftz value at 20, 50, 150 panels). The solver instead adds, for each
+  panel, the difference between the actual vortex system and the same wing
+  unrolled onto the panel's tangent line, with the bound vorticity and the leg
+  starting points spread along the chord with the thin-airfoil distribution
+  `sqrt((c-x)/x)` (`assemble_curved_bound_correction_AIC`). The correction is
+  identically zero on straight wings, has no tunable length (the distribution
+  fixes the cut-off at 0.15 c), and brings the on-blade induced drag within 1%
+  of the Trefftz plane on an arc wing, the V3 and the paper's swept-anhedral
+  elliptic wing at every resolution (figure 08). The correction depends on
+  the panel geometry only, so it is computed once per geometry (about 0.5 s at
+  50 panels) and reused for every inflow and circulation until the panels are
+  rebuilt or moved; a coupled trim that solves one deformed shape hundreds of
+  times pays for it once. It shares its mechanism with
+  the effective-lifting-line method of Reid & Hunsaker (2020), whose two
+  empirical lengths it replaces. On the V3 it raises the drag by about 5% of the
+  induced drag at 10 deg, onto the RANS value (figure 09).
 - **`is_with_attached_trailed_vortex_force`** (default True): Kutta-Joukowski
   force on the chordwise vortex legs between the bound vortex and the trailing
   edge (Sec. 3 of the paper). Zero net effect on unswept wings, needed for swept
   ones. Reported per section boundary in `F_attached_trailed_distribution` and
   folded into `F_distribution` and the totals.
+- **Direction of the attached-trailed legs**,
+  `BodyAerodynamics(..., leg_direction=...)` (also on `instantiate`). The paper
+  states that theory does not fix this direction and chooses the chordwise
+  direction of CP1, perpendicular to the quarter-chord line, up to the
+  trailing edge. Three constructions are available (figure 10): `"rib"`
+  (default) runs the legs along the interpolated input sections to their
+  trailing-edge points, with the control point on the section, a fixed
+  vortex system independent of the inflow; `"streamwise"` runs them along
+  the mean apparent velocity projected onto the surface, up to the
+  trailing-edge curve, and rebuilds them whenever `va` is set; `"perpendicular"`
+  is the paper's choice, with the tangent of the quarter-chord line averaged
+  over one leg length so that the legs do not cross at a planform kink. With
+  the last two the control point moves with the legs so that it stays between
+  the panel's own two legs. Against a vortex-lattice method (AeroSandbox,
+  `docs/validation/vlm_referee.py`, figure 11) rib and streamwise legs
+  reproduce the lift of straight, yawed, kinked-swept, arc and
+  swept-anhedral elliptic wings within 1% (streamwise: 2% low on the arc) and
+  the induced drag within 1-4%; perpendicular legs lose 9% of the lift on the
+  kinked swept wing and 8% on the V3, where they also cross at the tips above
+  80 panels. The rib legs stay the default: same accuracy, a fixed vortex
+  system, and the code's main use is trim finding with an inflow that varies
+  along the span, where the streamwise construction can only use the mean
+  direction. Streamwise legs are the option for uniform-inflow studies of
+  wings whose sections are drawn obliquely to the flow, or in sideslip: they
+  give the closest V3 polars to RANS (and the RANS lift slope) at a cost of
+  1-3% of lift on the nearly vertical tips of an arc wing at 4-15 deg, where
+  the chordwise rib legs are within 2%. An inflow without a mean direction
+  (pure rotation) falls back to the rib legs with a warning. Details in
+  `docs/validation/curved_bound_vortex_report.pdf`, Section 4.3.
 
 Every solve of a wing in one uniform inflow also reports
 `results["drag_induced_trefftz"]`, the Trefftz-plane induced drag
 (`BodyAerodynamics.compute_trefftz_plane_induced_drag`): the far-wake value
 that does not depend on where the forces are evaluated on the blade. With
-quarter-chord directions and the attached-trailed force the on-blade drag of
-an inviscid straight wing matches it to four digits; with 3/4-chord
-directions it does not. It is `None` for per-panel inflow or body rates.
+quarter-chord directions, the attached-trailed force and the curved
+bound-vortex regularisation the on-blade drag of an inviscid straight wing
+matches it to four digits and that of curved wings and the V3 within 1%,
+independently of the panel count; with 3/4-chord directions it does not. It
+is `None` for per-panel inflow or body rates.
 
 Effect on the TUDELFT V3 kite polars (CAD geometry, CFD+NeuralFoil polars,
 50 panels) against RANS and wind-tunnel data: the dashed line is the solver
@@ -270,7 +326,7 @@ chord directions, the red line with quarter-chord directions
 ![V3 polars before and after the consistency fixes](consistency_fixes_V3_polars.png)
 
 More figures (frame, Trefftz check, attached-trailed force, relaxation,
-wake direction) with their descriptions are in [figures/README.md](figures/README.md).
+wake direction, leg direction) with their descriptions are in [figures/README.md](figures/README.md).
 
 ### Frozen wake direction
 

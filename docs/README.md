@@ -66,7 +66,7 @@
     - Naming conventions
     - File and directory naming
 
-12. **[Aerodynamic_model.pdf](Aerodynamic_model.pdf)** - Theoretical background and mathematical formulations
+12. **[Aerodynamic_model.pdf](Aerodynamic_model.pdf)** - The aerodynamic model: formulation, conventions and validation (source in `aerodynamic_model/aerodynamic_model.tex`; figures from `validation/` and `figures/`)
 
 ## Quick Start Examples
 

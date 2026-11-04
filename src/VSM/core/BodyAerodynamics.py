@@ -12,9 +12,31 @@ from VSM.core.utils import (
     point_in_quad,
     assemble_AIC_matrices,
     induced_velocity_at_points,
-    assemble_bound_vortex_AIC,
+    assemble_curved_bound_correction_AIC,
+    perpendicular_leg_end_points,
+    thin_airfoil_strips,
 )
 from . import jit_cross, jit_norm, jit_dot
+from VSM.core import panel_kernels
+
+
+def _rigid_rotation_between(points_0, points_1, dirs_0, dirs_1, rel_tol=1e-9):
+    """Rotation matrix R with points_1 = R points_0 + t and dirs_1 = R dirs_0
+    (Kabsch), or None when the two point sets are not the same rigid body
+    to within ``rel_tol`` of the geometry's size."""
+    c0 = points_0.mean(axis=0)
+    c1 = points_1.mean(axis=0)
+    q0 = points_0 - c0
+    q1 = points_1 - c1
+    scale = max(float(np.abs(q0).max()), 1e-300)
+    u, _, vt = np.linalg.svd(q0.T @ q1)
+    d = np.sign(np.linalg.det(vt.T @ u.T))
+    R = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+    if np.abs(q0 @ R.T - q1).max() > rel_tol * scale:
+        return None
+    if np.abs(dirs_0 @ R.T - dirs_1).max() > rel_tol:
+        return None
+    return R
 
 
 class BodyAerodynamics:
@@ -59,10 +81,45 @@ class BodyAerodynamics:
         bridle_line_system: list = None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
+        leg_direction: str = "rib",
     ):
+        """
+        Args:
+            wings (list): Wing instances.
+            bridle_line_system (list, optional): bridle lines as [p1, p2, diameter].
+            aerodynamic_center_location (float): chord fraction of the bound vortex.
+            control_point_location (float): chord fraction of the control point.
+            leg_direction (str): direction of the attached-trailed legs, the
+                chordwise vortex segments between the bound vortex and the
+                trailing edge. ``"rib"`` (default): along the (interpolated)
+                input sections, ending at their trailing-edge points; a fixed
+                vortex system, independent of the inflow. ``"streamwise"``:
+                along the mean apparent velocity projected onto the local
+                surface, up to the trailing-edge curve, rebuilt whenever ``va``
+                is set; depends only on the quarter-chord line, the trailing
+                edge and the flow, not on how the input sections were drawn,
+                and follows the inflow in sideslip, but with a spanwise-varying
+                inflow (body rates, distributed ``va``) it uses the mean
+                direction only. ``"perpendicular"``:
+                perpendicular to the local quarter-chord line, up to the
+                trailing-edge curve, as in Gaunaa, Li & Pirrung (TORQUE 2026,
+                Sec. 3), with the control point between the panel's two legs;
+                see ``utils.perpendicular_leg_end_points``. Streamwise and rib
+                legs coincide on wings whose ribs are drawn along the flow.
+                The panel frame
+                and the chord length are the span-perpendicular ones (CP1) in
+                both cases; with ``"rib"`` the control point lies on the
+                interpolated rib at the control-point chord fraction.
+        """
+        if leg_direction not in ("rib", "perpendicular", "streamwise"):
+            raise ValueError(
+                "leg_direction must be 'rib', 'perpendicular' or 'streamwise', "
+                f"got {leg_direction!r}"
+            )
         self._wings = wings
         self._aerodynamic_center_location = aerodynamic_center_location
         self._control_point_location = control_point_location
+        self._leg_direction = leg_direction
 
         self._bridle_line_system = bridle_line_system
         self._reference_point = np.zeros(3, dtype=float)
@@ -85,6 +142,7 @@ class BodyAerodynamics:
     def _build_panels(self):
         """Helper method to build the panel list from the current wing geometry."""
         panels = []
+        wing_panel_groups = []
         for wing in self.wings:
             section_list = wing.refine_aerodynamic_mesh()
             n_panels_per_wing = len(section_list) - 1
@@ -104,8 +162,9 @@ class BodyAerodynamics:
                 self._aerodynamic_center_location,
                 self._control_point_location,
             )
+            wing_panels = []
             for j in range(n_panels_per_wing):
-                panels.append(
+                wing_panels.append(
                     Panel(
                         section_list[j],
                         section_list[j + 1],
@@ -118,8 +177,90 @@ class BodyAerodynamics:
                         z_airf_list[j],
                     )
                 )
+            if self._leg_direction == "perpendicular":
+                self._apply_perpendicular_legs(wing_panels, section_list)
+            wing_panel_groups.append((wing_panels, section_list))
+            panels.extend(wing_panels)
+        self._wing_panel_groups = wing_panel_groups
         self._panels = panels
+        # after a rebuild (rotate, update_from_points) streamwise legs must
+        # follow the inflow already set; before the first va they are ribs
+        va_distribution = getattr(self, "_va_distribution", None)
+        if self._leg_direction == "streamwise" and va_distribution is not None:
+            if len(va_distribution) == len(panels):
+                self._apply_streamwise_legs(va_distribution)
+            else:  # panel count changed: only the mean direction is meaningful
+                self._apply_streamwise_legs(np.mean(va_distribution, axis=0, keepdims=True))
         self._n_panels = len(panels)
+
+    def _apply_perpendicular_legs(self, wing_panels, section_list, direction=None):
+        """Replace the rib legs of one wing by legs perpendicular to the
+        quarter-chord line (or along ``direction``, projected onto the
+        surface) that end on the trailing-edge curve."""
+        bound_nodes = np.array(
+            [p.bound_point_1 for p in wing_panels] + [wing_panels[-1].bound_point_2],
+            dtype=float,
+        )
+        te_nodes = np.array([sec.TE_point for sec in section_list], dtype=float)
+        normals = None
+        if direction is not None:
+            normals = np.array([p.x_airf for p in wing_panels], dtype=float)
+        ends = perpendicular_leg_end_points(
+            bound_nodes,
+            te_nodes,
+            np.array([p.y_airf for p in wing_panels], dtype=float),
+            np.array([p.chord for p in wing_panels], dtype=float),
+            float(self._aerodynamic_center_location),
+            direction=direction,
+            normals=normals,
+        )
+        # The control point goes between the panel's own two legs, at the
+        # control-point fraction along them, with the same spanwise weights
+        # that place the aerodynamic centre on the bound segment. Between
+        # parallel perpendicular legs this is the 3/4-chord point of the CP1
+        # section (the paper's control point); where the legs fan out near a
+        # kink or a tip it stays between them, as it does between the rib
+        # legs in the default construction.
+        t_leg = (self._control_point_location - self._aerodynamic_center_location) / (
+            1.0 - self._aerodynamic_center_location
+        )
+        for j, panel in enumerate(wing_panels):
+            b1, b2 = panel.bound_point_1, panel.bound_point_2
+            w1 = np.linalg.norm(panel.aerodynamic_center - b2) / np.linalg.norm(b1 - b2)
+            control_point = w1 * (b1 + t_leg * (ends[j] - b1)) + (1.0 - w1) * (
+                b2 + t_leg * (ends[j + 1] - b2)
+            )
+            panel.set_leg_end_points(ends[j], ends[j + 1], control_point)
+
+    def _apply_streamwise_legs(self, va_distribution):
+        """Streamwise legs: along the mean apparent velocity, projected onto
+        the local surface, up to the trailing-edge curve. Called whenever
+        ``va`` is set, since the legs follow the inflow.
+
+        An inflow without a usable mean direction (pure rotation, a flow
+        that does not run from the bound vortex towards the trailing edge)
+        has no streamwise legs; the rib legs are then used and a warning is
+        logged, so that such a case still solves."""
+        va = np.atleast_2d(np.asarray(va_distribution, dtype=float))
+        va_mean = np.mean(va, axis=0)
+        norm = np.linalg.norm(va_mean)
+        speed = float(np.mean(np.linalg.norm(va, axis=1)))
+        try:
+            if speed <= 0.0 or norm < 1e-3 * speed:
+                raise ValueError("the mean apparent velocity is zero (pure rotation?)")
+            for wing_panels, section_list in self._wing_panel_groups:
+                self._apply_perpendicular_legs(wing_panels, section_list, direction=va_mean / norm)
+        except ValueError as err:
+            logging.warning(
+                "streamwise attached-trailed legs cannot be built for this inflow "
+                f"({err}); using the rib legs for this inflow"
+            )
+            for panel in self._panels:
+                panel.reset_legs_to_ribs()
+
+    @property
+    def leg_direction(self):
+        return self._leg_direction
 
     ####################
     ## CLASS METHODS ###
@@ -136,6 +277,7 @@ class BodyAerodynamics:
         ml_models_dir=None,
         aerodynamic_center_location: float = 0.25,
         control_point_location: float = 0.75,
+        leg_direction: str = "rib",
     ):
         """
         Instantiate a BodyAerodynamics object from either a provided wing_instance or a YAML config file.
@@ -150,6 +292,7 @@ class BodyAerodynamics:
                 center / bound vortex (default: 0.25).
             control_point_location (float): Chord fraction (from LE) of the control point
                 (default: 0.75).
+            leg_direction (str): ``"rib"`` (default), ``"streamwise"`` or ``"perpendicular"``, see ``BodyAerodynamics.__init__``.
 
         Returns:
             BodyAerodynamics instance.
@@ -347,12 +490,14 @@ class BodyAerodynamics:
                 bridle_lines,
                 aerodynamic_center_location=aerodynamic_center_location,
                 control_point_location=control_point_location,
+                leg_direction=leg_direction,
             )
         else:
             return cls(
                 [wing_instance],
                 aerodynamic_center_location=aerodynamic_center_location,
                 control_point_location=control_point_location,
+                leg_direction=leg_direction,
             )
 
     def rotate(
@@ -561,6 +706,11 @@ class BodyAerodynamics:
             va_distribution += -np.cross(self._body_rates, control_points - r0)
 
         # push to panels
+        # kept for a rebuild of the panels (rotate, update_from_points)
+        self._va_distribution = np.array(va_distribution, dtype=float)
+        if self._leg_direction == "streamwise":
+            self._apply_streamwise_legs(va_distribution)
+
         for i, panel in enumerate(self.panels):
             panel.va = va_distribution[i]
 
@@ -1149,17 +1299,17 @@ class BodyAerodynamics:
         ).astype(float)
         d_gamma = np.concatenate(([gamma[0]], gamma[1:] - gamma[:-1], [-gamma[-1]]))
         q = origins - np.outer(origins @ e_inf, e_inf)  # projected onto the plane
-        drag = 0.0
-        for i in range(n):
-            mid = 0.5 * (q[i] + q[i + 1])
-            d = mid - q
-            r2 = np.sum(d * d, axis=1)
-            v_t = np.sum(
-                (d_gamma / (2.0 * np.pi * r2))[:, None] * np.cross(e_inf, d), axis=0
-            )
-            # trace segment in the sense of the bound vortex (section i+1 -> i)
-            drag += gamma[i] * np.dot(np.cross(v_t, q[i] - q[i + 1]), e_inf)
-        return 0.5 * rho * drag
+        # velocity of all wake vortices k at every trace-segment midpoint i
+        mid = 0.5 * (q[:-1] + q[1:])  # (n, 3)
+        d = mid[:, None, :] - q[None, :, :]  # (n, n+1, 3)
+        r2 = np.sum(d * d, axis=2)
+        v_t = np.sum(
+            (d_gamma[None, :] / (2.0 * np.pi * r2))[:, :, None] * np.cross(e_inf, d),
+            axis=1,
+        )
+        # trace segment in the sense of the bound vortex (section i+1 -> i)
+        drag = np.sum(gamma[:n] * (np.cross(v_t, q[:-1] - q[1:]) @ e_inf))
+        return 0.5 * rho * float(drag)
 
     def compute_attached_trailed_vortex_forces(
         self, gamma, rho, core_radius_fraction, va_array
@@ -1182,11 +1332,7 @@ class BodyAerodynamics:
             (forces, points): ``(n+1, 3)`` force vectors and the points they act at.
         """
         panels = self.panels
-        n = len(panels)
         gamma = np.asarray(gamma, dtype=float).ravel()
-        gamma_net = np.zeros(n + 1)
-        gamma_net[:n] += gamma  # leg bound_1 -> TE_1 of panel j sits on boundary j
-        gamma_net[1:] -= gamma  # leg TE_2 -> bound_2 of panel j sits on boundary j+1
 
         bound_point_1 = np.ascontiguousarray(
             [p.bound_point_1 for p in panels], dtype=float
@@ -1206,13 +1352,7 @@ class BodyAerodynamics:
         t = (cp - ac) / (1.0 - ac)
         points = np.ascontiguousarray(bound + t * legs)
 
-        # inflow at a boundary: mean of the neighbouring panels' inflow
         va_array = np.asarray(va_array, dtype=float)
-        va_boundary = np.zeros((n + 1, 3))
-        va_boundary[:n] += va_array
-        va_boundary[1:] += va_array
-        va_boundary[1:n] *= 0.5
-
         va_speeds = np.linalg.norm(va_array, axis=1)
         wake_units, wake_speeds = self._wake_directions(
             va_speeds, va_array / va_speeds[:, None]
@@ -1228,8 +1368,9 @@ class BodyAerodynamics:
             wake_speeds,
             float(core_radius_fraction),
         )
-        v_rel = va_boundary + v_ind
-        forces = rho * gamma_net[:, None] * np.cross(v_rel, legs)
+        # net leg circulation and boundary inflow (mean of the neighbouring
+        # panels') are formed in the kernel
+        forces = panel_kernels.attached_trailed_forces(gamma, va_array, v_ind, legs, rho)
         return forces, points
 
     def compute_results(
@@ -1267,10 +1408,6 @@ class BodyAerodynamics:
             cl_array[icp] = panel_i.compute_cl(alpha_array[icp])
             cd_array[icp], cm_array[icp] = panel_i.compute_cd_cm(alpha_array[icp])
             panel_width_array[icp] = panel_i.width
-        lift = (cl_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
-        drag = (cd_array * 0.5 * rho * Umag_array**2 * chord_array)[:, np.newaxis]
-        moment = (cm_array * 0.5 * rho * Umag_array**2 * chord_array**2)[:, np.newaxis]
-
         # Quarter-chord force directions (TAT3) apply to the VSM model, whose
         # circulation loop evaluates at 3/4 chord. The LLT model already
         # evaluates on the quarter chord without any bound-vortex influence
@@ -1290,6 +1427,28 @@ class BodyAerodynamics:
         else:
             alpha_corrected = alpha_array[:, np.newaxis]
             alpha_uncorrected = alpha_array[:, np.newaxis]
+
+        # Section force law (VSM.core.panel_kernels): magnitudes from the polar
+        # at the 3/4-chord angle and section speed, directions from
+        # alpha_corrected (the quarter-chord angle, or the 3/4-chord one).
+        lift_2D_array, drag_2D_array, moment_2D_array, dir_flow_array = (
+            panel_kernels.section_force_vectors(
+                alpha_array,
+                Umag_array,
+                cl_array,
+                cd_array,
+                cm_array,
+                chord_array,
+                x_airf_array,
+                y_airf_array,
+                z_airf_array,
+                rho,
+                alpha_dir=np.ravel(alpha_corrected),
+            )
+        )
+        moment_local_3D_array = panel_kernels.panel_moment_local(
+            moment_2D_array, panel_width_array, z_airf_array
+        )
 
         # Initializing variables
         cl_prescribed_va_list = []
@@ -1347,45 +1506,19 @@ class BodyAerodynamics:
             ### Defining panel_variables
             # Defining directions of airfoil that defines current panel_i
             z_airf_span = panel_i.z_airf  # along the span
-            y_airf_chord = panel_i.y_airf  # along the chord
-            x_airf_normal_to_chord = panel_i.x_airf  # normal to the chord
-            # TODO: implement these
-            alpha_corrected_i = alpha_corrected[i]
             panel_chord = panel_i.chord
             panel_width = panel_i.width
             panel_area = panel_chord * panel_width
             area_all_panels += panel_area
 
-            ### Calculate the direction of the induced apparent wind speed to the airfoil orientation
-            # this is done using the CORRECTED CALCULATED (comes from gamma distribution) angle of attack
-            # For VSM the correction is applied, and it is the angle of attack, from calculating induced velocities at the 1/4c aerodynamic center location
-            # For LTT the correction is NOT applied, and it is the angle of attack, from calculating induced velocities at the 3/4c control point
-            induced_va_airfoil = (
-                np.cos(alpha_corrected_i) * y_airf_chord
-                + np.sin(alpha_corrected_i) * x_airf_normal_to_chord
-            )
-            dir_induced_va_airfoil = induced_va_airfoil / jit_norm(induced_va_airfoil)
-
-            ### Calculate the direction of the lift and drag vectors
-            # lift is perpendical/normal to induced apparent wind speed
-            dir_lift_induced_va = jit_cross(dir_induced_va_airfoil, z_airf_span)
-            dir_lift_induced_va = dir_lift_induced_va / jit_norm(dir_lift_induced_va)
-            # drag is parallel/tangential to induced apparent wind speed
-            # (TAT3: the local inner flow direction, which lies in the panel's
-            # span-perpendicular plane; the global span axis is NOT used here)
-            dir_drag_induced_va = dir_induced_va_airfoil
-
-            ### Calculating the MAGNITUDE of the lift and drag
-            # The VSM and LTT methods do NOT differ here, both use the uncorrected angle of attack
-            # i.e. evaluate the magnitude at the (3/4c) control point
-            # 2D AIRFOIL aerodynamic forces, so multiplied by chord
-            lift_induced_va_mag = lift[i]
-            drag_induced_va_mag = drag[i]
-
-            # panel force VECTOR NORMAL to CALCULATED induced velocity
-            lift_induced_va = lift_induced_va_mag * dir_lift_induced_va
-            # panel force VECTOR TANGENTIAL to CALCULATED induced velocity
-            drag_induced_va = drag_induced_va_mag * dir_drag_induced_va
+            ### Section force vectors (per unit span) from the force law above:
+            # lift normal and drag along the direction-defining flow
+            # dir_induced_va_airfoil (TAT3: the local inner flow direction, in
+            # the panel's span-perpendicular plane; the global span axis is NOT
+            # used), magnitudes at the 3/4c control point for VSM and LLT alike.
+            dir_induced_va_airfoil = dir_flow_array[i]
+            lift_induced_va = lift_2D_array[i]
+            drag_induced_va = drag_2D_array[i]
             ftotal_induced_va = lift_induced_va + drag_induced_va
 
             ### Converting forces to prescribed wing va
@@ -1540,13 +1673,10 @@ class BodyAerodynamics:
             # (1) Panel aerodynamic center in global frame:
             panel_ac_global = panel_i.aerodynamic_center  # 3D [x, y, z]
 
-            # (2) Convert local (2D) pitching moment to a 3D vector in global coords.
-            #     Use the axis around which the moment is defined,
-            #     which is the z-axis pointing "spanwise"
-            moment_axis_global = panel_i.z_airf
-
-            # Scale by panel width if your 'moment[i]' is 2D moment-per-unit-span:
-            M_local_3D = moment[i] * moment_axis_global * panel_i.width
+            # (2) Local (2D) pitching moment as a 3D vector in global coords:
+            #     along the z-axis pointing "spanwise", times the width
+            #     (panel_kernels.panel_moment_local).
+            M_local_3D = moment_local_3D_array[i]
 
             # (3) Force application point used for r x F:
             #     use aerodynamic center (1/4c) for all models.
@@ -1788,7 +1918,7 @@ class BodyAerodynamics:
                 (
                     "cm_panel_dist",
                     np.divide(
-                        moment[:, 0],
+                        moment_2D_array,
                         0.5 * rho * Umag_array**2 * chord_array**2,
                         out=np.zeros_like(chord_array),
                         where=(Umag_array > 0.0) & (chord_array > 0.0),
@@ -1959,37 +2089,75 @@ class BodyAerodynamics:
             rates_in_body_frame=rates_in_body_frame,
         )
 
-    def update_effective_angle_of_attack_if_VSM(
-        self,
-        gamma,
-        core_radius_fraction,
-        x_airf_array,
-        y_airf_array,
-        va_array,
-        va_norm_array,
-        va_unit_array,
+    def _curved_bound_correction_cached(
+        self, eval_points, bp1, bp2, te1, te2, chord_dir, chords, va_norm, core_radius_fraction
     ):
-        """Updates the angle of attack at the aerodynamic center of each panel,
-            Calculated at the AERODYNAMIC CENTER, which needs an update for VSM
-            And can just use the old value for the LLT
+        """The curved bound-vortex correction (3, N, N) for the current panels,
+        from the cache when the panels are the cached ones up to a rigid
+        rotation and translation, otherwise recomputed and stored."""
+        ac = float(self._aerodynamic_center_location)
+        points = np.vstack([eval_points, bp1, bp2, te1, te2])
+        cache = getattr(self, "_curved_bound_cache", None)
+        if (
+            cache is not None
+            and cache["ac"] == ac
+            and cache["core"] == float(core_radius_fraction)
+            and cache["points"].shape == points.shape
+            and np.allclose(cache["chords"], chords, rtol=0.0, atol=1e-12)
+        ):
+            R = _rigid_rotation_between(cache["points"], points, cache["chord_dir"], chord_dir)
+            if R is not None:
+                if np.allclose(R, np.eye(3), atol=1e-14):
+                    return cache["AIC"]
+                return np.ascontiguousarray(np.einsum("ab,bij->aij", R, cache["AIC"]))
+        strip_x, strip_w = thin_airfoil_strips()
+        AIC_corr = assemble_curved_bound_correction_AIC(
+            eval_points, bp1, bp2, te1, te2, chord_dir, chords, va_norm,
+            ac, float(core_radius_fraction), strip_x, strip_w,
+        )
+        self._curved_bound_cache = {
+            "ac": ac,
+            "core": float(core_radius_fraction),
+            "points": points.copy(),
+            "chord_dir": np.array(chord_dir, dtype=float),
+            "chords": np.array(chords, dtype=float),
+            "AIC": AIC_corr,
+        }
+        return AIC_corr
+
+    def compute_quarter_chord_AIC_matrices(
+        self, core_radius_fraction, va_norm_array, va_unit_array
+    ):
+        """Induction matrices of the force-direction flow at the panel
+        quarter chords (aerodynamic centres): ``v_qc = va + AIC_qc gamma``.
+
+        The direction-defining flow is the undisturbed relative flow at the
+        quarter chord (TAT3 in Gaunaa, Li & Pirrung, TORQUE 2026). The LLT
+        AIC holds the freestream-independent trailed system (legs + wake)
+        evaluated on the quarter chord, which is Prandtl's exact downwash for
+        a straight line but misses the influence of a curved or swept bound
+        vortex. Evaluating the other panels' bound segments on the line itself
+        is logarithmically singular (Li et al. 2020, "LL-P&S"), so the
+        curvature/sweep/skew influence is added as the chord-regularised
+        difference between the actual and the locally unrolled vortex
+        systems; see assemble_curved_bound_correction_AIC.
+
+        The matrices depend on the geometry and the wake (``va_norm_array``,
+        ``va_unit_array``, as in :meth:`compute_AIC_matrices`), not on the
+        circulation, so a caller can freeze them numerically, e.g. as
+        parameters of a CasADi graph (see ``VSM.core.panel_kernels``).
 
         Args:
-            None
+            core_radius_fraction (float): Vortex core radius fraction.
+            va_norm_array (np.ndarray): (n,) panel inflow speeds [m/s].
+            va_unit_array (np.ndarray): (n, 3) panel inflow directions.
 
         Returns:
-            None
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: the x, y and z
+            components, each (n, n): ``AIC_LLT + AIC_curved_correction``.
         """
-        # The direction-defining flow is the undisturbed relative flow at the
-        # quarter chord (TAT3 in Gaunaa, Li & Pirrung, TORQUE 2026): freestream
-        # plus every trailed vortex plus the bound vortices of the OTHER
-        # panels (the curved/swept bound-vortex influence of Li et al. 2020).
-        # The LLT AIC drops all bound vortices, which is exact only for a
-        # straight lifting line; the other panels' bound segments are added
-        # back here. The panel's own straight bound segment induces nothing on
-        # its own quarter-chord point.
-        aerodynamic_model_type = "LLT"
         AIC_x, AIC_y, AIC_z = self.compute_AIC_matrices(
-            aerodynamic_model_type, core_radius_fraction, va_norm_array, va_unit_array
+            "LLT", core_radius_fraction, va_norm_array, va_unit_array
         )
         eval_points = np.ascontiguousarray(
             [panel.aerodynamic_center for panel in self.panels], dtype=float
@@ -2000,24 +2168,58 @@ class BodyAerodynamics:
         bound_point_2 = np.ascontiguousarray(
             [panel.bound_point_2 for panel in self.panels], dtype=float
         )
-        AIC_bound = assemble_bound_vortex_AIC(
-            eval_points, bound_point_1, bound_point_2, float(core_radius_fraction)
+        TE_point_1 = np.ascontiguousarray(
+            [panel.TE_point_1 for panel in self.panels], dtype=float
         )
-        AIC_x = AIC_x + AIC_bound[0]
-        AIC_y = AIC_y + AIC_bound[1]
-        AIC_z = AIC_z + AIC_bound[2]
-        induced_velocity_all = np.array(
-            [
-                np.matmul(AIC_x, gamma),
-                np.matmul(AIC_y, gamma),
-                np.matmul(AIC_z, gamma),
-            ]
-        ).T
-        relative_velocity_array = va_array + induced_velocity_all
-        v_normal_array = np.sum(x_airf_array * relative_velocity_array, axis=1)
-        v_tangential_array = np.sum(y_airf_array * relative_velocity_array, axis=1)
-        alpha_array = np.arctan2(v_normal_array, v_tangential_array)
+        TE_point_2 = np.ascontiguousarray(
+            [panel.TE_point_2 for panel in self.panels], dtype=float
+        )
+        chords = np.ascontiguousarray([panel.chord for panel in self.panels], dtype=float)
+        chord_dir = np.ascontiguousarray(
+            [panel.y_airf for panel in self.panels], dtype=float
+        )
+        # The correction depends on the panel geometry only (the wake terms
+        # cancel between the actual and the unrolled systems, and the leg core
+        # radius has no measurable effect), so it is computed once per shape
+        # and reused for every inflow and circulation. A trim that rotates
+        # the body for each residual evaluation keeps the shape: the stored
+        # matrix is then rotated instead of rebuilt (its entries are velocity
+        # vectors, so they rotate with the geometry and ignore translations).
+        # The kernel costs about 0.5 s at 50 panels; a coupled trim solves
+        # one deformed shape hundreds of times.
+        AIC_corr = self._curved_bound_correction_cached(
+            eval_points, bound_point_1, bound_point_2, TE_point_1, TE_point_2,
+            chord_dir, chords, np.ascontiguousarray(va_norm_array, dtype=float).ravel(),
+            float(core_radius_fraction),
+        )
+        return AIC_x + AIC_corr[0], AIC_y + AIC_corr[1], AIC_z + AIC_corr[2]
 
+    def update_effective_angle_of_attack_if_VSM(
+        self,
+        gamma,
+        core_radius_fraction,
+        x_airf_array,
+        y_airf_array,
+        va_array,
+        va_norm_array,
+        va_unit_array,
+    ):
+        """Force-direction angle of each panel: the angle of the relative flow
+        at the quarter chord, ``va + AIC_qc gamma`` with the matrices of
+        :meth:`compute_quarter_chord_AIC_matrices`.
+
+        Returns:
+            np.ndarray: (n, 1) angles [rad].
+        """
+        AIC_x, AIC_y, AIC_z = self.compute_quarter_chord_AIC_matrices(
+            core_radius_fraction, va_norm_array, va_unit_array
+        )
+        relative_velocity_array = panel_kernels.quarter_chord_velocity(
+            va_array, gamma, AIC_x, AIC_y, AIC_z
+        )
+        alpha_array = panel_kernels.direction_angle(
+            relative_velocity_array, x_airf_array, y_airf_array
+        )
         return alpha_array[:, np.newaxis]
 
     def compute_line_aerodynamic_force(

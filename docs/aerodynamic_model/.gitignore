@@ -1,0 +1,9 @@
+# build artefacts; the compiled document is installed as docs/Aerodynamic_model.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+aerodynamic_model.pdf

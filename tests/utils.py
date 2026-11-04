@@ -508,10 +508,10 @@ def compute_new_for_alpha_range(
         #     airfoil_input,
         # )
 
-    wing_aero = BodyAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing], leg_direction="rib")  # thesis vortex system
 
     # initializing zero lists
-    wing_aero = BodyAerodynamics([wing])
+    wing_aero = BodyAerodynamics([wing], leg_direction="rib")  # thesis vortex system
     CL_LLT_new = np.zeros(len(aoas))
     CD_LLT_new = np.zeros(len(aoas))
     gamma_LLT_new = np.zeros((len(aoas), N - 1))

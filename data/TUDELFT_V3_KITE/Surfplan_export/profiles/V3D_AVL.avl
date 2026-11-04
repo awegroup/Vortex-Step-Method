@@ -1,0 +1,116 @@
+Empty Project
+0.0                          | Mach
+0     0     0.0              | iYsym  iZsym  Zsym
+
+  25.000      2.630     11.180  | Sref   Cref   Bref
+ 0.00   0.00   0.00          | Xref   Yref   Zref
+ 0.00                        | CDp  (optional)
+
+
+
+#=================================================
+SURFACE                      | (keyword)
+14 hydrav1 07
+#Nchord    Cspace   [ Nspan Sspace ]
+ 10        1.0
+
+INDEX                        | (keyword)
+111                          | Lsurf
+
+YDUPLICATE
+0.0
+
+SCALE
+1.0  1.0  1.0
+
+TRANSLATE
+0.0  0.0  0.0
+
+ANGLE
+0.0                          | dAinc
+
+#__________________________________
+SECTION                                          |  (keyword)
+   0.0000    0.2250    0.0000    2.6288  0.9989    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_1.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.0081    0.6643   -0.0830    2.6155  0.9897    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_2.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.0243    1.1112   -0.0701    2.5888  0.9712    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_3.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.0485    1.5538   -0.1544    2.5485  0.9433    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_4.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.0809    1.9597   -0.3432    2.4942  0.9058    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_5.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.1214    2.3932   -0.4532    2.4253  0.8582    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_6.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.1701    2.7983   -0.6488    2.3411  0.8000    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_7.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.2270    3.1343   -0.9453    2.2404  0.7304    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_8.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.2920    3.5012   -1.2016    2.1212  0.6480    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_9.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.3654    3.8053   -1.5323    1.9803  0.5506    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_10.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.4470    3.9680   -1.9505    1.7211  0.4341    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_11.dat
+
+#______________
+SECTION                                          |  (keyword)
+   0.6354    4.1563   -2.8252    1.3849  0.0000    3    0   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ]
+
+AFIL 0.0 1.0
+G:\Shared drives\Hardware\01 - Kite and Bridle (KB)\Archived kites\V3.25\V3.25D\VSM Package\prof_12.dat
+
+#______________
