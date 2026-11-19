@@ -44,24 +44,24 @@ def masure_params_list():
             "eta": 0.2,
             "kappa": 0.95,
             "delta": -2,
-            "lambda": 0.65,
-            "phi": 0.25,
+            "lambda": 0.25,
+            "phi": 0.65,
         },
         {
             "t": 0.08,
             "eta": 0.3,
             "kappa": 0.90,
             "delta": -1,
-            "lambda": 0.70,
-            "phi": 0.30,
+            "lambda": 0.30,
+            "phi": 0.65,
         },
         {
             "t": 0.06,
             "eta": 0.15,
             "kappa": 1.00,
             "delta": -3,
-            "lambda": 0.60,
-            "phi": 0.20,
+            "lambda": 0.20,
+            "phi": 0.65,
         },
     ]
 
@@ -164,8 +164,8 @@ def test_masure_regression(masure_test_config, small_alpha_range):
         "eta": 0.2,
         "kappa": 0.95,
         "delta": -2,
-        "lambda": 0.65,
-        "phi": 0.25,
+        "lambda": 0.25,
+        "phi": 0.65,
     }
     aero = AirfoilAerodynamics.from_yaml_entry(
         "masure_regression",
@@ -344,8 +344,8 @@ def test_masure_regression_caching(masure_test_config, small_alpha_range):
         "eta": 0.2,
         "kappa": 0.95,
         "delta": -2,
-        "lambda": 0.65,
-        "phi": 0.25,
+        "lambda": 0.25,
+        "phi": 0.65,
     }
     reynolds = 5e6
 
@@ -535,3 +535,24 @@ def test_missing_required_parameters():
             alpha_range=[-10, 10, 1],
             reynolds=1e6,
         )
+
+
+# ========================
+# MASURE INPUT MAPPING (no model file needed)
+# ========================
+
+
+def test_masure_model_inputs_order_and_reflex_sign():
+    """awesIO/thesis parameters -> ET model inputs [t, cx, cy, r, LE, camTE].
+
+    phi (LE curvature) feeds LE, lambda (camber tension) feeds camTE, and delta is
+    passed unchanged (Masure's TE_angle: negative = reflex, trailing edge turned up).
+    """
+    params = {"t": 0.08, "eta": 0.2, "kappa": 0.08, "delta": -5.0, "lambda": 0.2, "phi": 0.65}
+    assert AirfoilAerodynamics._masure_model_inputs(params) == [0.08, 0.2, 0.08, -5.0, 0.65, 0.2]
+
+
+def test_masure_model_inputs_warns_outside_training_range():
+    params = {"t": 0.08, "eta": 0.2, "kappa": 0.08, "delta": 3.0, "lambda": 0.2, "phi": 0.65}
+    with pytest.warns(UserWarning, match="r=3"):
+        AirfoilAerodynamics._masure_model_inputs(params)
