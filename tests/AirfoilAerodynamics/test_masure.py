@@ -37,8 +37,8 @@ class TestMasureRegressionReal:
             "eta": 0.2,
             "kappa": 0.95,
             "delta": -2,
-            "lambda": 0.65,
-            "phi": 0.25,
+            "lambda": 0.25,
+            "phi": 0.65,
         }
 
     @pytest.fixture
@@ -173,16 +173,16 @@ class TestMasureRegressionReal:
                 "eta": 0.1,
                 "kappa": 0.9,
                 "delta": -1,
-                "lambda": 0.6,
-                "phi": 0.2,
+                "lambda": 0.2,
+                "phi": 0.6,
             },
             {
                 "t": 0.1,
                 "eta": 0.3,
                 "kappa": 1.0,
                 "delta": -3,
-                "lambda": 0.7,
-                "phi": 0.3,
+                "lambda": 0.3,
+                "phi": 0.7,
             },
         ]
 
