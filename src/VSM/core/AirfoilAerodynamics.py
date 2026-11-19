@@ -311,6 +311,61 @@ class AirfoilAerodynamics:
 
         self._cm_coefficients = [cm_2_deg, cm_1_deg, cm_0_deg]
 
+    # Training ranges of the Masure ET models (MSc thesis K. Masure, TU Delft, 2025),
+    # in the model's own parameters [t, cx, cy, r, LE, camTE].
+    _MASURE_TRAINING_RANGES = {
+        "t": (0.03, 0.12),
+        "cx": (0.08, 0.40),
+        "cy": (0.04, 0.16),
+        "r": (-8.0, 0.0),
+        "LE": (0.65, 0.65),
+        "camTE": (0.10, 0.40),
+    }
+
+    @classmethod
+    def _masure_model_inputs(cls, airfoil_params):
+        """Map the awesIO ``masure_regression`` parameters to the ET model inputs.
+
+        The models were trained on ``[t, cx, cy, r, LE, camTE, alpha]`` (Masure's
+        toolchain naming). The awesIO/thesis parameters map as follows:
+
+        - ``t``      : LE tube diameter / chord                  -> ``t``
+        - ``eta``    (eta)    : chordwise position of max camber -> ``cx``
+        - ``kappa``  (kappa)  : camber height                    -> ``cy``
+        - ``delta``  (delta)  : trailing-edge angle [deg] of Masure's parametric
+          geometry (``TE_angle`` in Masure's toolchain and in SurfplanAdapter's
+          ``LEI_airfoil``), measured from the straight line joining the camber-tension
+          control point to the TE: NEGATIVE = trailing edge turned up (reflex),
+          positive = turned down. Passed unchanged (``r = delta``); training range
+          -8..0 deg, so a positive value is outside the data (the model saturates at 0).
+        - ``phi``    (phi)    : LE curvature (0.65 in all training data) -> ``LE``
+        - ``lambda`` (lambda) : camber tension (0.1..0.4)        -> ``camTE``
+
+        Returns:
+            list: ``[t, cx, cy, r, LE, camTE]`` (alpha is appended by the caller).
+        """
+        feats = {
+            "t": float(airfoil_params["t"]),
+            "cx": float(airfoil_params["eta"]),
+            "cy": float(airfoil_params["kappa"]),
+            "r": float(airfoil_params["delta"]),
+            "LE": float(airfoil_params["phi"]),
+            "camTE": float(airfoil_params["lambda"]),
+        }
+        out = [
+            f"{k}={v:g} (training {lo:g}..{hi:g})"
+            for k, v in feats.items()
+            for lo, hi in [cls._MASURE_TRAINING_RANGES[k]]
+            if not (lo - 1e-9 <= v <= hi + 1e-9)
+        ]
+        if out:
+            warnings.warn(
+                "masure_regression: inputs outside the training data, the Extra-Trees "
+                "model saturates there: " + ", ".join(out),
+                stacklevel=3,
+            )
+        return [feats[k] for k in ("t", "cx", "cy", "r", "LE", "camTE")]
+
     def _from_masure_regression(
         self, airfoil_params, alpha_range, reynolds, ml_models_dir
     ):
@@ -318,7 +373,8 @@ class AirfoilAerodynamics:
 
         Args:
             airfoil_params (dict): Dictionary containing regression parameters
-                                   't', 'eta', 'kappa', 'delta', 'lambda', 'phi'.
+                                   't', 'eta', 'kappa', 'delta', 'lambda', 'phi'
+                                   (see _masure_model_inputs for their meaning and sign).
             alpha_range (list): [min_alpha, max_alpha, step] in degrees.
             reynolds (float): Reynolds number for analysis.
             ml_models_dir (str): Base path for resolving relative model file paths.
@@ -326,13 +382,8 @@ class AirfoilAerodynamics:
         Returns:
             None: Populates self.alpha, self.CL, self.CD, self.CM.
         """
-        # Extract parameters
-        t = airfoil_params["t"]
-        eta = airfoil_params["eta"]
-        kappa = airfoil_params["kappa"]
-        delta = airfoil_params["delta"]
-        lambda_param = airfoil_params["lambda"]
-        phi = airfoil_params["phi"]
+        # Map parameters to the model inputs [t, cx, cy, r, LE, camTE]
+        base_inputs = self._masure_model_inputs(airfoil_params)
 
         # Generate alpha range
         alpha_deg = np.arange(
@@ -346,7 +397,7 @@ class AirfoilAerodynamics:
         X_input = np.zeros((n_alpha, 7))
 
         for i, alpha in enumerate(alpha_deg):
-            X_input[i, :] = [t, eta, kappa, delta, lambda_param, phi, alpha]
+            X_input[i, :] = base_inputs + [alpha]
 
         # Load the trained model
         model = self._load_masure_regression_model(reynolds, ml_models_dir)
@@ -628,33 +679,19 @@ class AirfoilAerodynamics:
         n_airfoils = len(group_items)
 
         # Prepare batch input matrix
-        # Shape: (n_airfoils * n_alpha, 7) where 7 is [t, eta, kappa, delta, lambda, phi, alpha]
+        # Shape: (n_airfoils * n_alpha, 7): [t, cx, cy, r, LE, camTE, alpha] (see _masure_model_inputs)
         X_batch = np.zeros((n_airfoils * n_alpha, 7))
 
         # Fill the batch input matrix
         airfoil_ids = []
         for i, (_, airfoil_id, airfoil_params) in enumerate(group_items):
             airfoil_ids.append(airfoil_id)
-            t = airfoil_params["t"]
-            eta = airfoil_params["eta"]
-            kappa = airfoil_params["kappa"]
-            delta = airfoil_params["delta"]
-            lambda_param = airfoil_params["lambda"]
-            phi = airfoil_params["phi"]
+            base_inputs = cls._masure_model_inputs(airfoil_params)
 
             start_idx = i * n_alpha
-            end_idx = (i + 1) * n_alpha
 
             for j, alpha in enumerate(alpha_deg):
-                X_batch[start_idx + j, :] = [
-                    t,
-                    eta,
-                    kappa,
-                    delta,
-                    lambda_param,
-                    phi,
-                    alpha,
-                ]
+                X_batch[start_idx + j, :] = base_inputs + [alpha]
 
         # Load model once (uses caching)
         obj = object.__new__(cls)
@@ -768,6 +805,9 @@ class AirfoilAerodynamics:
             "cacheable_types": sorted(
                 cls._cacheable_types
             ),  # Include cacheable types in hash
+            # Bump when the masure_regression input mapping changes, so polars cached
+            # with an older mapping are not reused.
+            "masure_input_mapping": "v2: phi->LE, lambda->camTE",
         }
 
         # Convert to JSON string with sorted keys for deterministic hashing
